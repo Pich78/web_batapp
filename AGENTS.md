@@ -35,6 +35,7 @@ source.
 ```
 index_old.html, app.css, js/     the shipped-layout page (classic scripts, no build)
 index.html, app-new.css, js/newapp.js   the modern layout page
+js/wav.js                    pure-JS 16-bit PCM WAV encoder for the modern page
 js/player.js                 modern transport (window.BatappPlayer), used by index.html
 js/mixer.js                  legacy transport (window.BatappMixer), used by index_old.html
 js/lessons.js                slim generated data + audio integrity for the modern page
@@ -206,11 +207,13 @@ legacy `js/mixer.js` transport.
   preserves the slider value. Every stem, including Vox, starts at 100%.
 - The mixer order and stem labels follow the shipped player's draw order.
 - Opening a lesson runs a load gate: on HTTP(S) every stem is fetched into a
-  Blob with `cache: "no-store"` and a fresh per-load URL, checked against the
-  byte count and SHA-256/CRC-32 manifest in `js/lessons.js`, and awaited until
-  it can play through. On `file://` the local elements are awaited and their
-  durations checked. The playing screen is not shown until every stem is ready;
-  failures are named and Retry restarts the whole load.
+  Blob with `cache: "no-store"` and a fresh per-load URL and checked against the
+  byte count and SHA-256/CRC-32 manifest in `js/lessons.js`. The verified Ogg is
+  decoded with `decodeAudioData` and re-encoded as 16-bit PCM WAV by `js/wav.js`
+  before the player is shown; duration is advisory because some mobile browsers
+  estimate it. If decoding fails, the stem falls back to direct Ogg. On
+  `file://` the local Ogg elements are awaited directly. Failures are named and
+  Retry restarts the whole load.
 - Transport: every stem loops (the scene object `Bit` maps to the exported
   `beat` stem). The transport resets all stems to 0 together at the loop
   boundary, so a browser that recalculates one stem's duration after a near-end
@@ -265,7 +268,9 @@ legacy `js/mixer.js` transport.
   order, slim-data equivalence, integrity manifest, icon links, no external
   requests/links and a lesson sweep. It also runs instrumented transport
   regressions (zero audio on library open, one slow stem keeps the player
-  hidden, corrupted transfers fail closed, one media element per stem, pause →
+  hidden, corrupted transfers fail closed, WAV headers and exact duration,
+  estimated mobile durations no longer blocking load, Ogg decode fallback, the
+  largest lesson converting completely, one media element per stem, pause →
   mute → play → backward seek, loop restart to zero, volume/mute leaving the
   transport untouched, Back unloading every resource and reopening downloading
   fresh stems). Chromium runs all 61 lessons; `BROWSER=firefox|webkit` runs

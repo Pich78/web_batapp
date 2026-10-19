@@ -88,10 +88,18 @@ the original scene-reconstruction transport in `js/mixer.js`.
 - Opening the library creates no audio element, no `AudioContext` and no audio
   request. Audio loading begins only after a rhythm is chosen.
 - The modern player fetches every stem with `cache: "no-store"` and a fresh
-  per-load URL, checks the byte count and SHA-256 (CRC-32 on origins without
-  Web Crypto) against the manifest in `js/lessons.js`, and waits until all stems
-  can play through. The playing screen is shown only after the last stem is
-  ready; failures name the stem and fail closed.
+  per-load URL, then checks the byte count and SHA-256 (CRC-32 on origins
+  without Web Crypto) against the manifest in `js/lessons.js`.
+- On HTTP/PWA the verified Ogg is decoded with `decodeAudioData` and re-encoded
+  as 16-bit PCM WAV by `js/wav.js`; the player waits until all five WAV Blobs
+  can play through. WAV headers make the duration exact on mobile browsers.
+  The largest lesson uses about 139 MB of WAV at 44.1 kHz. If a browser cannot
+  decode Ogg for conversion, that stem falls back to direct Ogg playback.
+- On `file://` the browser cannot read local bytes reliably, so the local Ogg
+  elements are awaited directly. The manifest duration remains the transport
+  length if a mobile browser estimates the duration.
+- The playing screen appears only after the last stem is ready; failures name
+  the stem and fail closed.
 - Back navigation aborts pending transfers, pauses and clears every media
   element, revokes the Blob URLs and closes the `AudioContext`. Reopening the
   same rhythm downloads all stems again from scratch.

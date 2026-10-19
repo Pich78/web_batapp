@@ -21,9 +21,11 @@ Android Chrome and Windows browsers must be checked by a person.
 1. Open the URL with the browser network panel recording. The library appears
    with Toques / Oru Seco tabs and **no audio file is requested**.
 2. Switch to **Oru Seco**, confirm the order is `1, 2, 3, … 20A, 20B, 21, 22`.
-3. Open **01 Alubanche** (Volume I). The loading gate appears and no player
-   controls are shown until every stem has downloaded, passed its checksum and
-   can play through.
+3. Open **01 Alubanche** (Volume I). The loading gate shows checksum
+   verification, then “Preparing WAV x/5”, and no player controls appear until
+   every stem has downloaded, passed its checksum and been converted to WAV.
+   This can take a few seconds and uses roughly 60 MB for this lesson; the
+   largest lessons use about 139 MB.
 4. Tap Play. All five stems start together; Vox is audible at 100%. Pause: the
    stems stay loaded and resume from the same point. Stop: the stems stay
    loaded and the next Play starts all of them from the beginning.
@@ -72,9 +74,15 @@ desktop-emulated runs as device results.
 
 - **No audio at all:** check iOS version (18.4+), the silent switch, and whether
   the loader reached “Loading stems 5/5”. If the gate shows an error, note the
-  stem name and whether it was a transfer, checksum, duration or playback error.
-- **Play stays disabled:** the gate did not finish; note the loading counter and
-  whether the error state offers Retry.
+  stem name and whether it was a transfer, checksum, WAV preparation or playback
+  error. Duration estimates must not block loading; note the stem and the
+  reported duration only if playback itself is wrong.
+- **Play stays disabled:** the gate did not finish; note whether it stopped at
+  “Checking stems”, “Preparing WAV” or “Loading stems”, and whether Retry offers
+  a new attempt.
+- **WAV preparation fails or the tab crashes:** note the lesson duration, device
+  memory and whether the WAV step reached 5/5. The largest lessons use about
+  139 MB of WAV in addition to the media pipeline.
 - **Checksum/error state:** note the stem name and the detail line. Do not retry
   against a proxy that rewrites media; verify the URL and the manifest version.
 - **Stems drift:** note the lesson, elapsed time and which stems flammed. Note

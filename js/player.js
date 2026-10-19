@@ -106,6 +106,21 @@
     });
   }
 
+  function decodeAudio(context, buffer) {
+    return new Promise(function (resolve, reject) {
+      var result;
+      try {
+        result = context.decodeAudioData(buffer, resolve, reject);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+      if (result && typeof result.then === "function") {
+        result.then(resolve, reject);
+      }
+    });
+  }
+
   function reportProgress(callback, done, total, stage) {
     if (typeof callback !== "function") return;
     try {
@@ -216,17 +231,17 @@
     return this._loadPromise;
   };
 
-  BatappPlayer.prototype._loadHttp = function () {
+  BatappPlayer.prototype._loadHttp = async function () {
     var self = this;
     var entries = this.lesson.audio || [];
     var total = entries.length;
-    if (!total) return Promise.resolve();
+    if (!total) return;
     var signal = this._controller ? this._controller.signal : undefined;
     var loadId = loadNonce + "-" + (++loadSequence);
     var verifiedCount = 0;
     var verified = new Array(total);
 
-    return Promise.all(entries.map(function (entry, index) {
+    await Promise.all(entries.map(function (entry, index) {
       var url = self._assetUrl(entry) + "?load=" + loadId;
       return fetch(url, {
         cache: "no-store",
@@ -250,7 +265,7 @@
         }
         return readBlob(blob).then(function (buffer) {
           return self._verify(entry, buffer).then(function (integrity) {
-            verified[index] = { entry: entry, blob: blob, integrity: integrity };
+            verified[index] = { entry: entry, blob: blob, buffer: buffer, integrity: integrity };
             verifiedCount += 1;
             reportProgress(self._onProgress, verifiedCount, total, "verify");
           });
@@ -260,29 +275,81 @@
         if (error && error.name === "BatappLoadError") throw error;
         throw loadError([entry.stem], "Could not download this stem. Check your connection and try again.");
       });
-    })).then(function () {
-      if (self._disposed) throw abortError();
-      self._objectUrls = [];
-      verified.forEach(function (item) {
-        self._objectUrls.push(URL.createObjectURL(item.blob));
+    }));
+
+    if (this._disposed) throw abortError();
+    this._objectUrls = [];
+    this._ensureContext();
+    var canEncodeWav = !!this._context &&
+      global.BatappWav && typeof global.BatappWav.encode === "function";
+    var preparedCount = 0;
+
+    // Decode and encode one stem at a time: the finished WAV Blobs stay for
+    // playback, but only one decoded AudioBuffer is alive at a time.
+    for (var index = 0; index < verified.length; index += 1) {
+      if (this._disposed) throw abortError();
+      var item = verified[index];
+      var record = this.tracks[index];
+      var sourceUrl = null;
+      var format = "ogg";
+
+      if (canEncodeWav) {
+        var audioBuffer = null;
+        try {
+          audioBuffer = await decodeAudio(this._context, item.buffer);
+          item.buffer = null;
+          var wav = await global.BatappWav.encode(audioBuffer);
+          audioBuffer = null;
+          sourceUrl = URL.createObjectURL(wav.blob);
+          format = "wav";
+          record.wavBytes = wav.bytes;
+          record.wavDuration = wav.duration;
+          record.wavSampleRate = wav.sampleRate;
+          record.wavChannels = wav.channels;
+          item.blob = null;
+        } catch (error) {
+          item.wavError = error && (error.message || String(error));
+          sourceUrl = null;
+        }
+      }
+
+      if (!sourceUrl) {
+        item.buffer = null;
+        record.wavBytes = null;
+        record.wavDuration = null;
+        record.wavSampleRate = null;
+        record.wavChannels = null;
+        sourceUrl = URL.createObjectURL(item.blob);
+        format = "ogg";
+      }
+
+      item.url = sourceUrl;
+      item.format = format;
+      this._objectUrls.push(sourceUrl);
+      preparedCount += 1;
+      reportProgress(this._onProgress, preparedCount, total, "wav");
+    }
+
+    if (this._disposed) throw abortError();
+    this._createElements(verified.map(function (item, trackIndex) {
+      return {
+        record: self.tracks[trackIndex],
+        url: item.url,
+        integrity: item.integrity,
+        format: item.format,
+        wavError: item.wavError
+      };
+    }));
+
+    var readyCount = 0;
+    await Promise.all(this.tracks.map(function (record) {
+      return self._waitForElement(record, signal, function () {
+        readyCount += 1;
+        reportProgress(self._onProgress, readyCount, total, "prepare");
       });
-      self._createElements(verified.map(function (item, index) {
-        return {
-          record: self.tracks[index],
-          url: self._objectUrls[index],
-          integrity: item.integrity
-        };
-      }));
-      var readyCount = 0;
-      return Promise.all(self.tracks.map(function (record) {
-        return self._waitForElement(record, signal, function () {
-          readyCount += 1;
-          reportProgress(self._onProgress, readyCount, total, "prepare");
-        });
-      }));
-    }).then(function () {
-      if (self._disposed) throw abortError();
-    });
+    }));
+
+    if (this._disposed) throw abortError();
   };
 
   BatappPlayer.prototype._loadFile = function () {
@@ -394,6 +461,8 @@
     items.forEach(function (item) {
       var element = item.record.element;
       item.record.integrity = item.integrity;
+      item.record.sourceFormat = item.format || "ogg";
+      item.record.wavError = item.wavError || null;
       element.addEventListener("error", function () {
         if (self._disposed) return;
         item.record.error = element.error ? element.error.code : -1;
@@ -440,15 +509,19 @@
         if (settled) return;
         if (element.readyState < 3) return;
         var duration = element.duration;
-        if (!isFinite(duration) || duration <= 0) return;
-        if (record.seconds && Math.abs(duration - record.seconds) > Math.max(0.25, record.seconds * 0.002)) {
-          fail("Duration check failed.");
-          return;
+        // Duration is advisory: some mobile browsers estimate Blob/Ogg
+        // durations. The manifest and WAV header are the canonical lengths.
+        if (isFinite(duration) && duration > 0) {
+          record.mediaDuration = duration;
+          if (record.seconds) record.durationDelta = Math.abs(duration - record.seconds);
+        } else {
+          record.mediaDuration = null;
         }
         settled = true;
         cleanup();
         record.ready = true;
-        record.duration = duration;
+        record.duration = record.wavDuration ||
+          (isFinite(duration) && duration > 0 ? duration : record.seconds) || 0;
         if (typeof onReady === "function") onReady();
         resolve();
       }
@@ -477,12 +550,20 @@
   };
 
   BatappPlayer.prototype._finalizeLoad = function () {
-    var durations = this.tracks.map(function (record) {
+    // The exported duration is the musical length. Browser-reported media
+    // durations can be estimates on mobile, so use the manifest when present.
+    var declared = this.tracks.map(function (record) {
+      return Number(record.seconds);
+    }).filter(function (duration) {
+      return isFinite(duration) && duration > 0;
+    });
+    var mediaDurations = this.tracks.map(function (record) {
       return record.element ? record.element.duration : 0;
     }).filter(function (duration) {
       return isFinite(duration) && duration > 0;
     });
-    this._loopDuration = durations.length ? Math.min.apply(null, durations) : 0;
+    this._loopDuration = declared.length ? Math.min.apply(null, declared)
+      : (mediaDurations.length ? Math.min.apply(null, mediaDurations) : 0);
     this.tracks.forEach(function (record) {
       if (!record.element) return;
       try { record.element.pause(); } catch (error) { /* not loaded */ }

@@ -109,12 +109,14 @@ const slimBytes = fs.statSync(path.join(root, "js/lessons.js")).size;
 check("slim modern data stays compact", slimBytes < 200000, slimBytes + " bytes");
 const modernHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const legacyHtml = fs.readFileSync(path.join(root, "index_old.html"), "utf8");
-check("modern page loads lessons.js and the new player only",
-  modernHtml.includes("js/lessons.js") && modernHtml.includes("js/player.js") &&
+check("modern page loads lessons.js, wav.js and the new player only",
+  modernHtml.includes("js/lessons.js") && modernHtml.includes("js/wav.js") &&
+  modernHtml.includes("js/player.js") &&
   !modernHtml.includes("js/data.js") && !modernHtml.includes("js/mixer.js"));
 check("modern assets are cache-versioned",
   /app-new\.css\?v=/.test(modernHtml) && /lessons\.js\?v=/.test(modernHtml) &&
-  /newapp\.js\?v=/.test(modernHtml) && /player\.js\?v=/.test(modernHtml));
+  /wav\.js\?v=/.test(modernHtml) && /newapp\.js\?v=/.test(modernHtml) &&
+  /player\.js\?v=/.test(modernHtml));
 check("legacy page keeps the full data.js and old mixer",
   legacyHtml.includes("js/data.js") && legacyHtml.includes("js/mixer.js") &&
   !legacyHtml.includes("js/lessons.js"));
@@ -975,6 +977,41 @@ try {
     servedAudioRequests.length === 5 && firstLoadIds.length === 1,
     JSON.stringify(servedAudioRequests));
   check("served page uses the Web Audio mixer", (await served.evaluate(() => window.__batapp_new.state().mode)) === "webaudio");
+  const wavInfo = await served.evaluate(async () => {
+    const tracks = window.__batapp_new.tracks();
+    const track = tracks[0];
+    const buffer = await (await fetch(track.src)).arrayBuffer();
+    const view = new DataView(buffer);
+    const ascii = (offset, length) => Array.from(new Uint8Array(buffer, offset, length))
+      .map((value) => String.fromCharCode(value)).join("");
+    return {
+      formats: tracks.map((item) => item.format),
+      wavBytes: tracks.map((item) => item.wavBytes),
+      bytes: buffer.byteLength,
+      riff: ascii(0, 4),
+      wave: ascii(8, 4),
+      fmt: ascii(12, 4),
+      audioFormat: view.getUint16(20, true),
+      channels: view.getUint16(22, true),
+      sampleRate: view.getUint32(24, true),
+      bits: view.getUint16(34, true),
+      dataSize: view.getUint32(40, true),
+      duration: view.getUint32(40, true) /
+        (view.getUint32(24, true) * view.getUint16(22, true) * 2),
+      transportDuration: window.__batapp_new.state().duration
+    };
+  });
+  check("HTTP stems are decoded into 16-bit PCM WAV",
+    wavInfo.formats.every((format) => format === "wav") &&
+    wavInfo.riff === "RIFF" && wavInfo.wave === "WAVE" && wavInfo.fmt === "fmt " &&
+    wavInfo.audioFormat === 1 && wavInfo.bits === 16 && wavInfo.channels === 2 &&
+    (wavInfo.sampleRate === 44100 || wavInfo.sampleRate === 48000) &&
+    wavInfo.dataSize > 0 && wavInfo.bytes === wavInfo.dataSize + 44,
+    JSON.stringify(wavInfo));
+  check("WAV duration is exact and matches the manifest transport length",
+    Math.abs(wavInfo.duration - wavInfo.transportDuration) < 0.1 &&
+    wavInfo.wavBytes.every((bytes) => bytes === wavInfo.bytes),
+    JSON.stringify({ wav: wavInfo.duration, transport: wavInfo.transportDuration, wavBytes: wavInfo.wavBytes, file: wavInfo.bytes }));
   let vox = await served.evaluate(() => window.__batapp_new.tracks().find((track) => track.stem === "vox"));
   check("Vox starts at 100% on HTTP",
     vox.volume === 1 && vox.gain === 1 && vox.elementVolume === 1,
@@ -1163,6 +1200,87 @@ try {
   check("Retry recovers after an integrity failure",
     await corrupt.evaluate(() => !window.__batapp_new.state().loading && window.__batapp_new.ui().playEnabled));
   await corrupt.close();
+
+  // Mobile browsers may estimate media duration. The WAV path must not reject
+  // a verified stem just because that estimate differs from the manifest.
+  const estimated = await browser.newPage({ viewport });
+  await estimated.bringToFront();
+  await estimated.addInitScript(() => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "duration");
+    Object.defineProperty(HTMLMediaElement.prototype, "duration", {
+      configurable: true,
+      get() {
+        const real = descriptor.get.call(this);
+        return Number.isFinite(real) && real > 1 ? real + 2 : real;
+      }
+    });
+  });
+  await estimated.goto(servedUrl + "#/lesson/volume-1/01-alubanche");
+  await ready(estimated);
+  const estimatedState = await estimated.evaluate(() => ({
+    state: window.__batapp_new.state(),
+    tracks: window.__batapp_new.tracks()
+  }));
+  check("estimated mobile durations do not fail the WAV gate",
+    !estimatedState.state.error && estimatedState.state.loaded &&
+    estimatedState.tracks.every((track) => track.ready && track.format === "wav") &&
+    Math.abs(estimatedState.state.duration - 69.407) < 0.01 &&
+    estimatedState.tracks.every((track) => Math.abs(track.durationDelta - 2) < 0.2),
+    JSON.stringify({ state: estimatedState.state, tracks: estimatedState.tracks.map((track) => ({ stem: track.stem, format: track.format, delta: track.durationDelta })) }));
+  await estimated.close();
+
+  // If the browser cannot decode Ogg for WAV conversion, the player falls
+  // back to the verified Ogg Blob rather than failing the lesson.
+  const decodeFail = await browser.newPage({ viewport });
+  await decodeFail.bringToFront();
+  await decodeFail.addInitScript(() => {
+    function wrap(Native) {
+      if (!Native) return Native;
+      const Wrapped = function () {
+        const context = new Native();
+        context.decodeAudioData = function () {
+          return Promise.reject(new Error("decode unavailable"));
+        };
+        return context;
+      };
+      Wrapped.prototype = Native.prototype;
+      return Wrapped;
+    }
+    if (window.AudioContext) window.AudioContext = wrap(window.AudioContext);
+    if (window.webkitAudioContext) window.webkitAudioContext = wrap(window.webkitAudioContext);
+  });
+  await decodeFail.goto(servedUrl + "#/lesson/volume-1/01-alubanche");
+  await ready(decodeFail);
+  const decodeFailState = await decodeFail.evaluate(() => ({
+    state: window.__batapp_new.state(),
+    tracks: window.__batapp_new.tracks()
+  }));
+  check("Ogg decode failure falls back to direct Ogg playback",
+    !decodeFailState.state.error && decodeFailState.state.loaded &&
+    decodeFailState.tracks.every((track) => track.ready && track.format === "ogg") &&
+    Math.abs(decodeFailState.state.duration - 69.407) < 0.01,
+    JSON.stringify({ state: decodeFailState.state, tracks: decodeFailState.tracks.map((track) => ({ stem: track.stem, format: track.format })) }));
+  await decodeFail.close();
+
+  // The largest lesson must also convert completely (about 139 MB of WAV).
+  const largest = await browser.newPage({ viewport });
+  await largest.bringToFront();
+  await largest.goto(servedUrl + "#/lesson/volume-1/31-tui-tui");
+  await largest.waitForFunction(() => {
+    const state = window.__batapp_new.state();
+    return state.lesson === "volume-1/31-tui-tui" && !state.loading &&
+      (state.loaded || !!state.error);
+  }, null, { timeout: 120000 });
+  const largestState = await largest.evaluate(() => ({
+    state: window.__batapp_new.state(),
+    tracks: window.__batapp_new.tracks()
+  }));
+  check("largest lesson converts every stem to WAV",
+    !largestState.state.error && largestState.state.loaded &&
+    largestState.tracks.every((track) => track.ready && track.format === "wav") &&
+    largestState.tracks.reduce((total, track) => total + (track.wavBytes || 0), 0) > 120000000,
+    JSON.stringify({ state: largestState.state, bytes: largestState.tracks.reduce((total, track) => total + (track.wavBytes || 0), 0), formats: largestState.tracks.map((track) => track.format) }));
+  await largest.close();
 
   // Error + Retry: abort the Vox fetch, then retry with the route removed.
   const failing = await browser.newPage({ viewport });

@@ -325,7 +325,7 @@ for (const route of ["#/credits", "#/opening", "#/volumes", "#/volume-1", "#/vol
 check("no author/shop text or external URL on any screen", bannedSeen.length === 0, bannedSeen.join(" | "));
 
 // --- file:// contract ------------------------------------------------------
-const shipped = ["js/batapp.js", "js/data.js", "js/lessons.js", "js/player.js", "js/newapp.js", "js/mixer.js"];
+const shipped = ["js/batapp.js", "js/data.js", "js/lessons.js", "js/wav.js", "js/player.js", "js/newapp.js", "js/mixer.js"];
 for (const file of shipped) {
   const text = fs.readFileSync(path.join(root, file), "utf8");
   const moduleUse = /type\s*=\s*["']module["']|import\s+.*from\s+["']/.test(text);

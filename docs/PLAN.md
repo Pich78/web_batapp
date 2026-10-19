@@ -66,9 +66,13 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       modern page; the legacy scene page keeps `js/mixer.js`:
       - opening the library creates no audio element, context or request;
       - HTTP(S): every stem is fetched with `cache: "no-store"` and a unique
-        per-load URL, checked against byte count and SHA-256/CRC-32 in
-        `js/lessons.js`, and awaited until it can play through;
-      - `file://`: local elements are awaited and their durations checked;
+        per-load URL and checked against byte count and SHA-256/CRC-32 in
+        `js/lessons.js`; the verified Ogg is decoded with `decodeAudioData`
+        and re-encoded as 16-bit PCM WAV by `js/wav.js` before the player is
+        shown. Duration is advisory because mobile browsers estimate it; a
+        stem that cannot be decoded falls back to direct Ogg;
+      - `file://`: local Ogg elements are awaited directly, with the manifest
+        duration as the transport length;
       - one `GainNode` per stem controls the level where Web Audio is
         available; otherwise the element volume is the fallback;
       - scene `Audios/Bit` maps to the exported `beat` stem, so Beat loops like
@@ -94,9 +98,9 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       transport. The generated `js/lessons.js` is a compact lessons-only payload
       for this page; the scene page keeps `js/data.js`.
       Vox starts at 100% in the modern model. All stems are loaded and verified
-      (fetch-to-Blob with checksums on HTTP, local elements with duration checks
-      on file://) before the playing screen appears, with named errors and
-      Retry. A no-store manifest version check reloads an installed home-screen
+      (fetch-to-Blob with checksums and runtime WAV expansion on HTTP, local Ogg
+      elements on file://) before the playing screen appears, with named errors
+      and Retry. A no-store manifest version check reloads an installed home-screen
       app once when a newer release is deployed, without a service worker.
       Verified by `tests/verify-new.mjs` (file:// and HTTP,
       Chromium/representative Firefox+WebKit); summary in
@@ -148,16 +152,18 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - [x] Modern-layout sweep (`tests/verify-new.mjs`): portrait, landscape-phone
       and desktop modes, load gate, seek, titles, library order, mixer, mute
       semantics, prev/next, keyboard, light/dark themes, all 61 lessons and an
-      HTTP pass exercising fetch-to-Blob, the gate, named errors/Retry and the
-      Web Audio gains. Landscape runs at five sizes up to 480×320 and asserts
-      no page, player or mixer scroll, all five stems visible and Stop beside
-      the transport. The HTTP pass also checks the manifest version reload.
-      Chromium runs the full sweep; Firefox/WebKit run representative lessons.
-      The instrumented transport regression covers zero audio on open, one slow
-      stem, corrupt transfers, pause → mute → play → backward seek, the
-      loop restart to zero, volume-only changes, Back unloading and fresh
-      reloads. Summary in `docs/verification/new-ui-sweep-summary.json`;
-      cross-browser record in `docs/verification/cross-browser-summary.json`.
+      HTTP pass exercising fetch-to-Blob, WAV headers, estimated mobile
+      durations, Ogg decode fallback, the largest lesson, the gate, named
+      errors/Retry and the Web Audio gains. Landscape runs at five sizes up to
+      480×320 and asserts no page, player or mixer scroll, all five stems
+      visible and Stop beside the transport. The HTTP pass also checks the
+      manifest version reload. Chromium runs the full sweep; Firefox/WebKit run
+      representative lessons. The instrumented transport regression covers zero
+      audio on open, one slow stem, corrupt transfers, pause → mute → play →
+      backward seek, the loop restart to zero, volume-only changes, Back
+      unloading and fresh reloads. Summary in
+      `docs/verification/new-ui-sweep-summary.json`; cross-browser record in
+      `docs/verification/cross-browser-summary.json`.
 - [ ] Re-run `tools/unity_schema.py` and `tools/export_audio.py --verify` in CI
       fashion and store the summaries under `docs/verification/`.
 - [ ] Compare the port's rendered screens against the shipped scene data

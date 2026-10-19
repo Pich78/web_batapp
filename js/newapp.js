@@ -241,14 +241,17 @@
     var status = view.querySelector(".load-status");
     var ratio = 0;
     if (total) {
-      // Verification and media preparation are equally weighted, so the ring
-      // never jumps backwards between the two phases.
-      ratio = stage === "verify" ? done / (2 * total) : (total + done) / (2 * total);
+      // Each phase gets a third of the ring, so progress never jumps backwards
+      // between checksum verification, WAV preparation and media readiness.
+      if (stage === "verify") ratio = done / (3 * total);
+      else if (stage === "wav") ratio = (total + done) / (3 * total);
+      else ratio = (2 * total + done) / (3 * total);
     }
     if (ring) ring.setAttribute("stroke-dashoffset", (RING_LENGTH * (1 - ratio)).toFixed(2));
     if (status) {
       if (!total) status.textContent = "Loading stems…";
       else if (stage === "verify") status.textContent = "Checking stems " + done + "/" + total + "…";
+      else if (stage === "wav") status.textContent = "Preparing WAV " + done + "/" + total + "…";
       else status.textContent = "Loading stems " + done + "/" + total + "…";
     }
   }
@@ -645,6 +648,11 @@
           error: element && element.error ? element.error.code : null,
           ready: !!record.ready,
           integrity: record.integrity,
+          format: record.sourceFormat || null,
+          wavBytes: record.wavBytes || null,
+          wavDuration: record.wavDuration || null,
+          mediaDuration: record.mediaDuration || null,
+          durationDelta: record.durationDelta === undefined ? null : record.durationDelta,
           src: element && element.getAttribute("src") ? element.getAttribute("src") : null
         };
       });
