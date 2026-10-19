@@ -25,10 +25,12 @@ Android Chrome and Windows browsers must be checked by a person.
    verification, then “Preparing WAV x/5”, and no player controls appear until
    every stem has downloaded, passed its checksum and been converted to WAV.
    This can take a few seconds and uses roughly 60 MB for this lesson; the
-   largest lessons use about 139 MB.
+   largest lessons use about 139 MB. The mixer order must be Beat, Vox, Iya,
+   Itotele, Okonkolo.
 4. Tap Play. All five stems start together; Vox is audible at 100%. Pause: the
-   stems stay loaded and resume from the same point. Stop: the stems stay
-   loaded and the next Play starts all of them from the beginning.
+   stems stay loaded and resume from the exact same point without replaying old
+   audio. Stop: the stems stay loaded and the next Play starts all of them from
+   the beginning, again without queued audio from the previous position.
 5. While playing, mute a stem and move another slider. Only the level changes:
    the timeline keeps advancing and no stem pauses, seeks or reloads. Unmute and
    confirm the previous slider value is restored. Then pause → mute a track →
@@ -40,14 +42,15 @@ Android Chrome and Windows browsers must be checked by a person.
 7. Seek near the end (last second) and let the lesson cross the loop boundary.
    All five stems must restart together, with Beat still present; no rapid
    repeated loop, doubled voice or end-of-loop noise.
-8. Move the Iya/Itotele/Okonkolo/Beat/Vox sliders; mute one, confirm its slider
-   value is preserved, then unmute.
+8. Move the sliders in the order Beat, Vox, Iya, Itotele, Okonkolo; mute one,
+   confirm its slider value is preserved, then unmute.
 9. Prev/Next moves through the volume; at the ends the button is disabled.
-10. Open an instrumental lesson (Volume II or Volume I 19 Egbi pami); there is
-    no Vox row, and the other four stems work.
-11. Rotate the phone (portrait and landscape). The landscape player must fit
-    the viewport completely: no page scroll, no scrolling inside the player or
-    the mixer, all five stems visible and Stop beside the transport controls.
+10. Open an Oru Seco lesson including **19 Egbi pami**. The order must be Beat,
+    Iya, Itotele, Okonkolo; there is no Vox row.
+11. Rotate the phone (portrait and landscape). Neither view may scroll the page
+    or the player. Portrait and landscape must show the seek bar, transport,
+    Stop and every mixer row inside the viewport; landscape keeps Stop beside
+    the transport.
 12. Check the browser tab title: e.g. `Alubanche · Toque 01 · Batá`.
 13. Press Back to the rhythm list. The player must stop and release every stem;
     the network panel must show no retained audio response. Open the same
@@ -56,8 +59,11 @@ Android Chrome and Windows browsers must be checked by a person.
     correct.
 15. Home-screen app only: after a new release is deployed, reopen the app. The
     version check must replace the old build once (the first update may need
-    clearing the site data or removing/re-adding the icon). Confirm the new
-    Stop size and the new mixer are present.
+    clearing the site data or removing/re-adding the icon).
+16. Open the top-left hamburger. Confirm the loaded build, manifest version,
+    script versions, current lesson and WAV/OGG source are shown. If the
+    manifest is newer, verify the “Reload latest” action. Confirm the panel
+    closes with Escape/outside tap and never scrolls the page.
 
 ## Results
 

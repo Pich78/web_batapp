@@ -25,6 +25,10 @@
     { key: "oko", label: "Okonkolo" },
     { key: "vox", label: "Vox" }
   ];
+  var STEM_ORDER = {
+    "volume-1": ["beat", "vox", "iya", "ito", "oko"],
+    "volume-2": ["beat", "iya", "ito", "oko"]
+  };
   var VOLUMES = {
     "volume-1": { tab: "Toques", kicker: "Volume I" },
     "volume-2": { tab: "Oru Seco", kicker: "Volume II" }
@@ -93,6 +97,15 @@
       return entry.key === stem;
     })[0];
     return match ? match.label : stem;
+  }
+
+  function stemsFor(lesson) {
+    var order = STEM_ORDER[lesson && lesson.volume] || STEM_ORDER["volume-1"];
+    return order.map(function (key) {
+      return STEMS.filter(function (entry) {
+        return entry.key === key;
+      })[0];
+    }).filter(Boolean);
   }
 
   function hashForLibrary(volume) {
@@ -373,7 +386,7 @@
     body.appendChild(hero);
 
     var mixerBox = element("div", "mixer");
-    STEMS.map(function (entry) {
+    stemsFor(lesson).map(function (entry) {
       return audio.trackFor(entry.key);
     }).filter(Boolean).forEach(function (record) {
       mixerBox.appendChild(stemRow(record, audio));
@@ -422,10 +435,12 @@
         }
         if (audio.playing()) {
           transportBusy = false;
+          hideStatus();
           return;
         }
         attempts += 1;
-        if (attempts < 8) {
+        if (attempts === 4) showStatus("Preparing playback…");
+        if (attempts < 20) {
           setTimeout(watchPlayback, 250);
           return;
         }
@@ -585,6 +600,7 @@
   }
 
   document.addEventListener("keydown", function (event) {
+    if (infoPanel && !infoPanel.hidden) return;
     if (event.key === "Escape" && state.view === "player") {
       location.hash = hashForLibrary(state.volume);
       return;
@@ -608,6 +624,138 @@
   if (!location.hash) location.hash = "#/";
   route();
 
+  /* ------------------------------------------------------------- app info */
+
+  var infoButton = document.getElementById("app-info-button");
+  var infoPanel = document.getElementById("app-info-panel");
+  var infoRows = document.getElementById("app-info-rows");
+  var manifestState = "idle";
+  var manifestVersion = null;
+
+  function loadedBuild() {
+    var meta = document.querySelector('meta[name="batapp-version"]');
+    return meta ? meta.content : "unknown";
+  }
+
+  function scriptVersion(name) {
+    var script = Array.prototype.filter.call(document.scripts, function (node) {
+      var src = node.getAttribute("src") || "";
+      return src.split("?")[0].split("/").pop() === name;
+    })[0];
+    if (!script) return "missing";
+    var match = /[?&]v=([^&]+)/.exec(script.getAttribute("src") || "");
+    return match ? decodeURIComponent(match[1]) : "unversioned";
+  }
+
+  function currentSource() {
+    if (!state.player || !state.player.tracks.length) return "none";
+    var counts = {};
+    state.player.tracks.forEach(function (record) {
+      var format = record.sourceFormat || "unknown";
+      counts[format] = (counts[format] || 0) + 1;
+    });
+    return Object.keys(counts).map(function (format) {
+      return format.toUpperCase() + " ×" + counts[format];
+    }).join(", ");
+  }
+
+  function addInfoRow(name, value, mismatch) {
+    var key = element("span", "k", name);
+    var text = element("span", "v" + (mismatch ? " mismatch" : ""));
+    text.textContent = value;
+    infoRows.appendChild(key);
+    infoRows.appendChild(text);
+  }
+
+  function renderInfo() {
+    if (!infoRows) return;
+    infoRows.innerHTML = "";
+    var build = loadedBuild();
+    addInfoRow("Loaded build", build);
+    addInfoRow("Manifest", manifestState === "ready" ? manifestVersion
+      : (manifestState === "local" ? "local file"
+        : (manifestState === "error" ? "offline / unknown" : "checking…")),
+      manifestState === "ready" && manifestVersion !== build);
+    addInfoRow("Lessons data", scriptVersion("lessons.js"));
+    addInfoRow("Player", scriptVersion("player.js"));
+    addInfoRow("WAV encoder", scriptVersion("wav.js"));
+    addInfoRow("New app runtime", scriptVersion("newapp.js"));
+    addInfoRow("Current lesson", state.lesson
+      ? state.lesson.number + " · " + state.lesson.title : "none");
+    addInfoRow("Audio source", currentSource());
+
+    if (manifestState === "ready" && manifestVersion && manifestVersion !== build) {
+      var update = element("div", "app-info-update");
+      var text = element("span");
+      text.textContent = "Update available: " + manifestVersion;
+      var reload = element("button", "app-info-reload", "Reload latest");
+      reload.type = "button";
+      reload.addEventListener("click", function () {
+        location.replace(location.pathname + "?v=" +
+          encodeURIComponent(manifestVersion) + location.hash);
+      });
+      update.appendChild(text);
+      update.appendChild(reload);
+      infoRows.appendChild(update);
+    }
+  }
+
+  function checkManifest() {
+    if (location.protocol !== "http:" && location.protocol !== "https:") {
+      manifestState = "local";
+      manifestVersion = null;
+      renderInfo();
+      return;
+    }
+    manifestState = "checking";
+    manifestVersion = null;
+    renderInfo();
+    fetch("site.webmanifest?batapp-check=" + Date.now(), {
+      cache: "no-store",
+      credentials: "same-origin"
+    }).then(function (response) {
+      return response.ok ? response.json() : null;
+    }).then(function (manifest) {
+      manifestVersion = manifest && manifest.version || null;
+      manifestState = manifestVersion ? "ready" : "error";
+      renderInfo();
+    }).catch(function () {
+      manifestState = "error";
+      manifestVersion = null;
+      renderInfo();
+    });
+  }
+
+  function openInfo() {
+    if (!infoPanel || !infoButton) return;
+    infoPanel.hidden = false;
+    infoButton.setAttribute("aria-expanded", "true");
+    renderInfo();
+    checkManifest();
+  }
+
+  function closeInfo() {
+    if (!infoPanel || !infoButton) return;
+    infoPanel.hidden = true;
+    infoButton.setAttribute("aria-expanded", "false");
+  }
+
+  if (infoButton && infoPanel && infoRows) {
+    infoButton.addEventListener("click", function (event) {
+      event.stopPropagation();
+      if (infoPanel.hidden) openInfo();
+      else closeInfo();
+    });
+    document.addEventListener("click", function (event) {
+      if (infoPanel.hidden) return;
+      if (infoPanel.contains(event.target) || infoButton.contains(event.target)) return;
+      closeInfo();
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && !infoPanel.hidden) closeInfo();
+    });
+  }
+
   /* Read-only debug/testing hook (the shipped app never uses it). */
   window.__batapp_new = {
     data: D,
@@ -616,6 +764,8 @@
         view: state.view,
         volume: state.volume,
         lesson: state.lesson ? state.lesson.slug : null,
+        build: loadedBuild(),
+        manifest: manifestVersion,
         playing: state.playing,
         mixerPlaying: state.player ? state.player.playing() : false,
         loading: state.loading,

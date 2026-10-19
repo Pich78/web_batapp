@@ -38,10 +38,16 @@ behind the reconstruction.
   library with the two volumes, lesson player with Play/Pause/Stop, Prev/Next,
   a draggable seek bar, loop progress, per-lesson browser titles and a five-stem
   mixer (volume + mute per stem). Every stem starts at 100%, including Vox. The
-  player loads all stems first and only enables Play when they are local. It
-  adapts from a one-pane portrait phone view to a two-column landscape phone
-  view (the full player fits the viewport without scrolling, with Stop beside
-  the transport) and a full desktop layout with a persistent library sidebar.
+  player loads all stems first and only enables Play when they are local. The
+  mixer order is Beat, Vox, Iya, Itotele, Okonkolo for Toques and Beat, Iya,
+  Itotele, Okonkolo for Oru Seco. It adapts from a fixed one-pane portrait phone
+  shell (no page or player scrolling) to a two-column landscape phone view
+  (Stop beside the transport) and a full desktop layout with a persistent
+  library sidebar.
+- **App info** — the hamburger button in the top-left shows the loaded build,
+  the deployed manifest version, the versions of every loaded script, the
+  current lesson and whether audio is WAV or Ogg. If the manifest is newer it
+  offers a manual “Reload latest” action.
 - **Home-screen / PWA updates** — there is no service worker. The page compares
   its own version with `site.webmanifest` through a `no-store` request and, when
   a newer version is deployed, reloads once with a versioned URL. The manifest
@@ -111,7 +117,9 @@ the original scene-reconstruction transport in `js/mixer.js`.
   near-end seek cannot leave that stem behind.
 - Pause keeps every stem loaded and resumes all of them from one shared
   position. Stop keeps them loaded and rewinds all of them to 0; the next Play
-  starts from the beginning. A pending `play()` from a quick tap cannot undo
+  starts from the beginning. On HTTP/PWA, Play after Pause or Stop builds a new
+  media generation from the same Blob URL data, so queued audio from the old
+  position cannot replay. A pending `play()` from a quick tap cannot undo
   Pause or Stop.
 - Seeking moves every stem to the same position before playback continues.
 

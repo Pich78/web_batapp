@@ -59,9 +59,10 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - [x] **Screens**: opening → volume selector → toque index (Volume I) / oru seco
       index (Volume II) → lesson player, with hash routing. No credit/link view.
 - [x] **Mixer**: five `Slider_Volume` controls (0…1, not whole numbers), track
-      labels `Iya/Itotele/Okonkolo/Beat/Vox`, Play/Pause/Stop; the scene page
-      keeps the shipped Vox-at-0 default, while the modern page starts every
-      stem (including Vox) at 100%.
+      labels `Beat/Vox/Iya/Itotele/Okonkolo` with the modern order Beat, Vox,
+      Iya, Itotele, Okonkolo for Toques and Beat, Iya, Itotele, Okonkolo for Oru
+      Seco; Play/Pause/Stop. The scene page keeps the shipped Vox-at-0 default,
+      while the modern page starts every stem (including Vox) at 100%.
 - [x] **Playback strategy** → `js/player.js` (`window.BatappPlayer`) for the
       modern page; the legacy scene page keeps `js/mixer.js`:
       - opening the library creates no audio element, context or request;
@@ -79,8 +80,10 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
         every other stem; a missing loop flag defaults to true;
       - all stems reset to 0 together at the loop boundary; no per-stem
         wrap-seek can leave a stem behind or add loop noise;
-      - Pause keeps the stems loaded and resumes them from one shared position;
-        Stop rewinds all stems to 0 and the next Play starts from the beginning;
+      - Pause keeps the stems loaded and resumes from the actual shared
+        position; Stop rewinds all stems to 0. On HTTP/PWA, Play after either
+        builds a fresh media generation from the same Blob with a new object
+        URL, so queued old-position audio cannot replay;
       - Back aborts pending transfers, clears the elements, revokes Blob URLs
         and closes the AudioContext; reopening downloads all stems again.
 - [x] **Pause/resume semantics** matching `AudioSource.Pause`/`Stop` for all five
@@ -93,10 +96,15 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       (persistent sidebar on desktop), progress ring, draggable seek bar,
       per-lesson titles, per-stem volume and mute, natural lesson order
       (1, 2, … 20A, 20B, 21, 22), system light/dark theme, generated
-      two-colour three-drum icon set, no external resources. Landscape fits the
-      whole player without page or mixer scrolling and places Stop beside the
-      transport. The generated `js/lessons.js` is a compact lessons-only payload
-      for this page; the scene page keeps `js/data.js`.
+      two-colour three-drum icon set, no external resources. Portrait and
+      landscape use a fixed app shell: the player fits without page or internal
+      scrolling (short portrait uses a compact single-line mixer), landscape
+      places Stop beside the transport, and the library list is the only scroll
+      container. A fixed top-left hamburger shows the loaded build, manifest,
+      script versions, current lesson and audio format, with a manual reload
+      when the deployed manifest is newer. The generated `js/lessons.js` is a
+      compact lessons-only payload for this page; the scene page keeps
+      `js/data.js`.
       Vox starts at 100% in the modern model. All stems are loaded and verified
       (fetch-to-Blob with checksums and runtime WAV expansion on HTTP, local Ogg
       elements on file://) before the playing screen appears, with named errors
@@ -154,16 +162,18 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       semantics, prev/next, keyboard, light/dark themes, all 61 lessons and an
       HTTP pass exercising fetch-to-Blob, WAV headers, estimated mobile
       durations, Ogg decode fallback, the largest lesson, the gate, named
-      errors/Retry and the Web Audio gains. Landscape runs at five sizes up to
-      480×320 and asserts no page, player or mixer scroll, all five stems
-      visible and Stop beside the transport. The HTTP pass also checks the
-      manifest version reload. Chromium runs the full sweep; Firefox/WebKit run
-      representative lessons. The instrumented transport regression covers zero
-      audio on open, one slow stem, corrupt transfers, pause → mute → play →
-      backward seek, the loop restart to zero, volume-only changes, Back
-      unloading and fresh reloads. Summary in
-      `docs/verification/new-ui-sweep-summary.json`; cross-browser record in
-      `docs/verification/cross-browser-summary.json`.
+      errors/Retry and the Web Audio gains. Portrait runs at five sizes and
+      landscape at five sizes up to 480×320, asserting no page, player or mixer
+      scroll, all five stems visible, the fixed app menu and (landscape) Stop
+      beside the transport. Mixer order and the app-info versions are checked.
+      The HTTP pass also checks the manifest version reload and update action,
+      fresh media generations on Pause/Stop → Play and exact WAV resumes.
+      Chromium runs the full sweep; Firefox/WebKit run representative lessons.
+      The instrumented transport regression covers zero audio on open, one slow
+      stem, corrupt transfers, pause → mute → play → backward seek, the loop
+      restart to zero, volume-only changes, Back unloading and fresh reloads.
+      Summary in `docs/verification/new-ui-sweep-summary.json`; cross-browser
+      record in `docs/verification/cross-browser-summary.json`.
 - [ ] Re-run `tools/unity_schema.py` and `tools/export_audio.py --verify` in CI
       fashion and store the summaries under `docs/verification/`.
 - [ ] Compare the port's rendered screens against the shipped scene data

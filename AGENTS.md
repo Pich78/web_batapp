@@ -205,7 +205,11 @@ legacy `js/mixer.js` transport.
   mixer row per available stem (Beat, Itotele, Iya, Okonkolo, Vox; Vox is absent
   in Volume II and in `Egbi pami`). Each row has a volume slider and a mute that
   preserves the slider value. Every stem, including Vox, starts at 100%.
-- The mixer order and stem labels follow the shipped player's draw order.
+- Mixer order is Beat, Vox, Iya, Itotele, Okonkolo for Toques and Beat, Iya,
+  Itotele, Okonkolo for Oru Seco (Vox is omitted when the stem is absent).
+- A fixed top-left hamburger opens the app-info panel: loaded build, deployed
+  manifest version, loaded script versions, current lesson and audio format,
+  plus a manual Reload latest action when the manifest is newer.
 - Opening a lesson runs a load gate: on HTTP(S) every stem is fetched into a
   Blob with `cache: "no-store"` and a fresh per-load URL and checked against the
   byte count and SHA-256/CRC-32 manifest in `js/lessons.js`. The verified Ogg is
@@ -217,15 +221,18 @@ legacy `js/mixer.js` transport.
 - Transport: every stem loops (the scene object `Bit` maps to the exported
   `beat` stem). The transport resets all stems to 0 together at the loop
   boundary, so a browser that recalculates one stem's duration after a near-end
-  seek cannot leave that stem behind. Pause captures one shared position and
-  resumes all stems there; Stop rewinds all stems to 0 and the next Play starts
-  from the beginning. Mute and volume only change per-stem gain. Back disposes
-  the player, revokes Blob URLs and closes the AudioContext.
+  seek cannot leave that stem behind. Pause captures the actual shared element
+  position; Stop rewinds to 0. On HTTP/PWA, Play after Pause or Stop builds a
+  fresh media generation from the same Blob with a new object URL, clearing any
+  queued old-position audio. Mute and volume only change per-stem gain. Back
+  disposes the player, revokes Blob URLs and closes the AudioContext.
 - The seek bar under the title seeks all stems together; the title format is
   `Title · Toque/Oru Seco NN · Batá`, with `Toques · Batá`, `Oru Seco · Batá`
   and the root title for library routes.
 - Three responsive modes built from one DOM:
-  - portrait phones: one pane at a time (library or player);
+  - portrait phones: fixed app shell, one pane at a time; the player fits with
+    no page or internal scroll (short screens use a compact single-line mixer),
+    while the library list is the only scroll container;
   - landscape phones (`orientation: landscape` and `max-height: 559px`):
     full-bleed two-column player that fits the viewport without page or player
     scrolling (Stop sits beside the transport) and a two-column library whose
@@ -263,17 +270,18 @@ legacy `js/mixer.js` transport.
   checks stems/durations, the five sliders, the title, canvas bounds and
   console/network errors; record its summary under `docs/verification/`.
 - `tests/verify-new.mjs` covers the modern layout (`index.html`) over
-  `file://` and over HTTP: portrait, landscape-phone and desktop modes, load
-  gate, seek, titles, mute semantics, prev/next, both colour schemes, lesson
-  order, slim-data equivalence, integrity manifest, icon links, no external
-  requests/links and a lesson sweep. It also runs instrumented transport
-  regressions (zero audio on library open, one slow stem keeps the player
-  hidden, corrupted transfers fail closed, WAV headers and exact duration,
-  estimated mobile durations no longer blocking load, Ogg decode fallback, the
-  largest lesson converting completely, one media element per stem, pause →
-  mute → play → backward seek, loop restart to zero, volume/mute leaving the
-  transport untouched, Back unloading every resource and reopening downloading
-  fresh stems). Chromium runs all 61 lessons; `BROWSER=firefox|webkit` runs
+  `file://` and over HTTP: fixed portrait and landscape shells at five sizes
+  each, desktop, load gate, seek, titles, mixer order, mute semantics,
+  prev/next, both colour schemes, lesson order, slim-data equivalence,
+  integrity manifest, app-info versions, icon links, no external requests/links
+  and a lesson sweep. It also runs instrumented transport regressions (zero
+  audio on library open, one slow stem keeps the player hidden, corrupted
+  transfers fail closed, WAV headers and exact duration, estimated mobile
+  durations no longer blocking load, Ogg decode fallback, the largest lesson
+  converting completely, fresh media generations on Pause/Stop → Play with no
+  extra audio requests, loop restart to zero, volume/mute leaving the transport
+  untouched, Back unloading every resource and reopening downloading fresh
+  stems). Chromium runs all 61 lessons; `BROWSER=firefox|webkit` runs
   representative lessons (and the HTTP gate/error paths). Its Chromium summary
   is written to `docs/verification/new-ui-sweep-summary.json`;
   `tests/verify-browsers.mjs` records all engines in

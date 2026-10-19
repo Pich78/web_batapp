@@ -329,14 +329,15 @@ const shipped = ["js/batapp.js", "js/data.js", "js/lessons.js", "js/wav.js", "js
 for (const file of shipped) {
   const text = fs.readFileSync(path.join(root, file), "utf8");
   const moduleUse = /type\s*=\s*["']module["']|import\s+.*from\s+["']/.test(text);
-  // The modern player fetches its own audio on HTTP(S) to satisfy the load gate
-  // and checksum verification. The legacy scene page keeps the fetch-free
-  // mixer, and no shipped script contains an absolute URL.
+  // The modern player fetches its own audio on HTTP(S) for the load gate and
+  // checksum verification; newapp.js fetches the same-origin manifest for the
+  // app-info/version panel. The legacy scene page keeps the fetch-free mixer,
+  // and no shipped script contains an absolute URL.
   const fetchUse = /\bfetch\s*\(/.test(text);
   const externalUrl = /https?:\/\//.test(text);
   check(file + " is a classic script (no modules)", !moduleUse, moduleUse ? "module syntax found" : "clean");
-  if (file === "js/player.js") {
-    check(file + " fetches only same-origin audio", fetchUse && !externalUrl,
+  if (file === "js/player.js" || file === "js/newapp.js") {
+    check(file + " fetches only same-origin resources", fetchUse && !externalUrl,
       fetchUse ? (externalUrl ? "absolute URL found" : "relative-only") : "fetch hook missing");
   } else {
     check(file + " contains no fetch()", !fetchUse, fetchUse ? "fetch found" : "clean");

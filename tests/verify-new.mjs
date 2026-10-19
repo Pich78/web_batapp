@@ -292,6 +292,25 @@ check("modern page links the icon set",
   iconLinks.includes("assets/icon-180.png") && iconLinks.includes("site.webmanifest"),
   iconLinks.join(", "));
 
+await page.locator("#app-info-button").click();
+await page.waitForTimeout(250);
+const infoPanel = await page.evaluate(() => ({
+  hidden: document.getElementById("app-info-panel").hidden,
+  text: document.getElementById("app-info-panel").innerText,
+  expanded: document.getElementById("app-info-button").getAttribute("aria-expanded"),
+  build: window.__batapp_new.state().build
+}));
+check("app menu shows the loaded build and script versions",
+  !infoPanel.hidden && infoPanel.expanded === "true" &&
+  infoPanel.build === "1.1.7" && infoPanel.text.indexOf("Loaded build") >= 0 &&
+  infoPanel.text.indexOf("Player") >= 0 && infoPanel.text.indexOf("WAV encoder") >= 0 &&
+  infoPanel.text.indexOf("1.1.7") >= 0,
+  JSON.stringify(infoPanel));
+await page.keyboard.press("Escape");
+await page.waitForTimeout(100);
+check("Escape closes the app menu",
+  await page.evaluate(() => document.getElementById("app-info-panel").hidden));
+
 await page.locator(".tab").nth(1).click();
 await page.waitForTimeout(300);
 rows = await page.locator(".row").count();
@@ -330,6 +349,9 @@ check("all stems start at 100%",
 check("every stem loops, including Beat",
   initial.every((track) => track.loop === true),
   JSON.stringify(initial.map((track) => track.stem + ":loop=" + track.loop)));
+const toqueStemOrder = await page.locator(".stem").evaluateAll((nodes) => nodes.map((node) => node.dataset.stem));
+check("Toques mixer order is Beat, Vox, Iya, Itotele, Okonkolo",
+  toqueStemOrder.join(",") === "beat,vox,iya,ito,oko", JSON.stringify(toqueStemOrder));
 
 // Play: every stem advances, in sync, and the progress ring moves
 await page.locator("button.play").click();
@@ -600,6 +622,9 @@ await ready();
 ui = await page.evaluate(() => window.__batapp_new.ui());
 check("instrumental lesson gets four mixer rows", ui.rows === 4, ui.rows + " rows");
 check("instrumental lesson has no Vox", !(await page.evaluate(() => window.__batapp_new.state().stems.includes("vox"))));
+const oruStemOrder = await page.locator(".stem").evaluateAll((nodes) => nodes.map((node) => node.dataset.stem));
+check("Oru Seco mixer order is Beat, Iya, Itotele, Okonkolo",
+  oruStemOrder.join(",") === "beat,iya,ito,oko", JSON.stringify(oruStemOrder));
 
 // --- no credit / external surface -----------------------------------------
 const banned = /Bianconcini|batangoma|Buy the book|Where to buy|Libri Video|Amazon|iTunes|Apple music|Instagram|Facebook|YouTube/i;
@@ -619,6 +644,81 @@ for (const hash of ["#/", "#/v/2", "#/lesson/volume-1/01-alubanche", "#/lesson/v
   if (found.sources.length) surface.push(hash + " urls:" + found.sources.join(","));
 }
 check("no author/shop text, no links, no external URLs", surface.length === 0, surface.join(" | "));
+
+// --- fixed portrait app shell ----------------------------------------------
+const portraitSizes = [[390, 844], [375, 667], [360, 640], [320, 568], [414, 896]];
+for (const [width, height] of portraitSizes) {
+  const label = width + "x" + height;
+  const page = await browser.newPage({ viewport: { width, height } });
+  await page.bringToFront();
+  await page.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
+  await ready(page);
+  await page.waitForTimeout(400);
+  const snap = await page.evaluate(() => {
+    const box = (node) => {
+      const rect = node.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+    };
+    const main = document.getElementById("main-pane");
+    const playerView = document.querySelector(".player-view");
+    const mixer = document.querySelector(".mixer");
+    return {
+      app: box(document.getElementById("app")),
+      menu: box(document.getElementById("app-info-button")),
+      seek: box(document.querySelector(".seek")),
+      stop: box(document.querySelector(".stop")),
+      rows: Array.from(document.querySelectorAll(".stem")).map(box),
+      viewport: [window.innerWidth, window.innerHeight],
+      scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+      mainScroll: [main.scrollWidth, main.scrollHeight, main.clientWidth, main.clientHeight],
+      playerScroll: [playerView.scrollWidth, playerView.scrollHeight, playerView.clientWidth, playerView.clientHeight],
+      mixerScroll: [mixer.scrollWidth, mixer.scrollHeight, mixer.clientWidth, mixer.clientHeight]
+    };
+  });
+  check(label + " portrait has no page scroll",
+    snap.app.left === 0 && snap.app.right === snap.viewport[0] &&
+    snap.app.top === 0 && snap.app.bottom === snap.viewport[1] &&
+    snap.scroll[0] <= snap.viewport[0] && snap.scroll[1] <= snap.viewport[1],
+    JSON.stringify({ app: snap.app, scroll: snap.scroll, viewport: snap.viewport }));
+  check(label + " portrait player fits without internal scroll",
+    snap.playerScroll[1] <= snap.playerScroll[3] + 1 &&
+    snap.mixerScroll[1] <= snap.mixerScroll[3] + 1 &&
+    snap.mainScroll[1] <= snap.mainScroll[3] + 1 &&
+    snap.seek.top >= 0 && snap.seek.bottom <= snap.viewport[1] &&
+    snap.stop.top >= 0 && snap.stop.bottom <= snap.viewport[1] &&
+    snap.rows.length === 5 && snap.rows.every((row) =>
+      row.top >= -1 && row.bottom <= snap.viewport[1] + 1),
+    JSON.stringify({ player: snap.playerScroll, mixer: snap.mixerScroll, main: snap.mainScroll, seek: snap.seek, stop: snap.stop, rows: snap.rows }));
+  check(label + " portrait keeps the app menu in the top-left safe area",
+    snap.menu.left >= 0 && snap.menu.top >= 0 &&
+    snap.menu.right <= 52 && snap.menu.bottom <= 52,
+    JSON.stringify(snap.menu));
+  if (label === "320x568") {
+    await page.screenshot({ path: path.join(shots, "07-portrait-small.png") });
+  }
+  await page.close();
+}
+
+const portraitLibrary = await browser.newPage({ viewport: { width: 390, height: 844 } });
+await portraitLibrary.bringToFront();
+await portraitLibrary.goto(pageUrl + "#/v/1");
+await portraitLibrary.waitForTimeout(500);
+const portraitLibrarySnap = await portraitLibrary.evaluate(() => {
+  const list = document.querySelector(".list");
+  return {
+    scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+    viewport: [window.innerWidth, window.innerHeight],
+    listScroll: [list.scrollWidth, list.scrollHeight, list.clientWidth, list.clientHeight]
+  };
+});
+check("portrait library does not scroll the page",
+  portraitLibrarySnap.scroll[0] <= portraitLibrarySnap.viewport[0] &&
+  portraitLibrarySnap.scroll[1] <= portraitLibrarySnap.viewport[1],
+  JSON.stringify(portraitLibrarySnap));
+check("portrait library scrolls only inside the lesson list",
+  portraitLibrarySnap.listScroll[1] > portraitLibrarySnap.listScroll[3],
+  JSON.stringify(portraitLibrarySnap.listScroll));
+await portraitLibrary.close();
 
 // --- mobile landscape ------------------------------------------------------
 function landscapeSnapshot(page) {
@@ -958,6 +1058,31 @@ try {
     (versionNew.url().match(/v=9\.9\.9/g) || []).length === 1, versionNew.url());
   await versionNew.close();
 
+  // Opening the app menu after deployment must expose a manifest newer than
+  // the loaded page and offer a manual cache-busting reload.
+  const infoUpdate = await browser.newPage({ viewport });
+  await infoUpdate.goto(servedUrl + "#/");
+  await infoUpdate.waitForTimeout(700);
+  await infoUpdate.route("**/site.webmanifest*", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/manifest+json",
+    body: JSON.stringify({
+      name: "Batá · Toques & Oru Seco",
+      short_name: "Batá",
+      version: "9.9.9",
+      start_url: "./?v=9.9.9",
+      scope: "./",
+      icons: []
+    })
+  }));
+  await infoUpdate.locator("#app-info-button").click();
+  await infoUpdate.waitForFunction(() => {
+    return document.getElementById("app-info-panel").innerText.indexOf("Update available: 9.9.9") >= 0;
+  }, null, { timeout: 10000 });
+  check("app menu exposes a newer deployed manifest and a reload action",
+    await infoUpdate.locator(".app-info-reload").isVisible());
+  await infoUpdate.close();
+
   const served = await browser.newPage({ viewport });
   await served.bringToFront();
   await served.addInitScript(installMediaProbe);
@@ -1012,6 +1137,26 @@ try {
     Math.abs(wavInfo.duration - wavInfo.transportDuration) < 0.1 &&
     wavInfo.wavBytes.every((bytes) => bytes === wavInfo.bytes),
     JSON.stringify({ wav: wavInfo.duration, transport: wavInfo.transportDuration, wavBytes: wavInfo.wavBytes, file: wavInfo.bytes }));
+
+  await served.locator("#app-info-button").click();
+  await served.waitForFunction(() => window.__batapp_new.state().manifest === "1.1.7", null, { timeout: 10000 });
+  const servedInfo = await served.evaluate(() => ({
+    text: document.getElementById("app-info-panel").innerText,
+    hidden: document.getElementById("app-info-panel").hidden,
+    build: window.__batapp_new.state().build,
+    manifest: window.__batapp_new.state().manifest
+  }));
+  check("HTTP app menu reports the loaded build, manifest and WAV source",
+    !servedInfo.hidden && servedInfo.build === "1.1.7" &&
+    servedInfo.manifest === "1.1.7" &&
+    servedInfo.text.indexOf("Current lesson") >= 0 &&
+    servedInfo.text.indexOf("Alubanche") >= 0 &&
+    servedInfo.text.indexOf("WAV ×5") >= 0,
+    JSON.stringify(servedInfo));
+  await served.keyboard.press("Escape");
+  await served.waitForTimeout(100);
+  check("HTTP app menu closes with Escape",
+    await served.evaluate(() => document.getElementById("app-info-panel").hidden));
   let vox = await served.evaluate(() => window.__batapp_new.tracks().find((track) => track.stem === "vox"));
   check("Vox starts at 100% on HTTP",
     vox.volume === 1 && vox.gain === 1 && vox.elementVolume === 1,
@@ -1027,6 +1172,10 @@ try {
     input.value = "100";
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
+  const initialGeneration = await served.evaluate(() => ({
+    created: window.__mediaProbeSummary().created,
+    src: window.__batapp_new.tracks()[0].src
+  }));
   await served.locator("button.play").click();
   await served.waitForTimeout(1400);
   const servedTimes = await served.evaluate(() => window.__batapp_new.tracks().map((track) => track.currentTime));
@@ -1037,8 +1186,16 @@ try {
   await served.waitForTimeout(250);
   await served.locator(".stem[data-stem='iya'] .mute").click();
   await served.waitForTimeout(150);
+  const pausedPosition = await served.evaluate(() => window.__batapp_new.state().position);
   await served.locator("button.play").click();
   await served.waitForTimeout(700);
+  const resumedTracks = await served.evaluate(() => window.__batapp_new.tracks());
+  const resumedTimes = resumedTracks.map((track) => track.currentTime);
+  check("HTTP Pause -> Play resumes at the pause point on a fresh generation",
+    Math.max(...resumedTimes) - Math.min(...resumedTimes) < 0.12 &&
+    resumedTimes.every((time) => Math.abs(time - (pausedPosition + 0.7)) < 0.35) &&
+    resumedTracks.find((track) => track.stem === "iya").muted === true,
+    JSON.stringify({ paused: +pausedPosition.toFixed(3), times: resumedTimes.map((time) => +time.toFixed(3)) }));
   await served.locator(".seek-input").evaluate((input) => {
     input.value = "10";
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -1050,12 +1207,47 @@ try {
     tracks: window.__batapp_new.tracks(),
     state: window.__batapp_new.state()
   }));
-  check("HTTP pause + mute + play + backward seek keeps five active stems",
-    servedSequence.media.created === 5 && servedSequence.media.active === 5 &&
+  check("HTTP pause + mute + play rebuilds a fresh generation at the same point",
+    initialGeneration.created === 5 &&
+    servedSequence.media.created === initialGeneration.created + 5 &&
+    servedSequence.media.active === 5 &&
     servedSequence.media.rates.length === 1 && servedSequence.state.mixerPlaying === true &&
     servedSequence.tracks.every((track) => track.currentTime >= 9.9 && track.currentTime < 12) &&
-    servedSequence.tracks.find((track) => track.stem === "iya").muted === true,
+    servedSequence.tracks.find((track) => track.stem === "iya").muted === true &&
+    servedSequence.tracks[0].src !== initialGeneration.src,
     JSON.stringify({ media: servedSequence.media, tracks: servedSequence.tracks.map((track) => ({ stem: track.stem, t: +track.currentTime.toFixed(2), muted: track.muted })) }));
+
+  // Stop -> Play must create another fresh generation at zero, without
+  // downloading any audio again.
+  const beforeStop = await served.evaluate(() => ({
+    created: window.__mediaProbeSummary().created,
+    src: window.__batapp_new.tracks()[0].src
+  }));
+  await served.locator(".stop").click();
+  await served.waitForTimeout(300);
+  const stoppedGeneration = await served.evaluate(() => ({
+    state: window.__batapp_new.state(),
+    tracks: window.__batapp_new.tracks()
+  }));
+  check("HTTP Stop resets the visible timeline immediately",
+    stoppedGeneration.state.position === 0 &&
+    stoppedGeneration.tracks.every((track) => track.paused && track.currentTime < 0.1),
+    JSON.stringify({ position: stoppedGeneration.state.position, tracks: stoppedGeneration.tracks.map((track) => ({ stem: track.stem, t: track.currentTime, paused: track.paused })) }));
+  await served.locator("button.play").click();
+  await served.waitForTimeout(1200);
+  const afterStopPlay = await served.evaluate(() => ({
+    media: window.__mediaProbeSummary(),
+    tracks: window.__batapp_new.tracks(),
+    state: window.__batapp_new.state()
+  }));
+  check("HTTP Stop -> Play builds a fresh generation from zero",
+    afterStopPlay.media.created === beforeStop.created + 5 &&
+    afterStopPlay.media.active === 5 &&
+    afterStopPlay.state.mixerPlaying === true &&
+    afterStopPlay.tracks.every((track) => track.currentTime > 0 && track.currentTime < 1.8) &&
+    afterStopPlay.tracks[0].src !== beforeStop.src &&
+    servedAudioRequests.length === 5,
+    JSON.stringify({ created: afterStopPlay.media.created, times: afterStopPlay.tracks.map((track) => +track.currentTime.toFixed(2)), requests: servedAudioRequests.length }));
 
   // Volume and mute must not touch the transport.
   const beforeLevel = await served.evaluate(() => ({

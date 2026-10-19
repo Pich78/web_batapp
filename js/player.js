@@ -152,6 +152,7 @@
     this._context = null;
     this._playToken = 0;
     this._alignToken = 0;
+    this._needsFreshGeneration = false;
     this._onProgress = null;
     this._buildRecords();
   }
@@ -306,6 +307,7 @@
           record.wavDuration = wav.duration;
           record.wavSampleRate = wav.sampleRate;
           record.wavChannels = wav.channels;
+          item.sourceBlob = wav.blob;
           item.blob = null;
         } catch (error) {
           item.wavError = error && (error.message || String(error));
@@ -319,6 +321,7 @@
         record.wavDuration = null;
         record.wavSampleRate = null;
         record.wavChannels = null;
+        item.sourceBlob = item.blob;
         sourceUrl = URL.createObjectURL(item.blob);
         format = "ogg";
       }
@@ -337,7 +340,8 @@
         url: item.url,
         integrity: item.integrity,
         format: item.format,
-        wavError: item.wavError
+        wavError: item.wavError,
+        blob: item.sourceBlob
       };
     }));
 
@@ -463,6 +467,9 @@
       item.record.integrity = item.integrity;
       item.record.sourceFormat = item.format || "ogg";
       item.record.wavError = item.wavError || null;
+      item.record.sourceBlob = item.blob || null;
+      item.record.sourceUrl = item.url;
+      item.record.objectUrl = item.blob ? item.url : null;
       element.addEventListener("error", function () {
         if (self._disposed) return;
         item.record.error = element.error ? element.error.code : -1;
@@ -572,6 +579,7 @@
     this._offset = 0;
     this._clockOffset = 0;
     this._clockStartedAt = 0;
+    this._needsFreshGeneration = false;
     this._loaded = true;
     this._loading = false;
     this._state = "ready";
@@ -616,6 +624,92 @@
       if (!record.element || record.element.paused) return;
       try { record.element.pause(); } catch (error) { /* already released */ }
     });
+  };
+
+  BatappPlayer.prototype._mediaPosition = function () {
+    var record = this.tracks.filter(function (item) {
+      return item.element && !item.element.paused;
+    })[0] || this.tracks.filter(function (item) {
+      return item.element;
+    })[0];
+    if (record && record.element && isFinite(record.element.currentTime)) {
+      return Math.max(0, Math.min(record.element.currentTime, this.duration()));
+    }
+    return this.position();
+  };
+
+  BatappPlayer.prototype._hasBlobSources = function () {
+    return this.tracks.some(function (record) {
+      return !!record.sourceBlob;
+    });
+  };
+
+  BatappPlayer.prototype._silenceGeneration = function () {
+    this.tracks.forEach(function (record) {
+      if (record.element && !record.element.paused) {
+        try { record.element.pause(); } catch (error) { /* released */ }
+      }
+      if (record.sourceNode) {
+        try { record.sourceNode.disconnect(); } catch (error) { /* released */ }
+      }
+    });
+  };
+
+  BatappPlayer.prototype._disposeGeneration = function () {
+    this._alignToken += 1;
+    this.tracks.forEach(function (record) {
+      if (record.element) {
+        try { record.element.pause(); } catch (error) { /* released */ }
+        try { record.element.removeAttribute("src"); } catch (error) { /* released */ }
+        try { record.element.load(); } catch (error) { /* released */ }
+      }
+      if (record.sourceNode) {
+        try { record.sourceNode.disconnect(); } catch (error) { /* released */ }
+      }
+      if (record.gain) {
+        try { record.gain.disconnect(); } catch (error) { /* released */ }
+      }
+      record.element = null;
+      record.sourceNode = null;
+      record.gain = null;
+      record.ready = false;
+      record.objectUrl = null;
+      record._alignSeeking = false;
+    });
+    this._objectUrls.forEach(function (url) {
+      try { URL.revokeObjectURL(url); } catch (error) { /* already revoked */ }
+    });
+    this._objectUrls = [];
+  };
+
+  BatappPlayer.prototype._rebuildPlayback = function (offset) {
+    var self = this;
+    this._disposeGeneration();
+    var items = this.tracks.map(function (record) {
+      var url = record.sourceUrl;
+      if (record.sourceBlob) {
+        url = URL.createObjectURL(record.sourceBlob);
+        self._objectUrls.push(url);
+        record.sourceUrl = url;
+        record.objectUrl = url;
+      }
+      return {
+        record: record,
+        url: url,
+        integrity: record.integrity,
+        format: record.sourceFormat,
+        wavError: record.wavError,
+        blob: record.sourceBlob
+      };
+    });
+    this._createElements(items);
+    this.tracks.forEach(function (record) {
+      record.ready = true;
+      record.duration = record.wavDuration || record.seconds || 0;
+      if (!record.element) return;
+      try { record.element.currentTime = offset; } catch (error) { /* not seekable yet */ }
+    });
+    this._needsFreshGeneration = false;
   };
 
   BatappPlayer.prototype._alignAll = function (seconds) {
@@ -824,17 +918,20 @@
       var failure = results.filter(Boolean)[0];
       if (!failure) return;
       if (self._disposed || token !== self._playToken || self._state !== "playing") return;
-      var position = self.position();
+      var position = self._mediaPosition();
       if (self._loopTimer) {
         clearTimeout(self._loopTimer);
         self._loopTimer = 0;
       }
       self._state = "paused";
       self._pauseAll();
+      var fresh = self._hasBlobSources();
+      if (fresh) self._silenceGeneration();
       self._offset = position;
       self._clockOffset = position;
       self._clockStartedAt = performance.now();
-      self._alignAll(position);
+      self._needsFreshGeneration = fresh;
+      if (!fresh) self._alignAll(position);
       if (typeof self.options.onError === "function") {
         self.options.onError(failure.record.stem, failure.error);
       }
@@ -882,6 +979,27 @@
     this._offset = offset;
     this._state = "playing";
 
+    // After Pause or Stop on HTTP, build a fresh media generation from the
+    // same Blob instead of seeking the old pipeline. This discards buffered
+    // audio and guarantees the audible start position.
+    if (this._needsFreshGeneration) {
+      try {
+        this._rebuildPlayback(offset);
+      } catch (error) {
+        this._state = "paused";
+        this._needsFreshGeneration = this._hasBlobSources();
+        if (typeof this.options.onError === "function") {
+          this.options.onError(null, error);
+        }
+        return true;
+      }
+      this._clockOffset = offset;
+      this._clockStartedAt = performance.now();
+      this._startElements(token);
+      this._scheduleLoop(token);
+      return true;
+    }
+
     // A pending seek must settle before all stems start, or one element can
     // keep its old position while the others jump to the shared offset.
     this._alignAll(offset).then(function (aligned) {
@@ -906,18 +1024,21 @@
 
   BatappPlayer.prototype.pause = function () {
     if (this._disposed || this._state !== "playing") return;
-    var position = this.position();
+    var position = this._mediaPosition();
     this._playToken += 1;
     if (this._loopTimer) {
       clearTimeout(this._loopTimer);
       this._loopTimer = 0;
     }
     this._pauseAll();
+    var fresh = this._hasBlobSources();
+    if (fresh) this._silenceGeneration();
     this._offset = position;
     this._clockOffset = position;
     this._clockStartedAt = performance.now();
     this._state = "paused";
-    this._alignAll(position);
+    this._needsFreshGeneration = fresh;
+    if (!fresh) this._alignAll(position);
   };
 
   BatappPlayer.prototype.stop = function () {
@@ -928,11 +1049,23 @@
       this._loopTimer = 0;
     }
     this._pauseAll();
+    var fresh = this._hasBlobSources();
+    if (fresh) this._silenceGeneration();
     this._offset = 0;
     this._clockOffset = 0;
     this._clockStartedAt = performance.now();
     this._state = "stopped";
-    this._alignAll(0);
+    this._needsFreshGeneration = fresh;
+    if (!fresh) {
+      this._alignAll(0);
+    } else {
+      // Keep the paused elements visually at the start even though the next
+      // Play will replace them with a fresh generation.
+      this.tracks.forEach(function (record) {
+        if (!record.element) return;
+        try { record.element.currentTime = 0; } catch (error) { /* not seekable */ }
+      });
+    }
   };
 
   BatappPlayer.prototype.seek = function (seconds) {
@@ -953,7 +1086,7 @@
       this._state = "paused";
       this.play();
     } else {
-      this._alignAll(target);
+      if (!this._needsFreshGeneration) this._alignAll(target);
       if (this._state !== "ready") this._state = "paused";
     }
     return target;
@@ -1055,17 +1188,18 @@
       this._controller = null;
     }
     this._pauseAll();
-    this._discardElements(this.tracks);
-    this._objectUrls.forEach(function (url) {
-      try { URL.revokeObjectURL(url); } catch (error) { /* already revoked */ }
+    this._disposeGeneration();
+    this.tracks.forEach(function (record) {
+      record.sourceBlob = null;
+      record.sourceUrl = null;
     });
-    this._objectUrls = [];
     this._closeContext();
     this._loaded = false;
     this._loading = false;
     this._offset = 0;
     this._clockOffset = 0;
     this._clockStartedAt = 0;
+    this._needsFreshGeneration = false;
     this._onProgress = null;
   };
 
