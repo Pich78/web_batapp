@@ -293,17 +293,24 @@ Findings that matter for the port:
   32-byte payload is the MonoBehaviour preamble plus the same unexplained
   4-byte slot every fieldless component carries. They resolve their
   `AudioSource` at runtime (`Start`), which is why the port needs no per-track
-  configuration beyond the slider's `SetVolume` target.
+  configuration beyond the slider's `SetVolume` target. Decompilation confirms
+  `SetVolume` only stores the value at `this + 0x20` (`musicVolume`); `Update`
+  (not decompiled) applies it to the `AudioSource`. Full pseudocode and
+  Evidence IDs are in
+  [docs/verification/app-methods.txt](verification/app-methods.txt).
 - **The links screen is explicit**: `WebURLScript` exposes one method per
   destination (`btnFacebook`, `btnYoutube`, `btnInstagram`, `btnAmazon`,
   `btnAppleMusic`, `btnBatangoma`) — the Amazon/Apple Music art in
   `assets/img/` belongs to those buttons.
-- **Navigation is index-based**: `SceneSurf` keeps `private int sceneIndex` and
-  implements `LoadPrevLevel()` / `LoadNextLevel()` (the `"Entermenu"` string
-  seen in the UnityEvent is a *stale argument* left in the inspector — the
-  method takes no parameter).
-- `MoveOnClick.ChangeScene(string sceneName)` is the carousel's route to a
-  lesson scene, matching the `ChangeScene` strings recorded per button.
+- **Navigation is index-based**: `SceneSurf` keeps `private int sceneIndex` at
+  `+0x18` and implements `LoadPrevLevel()` / `LoadNextLevel()` as
+  `SceneManager.LoadScene(sceneIndex - 1)` / `(sceneIndex + 1)` (the
+  `"Entermenu"` string seen in the UnityEvent is a *stale argument* left in the
+  inspector — the method takes no parameter).
+- `MoveOnClick.ChangeScene(string sceneName)` decompiles to
+  `Application.LoadLevel(name)`, the carousel's route to a lesson scene, matching
+  the `ChangeScene` strings recorded per button (pseudocode in
+  `docs/verification/app-methods.txt`).
 - `SimpleSpectrum`/`OutputVolume` are the third-party FFT/RMS visualisers; their
-  full public field lists are in the recorded slice and are what a faithful
-  spectrum animation would read.
+  fields are now decoded for `SimpleSpectrum` (40 bars, scale/spacing, colour
+  curve) and the port animates them.

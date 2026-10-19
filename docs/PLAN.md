@@ -129,19 +129,27 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       3.4 MB catalog (largest schema 196 KB) that OpenCode drops silently
       (`rea mcp doctor` green; issue draft in `.work/rea-mcp-catalog-issue.md`).
       REA is driven through its CLI instead (documented in AGENTS.md).
-- [~] Decompile the app's own methods with Ghidra by their VA from `script.json`.
-      The timeout knob is **`REA_GHIDRA_STARTUP_TIMEOUT_MS`** (REA default
-      `330000` ms = 5.5 min, which is exactly where the previous attempts
-      stopped). `REA_GHIDRA_DISABLED_ANALYZERS` can skip expensive analyzers.
-      The first analysis of the 14 MB `libil2cpp.so` is now running with a
-      1,800,000 ms deadline; the snapshot is `.work/ghidra/libil2cpp.snapshot`.
-- [ ] Install Ghidra 12.1.4 + JDK 21 (byo) and register the REA MCP server
-      (`rea setup --client opencode --dry-run` first, review paths and backups,
-      then apply, then restart).
-- [ ] Decompile only the app's own methods (`Assembly-CSharp`: 16 classes) to
-      confirm `SetVolume`, `LoadNextLevel`, `ChangeScene`, `Hide`, `PauseMenu`
-      and the `VolumeValueChange*` variants, and to settle open questions such
-      as the 4-byte field and any purchase gating.
+- [x] Decompile the app's own methods with Ghidra. The timeout knob is
+      **`REA_GHIDRA_STARTUP_TIMEOUT_MS`** (REA default `330000` ms = 5.5 min,
+      exactly where the previous attempts stopped); the first analysis takes
+      ~7 min with `REA_GHIDRA_STARTUP_TIMEOUT_MS=1800000`. Ghidra's image base
+      is `+0x100000` over Il2CppDumper's RVA, so the five methods live at
+      `0x5E8990`, `0x5E8A24`, `0x5E1F74`, `0x5E1F84`, `0x5E13FC`. Pseudocode and
+      REA Evidence IDs are recorded in
+      `docs/verification/app-methods.txt`: `SetVolume` stores `musicVolume` at
+      `+0x20`; `LoadPrev/NextLevel` call
+      `SceneManager.LoadScene(sceneIndex ± 1)`; `ChangeScene(name)` calls
+      `Application.LoadLevel(name)`.
+- [x] Ghidra 12.1.4 + JDK 21 are installed user-level under `~/tools` and
+      registered through `GHIDRA_INSTALL_DIR`/`JAVA_HOME` in the REA CLI
+      invocation. REA MCP registration was not applied: the advertised catalog
+      is unusable with this client, so the CLI is the supported path here.
+- [x] Decompile the port-relevant methods: both `SetVolume` variants,
+      `LoadPrevLevel`, `LoadNextLevel` and `ChangeScene`, with Evidence recorded
+      in `docs/verification/app-methods.txt`. Remaining optional depth (not
+      needed to reproduce the port): `UIController.Show/Hide`, `PauseMenu`,
+      `SceneSurf.Start`. The 4-byte schema slot and any purchase gating remain
+      unresolved; they are not exercised by these five methods.
 
 ## Publishing
 

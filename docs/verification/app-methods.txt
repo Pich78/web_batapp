@@ -1,0 +1,89 @@
+# Decompiled app methods (Ghidra 12.1.4 via REA 6.7.0)
+
+Derived from the shipped `libil2cpp.so` (sha256
+`72ab2ea4cf250c0e69601fc6de9517c151ed283724ffbc5786a45997f68cb24a`); these are
+decompiler pseudocode, not observed runtime behaviour and not original source.
+
+| item | value |
+|---|---|
+| provider | Ghidra 12.1.4 (REA 6.7.0, authority `shipped-artifact`) |
+| image base | Ghidra analysis address = Il2CppDumper RVA + `0x100000` |
+| deadline | `REA_GHIDRA_STARTUP_TIMEOUT_MS=1800000` (default 330,000 ms) |
+| command | `rea decompile .work/native/arm64-v8a/libil2cpp.so <va> --provider ghidra --snapshot <file> --format json` |
+
+## VolumeValueChange.SetVolume (RVA 0x4E8990, VA 0x5E8990)
+
+Evidence `ev_c7bc59a28808e340893ab6be4b843129d88c27e02896a6efe46222d5f1a214a6`.
+
+```c
+void FUN_005e8990(undefined4 param_1, long param_2)   // SetVolume(float vol)
+{
+  *(undefined4 *)(param_2 + 0x20) = param_1;           // musicVolume = vol
+  return;
+}
+```
+
+## VolumeValueChangefromzero.SetVolume (RVA 0x4E8A24, VA 0x5E8A24)
+
+Evidence `ev_52ac77958a8027cb7c12f51887755e2f50f88e100f50ac0bad47622048ded7a0`.
+
+```c
+void FUN_005e8a24(undefined4 param_1, long param_2)   // SetVolume(float vol)
+{
+  *(undefined4 *)(param_2 + 0x20) = param_1;           // musicVolume = vol
+  return;
+}
+```
+
+Both volume components only store the value in the `musicVolume` field at
+offset `0x20`; their per-frame `Update` (not decompiled) applies it to the
+`AudioSource`. The port applies the slider value to that stem directly, which is
+behaviourally equivalent within one frame.
+
+## SceneSurf.LoadNextLevel (RVA 0x4E1F84, VA 0x5E1F84)
+
+Evidence `ev_ca54e4391acf124439e39077a363489a41b59ce8fb4addecb20f6147b303daa9`.
+
+```c
+void FUN_005e1f84(long param_1)
+{
+  FUN_008d5c88(*(int *)(param_1 + 0x18) + 1, 0);   // SceneManager.LoadScene(sceneIndex + 1)
+  return;
+}
+```
+
+## SceneSurf.LoadPrevLevel (RVA 0x4E1F74, VA 0x5E1F74)
+
+Evidence `ev_e691a355480ad8e3ba4b7bccc95d8ee725672a949f3011a38751a3f103b2977c`.
+
+```c
+void FUN_005e1f74(long param_1)
+{
+  FUN_008d5c88(*(int *)(param_1 + 0x18) - 1, 0);   // SceneManager.LoadScene(sceneIndex - 1)
+  return;
+}
+```
+
+`FUN_008d5c88` (RVA 0x7D5C88) is
+`UnityEngine.SceneManagement.SceneManager$$LoadScene(int32_t, MethodInfo*)`;
+`FUN_0080da70` (RVA 0x70DA70) is `UnityEngine.Application$$LoadLevel(string,
+MethodInfo*)`. The `sceneIndex` field sits at `+0x18`, matching the metadata
+(`private int sceneIndex`). Navigation is therefore by build-settings index;
+the `"Entermenu"` string in the UnityEvent is a stale argument, as recorded in
+the reverse-engineering notes.
+
+## MoveOnClick.ChangeScene (RVA 0x4E13FC, VA 0x5E13FC)
+
+Evidence `ev_5934eb339bcfb119d62b5bc5c7bf4ecb444d11bc545185e99d3a37c161e6d7df`.
+
+```c
+void FUN_005e13fc(undefined8 param_1, undefined8 param_2)   // ChangeScene(string name)
+{
+  FUN_0080da70(param_2, 0);                                  // Application.LoadLevel(name)
+  return;
+}
+```
+
+The carousel/route buttons therefore call `Application.LoadLevel` with the
+scene name recorded in the UnityEvent, which is exactly what the port's
+`routeForScene` maps onto hash routes.

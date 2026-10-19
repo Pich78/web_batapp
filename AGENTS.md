@@ -101,17 +101,22 @@ export DOTNET_ROLL_FORWARD=LatestMajor
   .work/unity/Data/Managed/Metadata/global-metadata.dat .work/il2cpp
 .venv/bin/python tools/extract_app_classes.py --dump .work/il2cpp/dump.cs
 
-# 2) decompile an app method by its VA from script.json
-rea decompile .work/native/arm64-v8a/libil2cpp.so 0x4E86D0 \
+# 2) decompile an app method by its VA from script.json.
+# Il2CppDumper reports RVAs; Ghidra's image base is +0x100000, so
+# VolumeValueChange.SetVolume (RVA 0x4E8990) is queried at 0x5E8990.
+REA_GHIDRA_STARTUP_TIMEOUT_MS=1800000 \
+rea decompile .work/native/arm64-v8a/libil2cpp.so 0x5E8990 \
   --provider ghidra --snapshot .work/ghidra/libil2cpp.snapshot --format json
 ```
 
 Addresses for the app's own methods are cached in
-`.work/il2cpp/interesting-methods.json` (names as `Type$$Method`). The first
-decompilation pays for Ghidra's analysis of the 14 MB binary; `--snapshot`
-keeps it for later queries. REA's default startup deadline is 330,000 ms
-(`REA_GHIDRA_STARTUP_TIMEOUT_MS`); raise it for the first analysis, e.g.
-`REA_GHIDRA_STARTUP_TIMEOUT_MS=1800000`.
+`.work/il2cpp/interesting-methods.json` (names as `Type$$Method`). Every CLI
+query imports the 14 MB binary into an ephemeral Ghidra project and pays for its
+analysis (~7-9 minutes with 16 cores; budget `REA_GHIDRA_STARTUP_TIMEOUT_MS`
+above the 330,000 ms default). `--snapshot` pins the analysis profile so a later
+query fails closed if the profile changes; it does not cache the decompilation.
+The five port methods and their Evidence IDs are recorded in
+`docs/verification/app-methods.txt`.
 
 ## Layout model
 
