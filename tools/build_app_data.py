@@ -34,17 +34,20 @@ FILL_METHOD = {0: "horizontal", 1: "vertical", 2: "radial-90", 3: "radial-180", 
 SLIDER_DIRECTION = {0: "left-to-right", 1: "right-to-left", 2: "bottom-to-top", 3: "top-to-bottom"}
 
 
+def local_angle(transform: dict) -> float:
+    rotation = transform.get("local_rotation") or [0.0, 0.0, 0.0, 1.0]
+    return round(math.degrees(2.0 * math.atan2(rotation[2], rotation[3])), 4)
+
+
 def layout_payload(transform: dict) -> dict:
     """Anchor-relative layout data for one RectTransform (Unity's own math runs in the browser)."""
-    rotation = transform.get("local_rotation") or [0.0, 0.0, 0.0, 1.0]
-    angle = math.degrees(2.0 * math.atan2(rotation[2], rotation[3]))
     return {
         "anchors": [*transform["anchor_min"][:2], *transform["anchor_max"][:2]],
         "pivot": transform["pivot"][:2],
         "anchored": transform["anchored_position"][:2],
         "delta": transform["size_delta"][:2],
         "scale": float(transform.get("local_scale", [1.0])[0] or 1.0),
-        "rotation": round(angle, 4),
+        "rotation": local_angle(transform),
     }
 
 
@@ -89,12 +92,14 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
             # canvases because a later build may use their authored size.
             entry.update(layout_payload(transform))
         elif plain:
-            # A plain Transform holder (e.g. "Actions") is not a UI node. Its 1.8
-            # local scale would push its anchored children far outside the canvas
-            # (Next Lesson ended up at x=2039 in a 1920 canvas), while the authored
-            # child positions form a tidy row only without it. Treat it as a
-            # pass-through, as the shipped layout behaves.
-            entry["scale"] = 1.0
+            # A plain Transform holder (e.g. "Actions", "Menu/Volume 2") is not a
+            # UI node, but its local position and scale move its RectTransform
+            # children around the parent canvas centre. Ignoring them put the
+            # action row and "Change book" off to the right of the menu.
+            local_scale = float((transform.get("local_scale") or [1.0])[0]) or 1.0
+            entry["scale"] = local_scale
+            entry["position"] = [float(v) for v in (transform.get("local_position") or [0.0, 0.0])[:2]]
+            entry["rotation"] = local_angle(transform)
         else:
             entry.update(layout_payload(transform))
         layout.append(entry)

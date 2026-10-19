@@ -109,15 +109,17 @@ Validated coverage (100% of instances, length *and* semantics):
 | Image | 3776 | CanvasScaler | 249 |
 | Shadow | 1129 | GraphicRaycaster | 249 |
 | Text | 1117 | EventSystem | 65 |
-| Outline | 893 | StandaloneInputModule | 65 |
-| Button | 717 | Mask | 16 |
-| Slider | 305 | ScrollRect | 4 |
-| ContentSizeFitter | 258 | GridLayoutGroup | 2 |
+| Button | 717 | StandaloneInputModule | 65 |
+| Slider | 305 | SimpleSpectrum | 61 |
+| ContentSizeFitter | 258 | Mask | 16 |
+| GridLayoutGroup | 2 | ScrollRect | 4 |
+| RawImage | 1 | | |
 
-`SimpleSpectrum` (61 instances, one per lesson) is decoded as well: 40 bars,
+`SimpleSpectrum` (61 instances, one per lesson) decodes to 40 bars,
 `barXScale=2.2`, `barXSpacing=6`, `barYScale=40`, `barMinYScale=0.1`, the
 `SpectrumOrigin` transform, a white→cream `AnimationCurve`, attack/decay 0.25.
-The schema includes the `AnimationCurve`/`Keyframe` wire format.
+The schema includes the `AnimationCurve`/`Keyframe` wire format. `Outline` is not
+in the validated set (no port consumer needs it).
 
 Findings that only came out of byte-level derivation:
 

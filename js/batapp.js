@@ -204,10 +204,21 @@
         return;
       }
       if (node.plain) {
+        // Plain Transform holder: its local position and scale move the
+        // RectTransform children around the parent canvas centre; anchors still
+        // resolve against the parent rect (the canvas).
+        var plainScale = node.scale || 1;
+        var plainAngle = parent.angle + (node.rotation || 0);
+        var plainPos = node.position || [0, 0];
+        var offset = rotatePoint(parent.angle,
+          (plainPos[0] - plainScale * parent.size[0] / 2) * parent.scale,
+          (plainPos[1] - plainScale * parent.size[1] / 2) * parent.scale);
         out[node.id] = {
           rect: parent.rect, size: parent.size,
-          scale: parent.scale * (node.scale || 1),
-          angle: parent.angle, origin: parent.origin, center: parent.center
+          scale: parent.scale * plainScale,
+          angle: plainAngle,
+          origin: [parent.center[0] + offset[0], parent.center[1] + offset[1]],
+          center: parent.center
         };
         return;
       }
