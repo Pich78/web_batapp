@@ -8,7 +8,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const pageUrl = "file://" + root + "/index.html";
+const pageUrl = "file://" + root + "/index_old.html";
 const reportFile = path.join(root, ".work/verification/lesson-sweep.json");
 const summaryFile = path.join(root, "docs/verification/lesson-sweep-summary.json");
 const viewport = { width: 720, height: 1440 };

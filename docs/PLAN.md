@@ -75,7 +75,7 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - [x] **Keyboard affordances**: Space toggles playback, arrows step lessons and
       Escape returns to the list on the modern page; `Esc` keeps the original
       pause layer on the shipped-layout page.
-- [x] **Modern layout** (`index_new.html` + `app-new.css` + `js/newapp.js`):
+- [x] **Modern layout** (`index.html` + `app-new.css` + `js/newapp.js`):
       responsive player with portrait-phone, landscape-phone and desktop modes
       (persistent sidebar on desktop), progress ring, per-stem volume and mute,
       natural lesson order (1, 2, … 20A, 20B, 21, 22), system light/dark theme,
@@ -87,7 +87,7 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - [ ] **Self-test page** (`selftest.html`): every lesson resolves its stems and
       sprites, durations match the manifest, no `fetch`/module syntax anywhere in
       the shipped scripts.
-- [ ] **Browser pass by the maintainer**: open `index.html` from `file://` and
+- [ ] **Browser pass by the maintainer**: open `index_old.html` from `file://` and
       confirm each screen against the original (geometry is generated from the
       scenes, so this is a confirmation rather than a design review).
 - [ ] **Index screens as shipped**: the visible cards are drawn from the scene
@@ -184,4 +184,4 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       absolute `src`/`href`/`url` roots).
 - [x] Modern layout over HTTP: `tests/verify-new.mjs` serves the repo and checks
       the Web Audio gain path (including raising Vox from its 0 default) with no
-      console errors; `index_new.html` works from the repository subpath.
+      console errors; `index.html` works from the repository subpath.

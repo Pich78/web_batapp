@@ -1,4 +1,4 @@
-/* Modern layout runtime (index_new.html).
+/* Modern layout runtime (index.html).
  *
  * Static, dependency-free player shared by three responsive modes:
  *   - portrait phone: one pane at a time (library or player);

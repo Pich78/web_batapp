@@ -17,8 +17,8 @@ losslessly — and rebuilds the interface as plain HTML/CSS/JavaScript.
 | Reverse engineering of scene layout, UI schemas, widget wiring | **done** |
 | All 65 scenes dumped to a machine-readable model | **done** |
 | Layout + content model emitted as `js/data.js` | **done** |
-| Shipped-layout page (`index.html`) | working; reconstructs the original screens |
-| Modern layout page (`index_new.html`) | working; responsive player (portrait phone, landscape phone, desktop sidebar), same data and transport |
+| Shipped-layout page (`index_old.html`) | working; reconstructs the original screens |
+| Modern layout page (`index.html`) | working; responsive player (portrait phone, landscape phone, desktop sidebar), same data and transport |
 
 See [docs/PLAN.md](docs/PLAN.md) for the next steps and
 [docs/REVERSE-ENGINEERING.md](docs/REVERSE-ENGINEERING.md) for the evidence
@@ -26,17 +26,18 @@ behind the reconstruction.
 
 ## Running the app
 
-- **Double-click `index_new.html`** — the modern layout. No server, no build:
+- **Double-click `index.html`** — the modern layout. No server, no build:
   library with the two volumes, lesson player with Play/Pause/Stop, Prev/Next,
   loop progress and a five-stem mixer (volume + mute per stem). It adapts from
   a one-pane portrait phone view to a two-column landscape phone view and a
   full desktop layout with a persistent library sidebar.
-- **Double-click `index.html`** — the shipped-layout reconstruction: opening →
-  volume selector → toque/oru-seco index → lesson player, rendered from the
+- **Double-click `index_old.html`** — the shipped-layout reconstruction: opening
+  → volume selector → toque/oru-seco index → lesson player, rendered from the
   app's own scene geometry.
 - Or publish the repository with GitHub Pages (Settings → Pages → deploy from
   the branch root). All paths are relative, so it works from a subpath too; the
-  site root serves `index.html`, and `index_new.html` is reachable directly.
+  site root serves the modern `index.html`, and the scene reconstruction stays
+  reachable at `index_old.html`.
 
 ## Playback
 

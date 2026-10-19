@@ -1,6 +1,6 @@
 /* Behavioural verification of the static port with a real browser.
  *
- * Opens index.html over file:// (exactly how a user double-clicks it), walks
+ * Opens index_old.html over file:// (exactly how a user double-clicks it), walks
  * every screen, exercises the mixer, and records screenshots plus a JSON report.
  *
  *   cd tests && npm run verify
@@ -11,7 +11,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const pageUrl = "file://" + root + "/index.html";
+const pageUrl = "file://" + root + "/index_old.html";
 const shots = path.join(root, ".work/screenshots");
 const reportFile = path.join(root, ".work/verification/playwright-report.json");
 fs.mkdirSync(shots, { recursive: true });

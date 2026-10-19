@@ -1,8 +1,8 @@
-/* BatApp static port runtime for the shipped-layout page (index.html).
+/* BatApp static port runtime for the shipped-layout page (index_old.html).
  *
  * Renders the geometry and wiring that tools/build_app_data.py lifted out of the
  * shipped Unity scenes. Playback lives in js/mixer.js (window.BatappMixer) and
- * is shared with the modern layout page (index_new.html).
+ * is shared with the modern layout page (index.html).
  */
 (function () {
   "use strict";

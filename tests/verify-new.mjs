@@ -1,4 +1,4 @@
-/* Behavioural verification of the modern layout (index_new.html).
+/* Behavioural verification of the modern layout (index.html).
  *
  * Opens the page over file:// and over HTTP, walks the library, exercises the
  * shared mixer (play/pause/stop, per-stem volume and mute, prev/next), sweeps
@@ -13,7 +13,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const pageUrl = "file://" + root + "/index_new.html";
+const pageUrl = "file://" + root + "/index.html";
 const shots = path.join(root, ".work/screenshots-new");
 const reportFile = path.join(root, ".work/verification/new-ui-report.json");
 const summaryFile = path.join(root, "docs/verification/new-ui-sweep-summary.json");
@@ -434,7 +434,7 @@ try {
     if (message.type() === "error") servedErrors.push(message.text().slice(0, 150));
   });
   served.on("pageerror", (error) => servedErrors.push("pageerror: " + error.message.slice(0, 150)));
-  await served.goto(`http://127.0.0.1:${port}/index_new.html#/lesson/volume-1/01-alubanche`);
+  await served.goto(`http://127.0.0.1:${port}/index.html#/lesson/volume-1/01-alubanche`);
   await served.waitForFunction(
     () => window.__batapp_new && window.__batapp_new.tracks().length === 5 &&
       window.__batapp_new.tracks().every((track) => track.duration > 1 || track.error),

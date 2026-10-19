@@ -7,8 +7,9 @@ source.
 
 ## Hard constraints for the deliverable
 
-1. **Offline first.** `index.html` must work when a user double-clicks it
-   (`file://`), with no server, no build step and no network access.
+1. **Offline first.** Both `index.html` (modern) and `index_old.html`
+   (shipped-layout) must work when a user double-clicks them (`file://`), with
+   no server, no build step and no network access.
 2. **No Node.js, npm, TypeScript, bundlers, frameworks or compiled browser
    libraries in the shipped app.** Classic `<script>` files only.
 3. Consequences of `file://` that the code must respect:
@@ -30,8 +31,8 @@ source.
 ## Repository layout
 
 ```
-index.html, app.css, js/     the shipped-layout page (classic scripts, no build)
-index_new.html, app-new.css, js/newapp.js   the modern layout page
+index_old.html, app.css, js/     the shipped-layout page (classic scripts, no build)
+index.html, app-new.css, js/newapp.js   the modern layout page
 js/mixer.js                  shared transport (window.BatappMixer) for both pages
 assets/audio/<slug>/<stem>.ogg   281 lesson stems (iya, ito, oko, vox, beat)
 assets/img/...               sprites and background art exported from the APK
@@ -180,9 +181,9 @@ A second `CanvasScaler` of **298.5×456** (`Expand`) exists in `Volume Selector`
 on the inactive `Libri Video / Canvas video` object; it is the video canvas, not
 the menu design space. Do not use it as the menu reference.
 
-## Modern layout (`index_new.html`)
+## Modern layout (`index.html`)
 
-`index_new.html` + `app-new.css` + `js/newapp.js` are a fresh player, not a
+`index.html` + `app-new.css` + `js/newapp.js` are a fresh player, not a
 re-skin of the shipped scenes: no scene geometry and no sprites are used, only
 `js/data.js` (lessons, audio paths, durations) and the shared transport in
 `js/mixer.js`.
@@ -220,7 +221,7 @@ re-skin of the shipped scenes: no scene geometry and no sprites are used, only
 - `tests/lesson-sweep.mjs` walks all 61 lesson routes in a real browser and
   checks stems/durations, the five sliders, the title, canvas bounds and
   console/network errors; record its summary under `docs/verification/`.
-- `tests/verify-new.mjs` covers the modern layout (`index_new.html`) over
+- `tests/verify-new.mjs` covers the modern layout (`index.html`) over
   `file://` and over HTTP: portrait, landscape-phone and desktop modes, library
   order, shared-transport sync, mute semantics, prev/next, both colour schemes,
   no external requests/links and a sweep of all 61 lessons; its summary is
