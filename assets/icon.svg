@@ -1,18 +1,44 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <defs>
-    <linearGradient id="amber" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#f4b963"/>
-      <stop offset="1" stop-color="#cf8427"/>
-    </linearGradient>
-    <clipPath id="drum"><polygon points="292,196 732,196 760,236 668,466 620,500 620,524 668,558 760,788 732,828 292,828 264,788 356,558 404,524 404,500 356,466 264,236"/></clipPath>
-  </defs>
   <rect width="1024" height="1024" rx="224" fill="#0d0f13"/>
-  <polygon points="292,196 732,196 760,236 668,466 620,500 620,524 668,558 760,788 732,828 292,828 264,788 356,558 404,524 404,500 356,466 264,236" fill="url(#amber)"/>
-  <g clip-path="url(#drum)" stroke="#0d0f13" stroke-width="12" stroke-linecap="round">
-      <line x1="270" y1="300" x2="754" y2="300"/>
-      <line x1="270" y1="724" x2="754" y2="724"/>
-      <line x1="450" y1="460" x2="450" y2="564"/>
-      <line x1="512" y1="460" x2="512" y2="564"/>
-      <line x1="574" y1="460" x2="574" y2="564"/>
+  <g transform="translate(292 566) rotate(-27)">
+    <polygon points="-75.0,-205.0 75.0,-205.0 54.0,-24.6 68.0,205.0 -68.0,205.0 -54.0,-24.6" fill="#e6a44f" stroke="#0d0f13" stroke-width="22" stroke-linejoin="round"/>
+    <ellipse cx="0" cy="-205.0" rx="75.0" ry="15.8" fill="#e6a44f" stroke="#0d0f13" stroke-width="13"/>
+    <g stroke="#0d0f13" stroke-width="8" stroke-linecap="round">
+      <line x1="-51.0" y1="-147.6" x2="-36.7" y2="8.2"/>
+      <line x1="-16.5" y1="-155.8" x2="-11.9" y2="24.6"/>
+      <line x1="16.5" y1="-155.8" x2="11.9" y2="24.6"/>
+      <line x1="51.0" y1="-147.6" x2="36.7" y2="8.2"/>
+      <line x1="-51.0" y1="-147.6" x2="36.7" y2="8.2"/>
+    </g>
+  </g>
+  <g transform="translate(732 566) rotate(27)">
+    <polygon points="-90.0,-232.5 90.0,-232.5 64.0,-27.9 80.0,232.5 -80.0,232.5 -64.0,-27.9" fill="#e6a44f" stroke="#0d0f13" stroke-width="22" stroke-linejoin="round"/>
+    <ellipse cx="0" cy="-232.5" rx="90.0" ry="18.9" fill="#e6a44f" stroke="#0d0f13" stroke-width="13"/>
+    <g stroke="#0d0f13" stroke-width="8" stroke-linecap="round">
+      <line x1="-61.2" y1="-167.4" x2="-43.5" y2="9.3"/>
+      <line x1="-19.8" y1="-176.7" x2="-14.1" y2="27.9"/>
+      <line x1="19.8" y1="-176.7" x2="14.1" y2="27.9"/>
+      <line x1="61.2" y1="-167.4" x2="43.5" y2="9.3"/>
+      <line x1="-61.2" y1="-167.4" x2="43.5" y2="9.3"/>
+    </g>
+  </g>
+  <g transform="translate(512 522) rotate(0)">
+    <polygon points="-110.0,-270.0 110.0,-270.0 79.0,-32.4 96.0,270.0 -96.0,270.0 -79.0,-32.4" fill="#e6a44f" stroke="#0d0f13" stroke-width="22" stroke-linejoin="round"/>
+    <ellipse cx="0" cy="-270.0" rx="110.0" ry="23.1" fill="#e6a44f" stroke="#0d0f13" stroke-width="13"/>
+    <g stroke="#0d0f13" stroke-width="8" stroke-linecap="round">
+      <line x1="-74.8" y1="-194.4" x2="-53.7" y2="10.8"/>
+      <line x1="-24.2" y1="-205.2" x2="-17.4" y2="32.4"/>
+      <line x1="24.2" y1="-205.2" x2="17.4" y2="32.4"/>
+      <line x1="74.8" y1="-194.4" x2="53.7" y2="10.8"/>
+      <line x1="-74.8" y1="-194.4" x2="53.7" y2="10.8"/>
+    </g>
+    <ellipse cx="0" cy="-86.4" rx="114.4" ry="33.0" fill="none" stroke="#0d0f13" stroke-width="18"/>
+      <circle cx="106.4" cy="-74.3" r="7.7" fill="#e6a44f"/>
+      <circle cx="81.7" cy="-63.3" r="7.7" fill="#e6a44f"/>
+      <circle cx="44.3" cy="-56.0" r="7.7" fill="#e6a44f"/>
+      <circle cx="0.0" cy="-53.4" r="7.7" fill="#e6a44f"/>
+      <circle cx="-44.3" cy="-56.0" r="7.7" fill="#e6a44f"/>
+      <circle cx="-81.7" cy="-63.3" r="7.7" fill="#e6a44f"/>
+      <circle cx="-106.4" cy="-74.3" r="7.7" fill="#e6a44f"/>
   </g>
 </svg>

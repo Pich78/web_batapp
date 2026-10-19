@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Render the Batá app icon (SVG master + PNG favicon/home-screen set).
 
-One geometry source for the hourglass drum, the charcoal tile and the lacing
-marks. Pillow is a development-time dependency; the generated assets are
-committed and the app never needs Python.
+Three tapered, laced batá drums fanned like the reference photograph: small
+Okónkolo left, large Iya (with its bell ring) centre, medium Itótele right.
+Flat two-colour artwork: black background/outlines/lacing and amber drums,
+with black separator outlines like the reference silhouette.
 
 Usage:
     .venv/bin/python tools/make_icons.py
@@ -11,88 +12,113 @@ Usage:
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets"
 
-# Design space (1024x1024). The drum is symmetric around x=512 / y=512.
-DRUM = [
-    (292, 196), (732, 196), (760, 236), (668, 466), (620, 500),
-    (620, 524), (668, 558), (760, 788), (732, 828), (292, 828),
-    (264, 788), (356, 558), (404, 524), (404, 500), (356, 466), (264, 236),
-]
-STRINGS = [
-    ((270, 300), (754, 300)),
-    ((270, 724), (754, 724)),
-    ((450, 460), (450, 564)),
-    ((512, 460), (512, 564)),
-    ((574, 460), (574, 564)),
-]
-BACKGROUND = (13, 15, 19, 255)
-AMBER_TOP = (244, 185, 99, 255)
-AMBER_BOTTOM = (207, 132, 39, 255)
-CORD = (13, 15, 19, 255)
+BLACK = (13, 15, 19, 255)
+AMBER = (230, 164, 79, 255)
 SVG_RADIUS = 224
 FAVICON_CORNER = 0.22
 
-
-def lerp(a: int, b: int, t: float) -> int:
-    return round(a + (b - a) * t)
-
-
-def gradient(size: int) -> Image.Image:
-    image = Image.new("RGBA", (size, size))
-    draw = ImageDraw.Draw(image)
-    for y in range(size):
-        t = y / max(1, size - 1)
-        draw.line(
-            [(0, y), (size, y)],
-            fill=(
-                lerp(AMBER_TOP[0], AMBER_BOTTOM[0], t),
-                lerp(AMBER_TOP[1], AMBER_BOTTOM[1], t),
-                lerp(AMBER_TOP[2], AMBER_BOTTOM[2], t),
-                255,
-            ),
-        )
-    return image
+# name, centre x, centre y, angle, height, top width, waist width,
+# bottom width, bell ring
+DRUMS = (
+    ("okonkolo", 292, 566, -27, 410, 150, 108, 136, False),
+    ("itotele", 732, 566, 27, 465, 180, 128, 160, False),
+    ("iya", 512, 522, 0, 540, 220, 158, 192, True),
+)
 
 
-def scaled(points: list[tuple[int, int]], size: int) -> list[tuple[int, int]]:
+def rotate(x: float, y: float, angle: float) -> tuple[float, float]:
+    rad = math.radians(angle)
+    return (x * math.cos(rad) - y * math.sin(rad),
+            x * math.sin(rad) + y * math.cos(rad))
+
+
+def to_world(points: list[tuple[float, float]], cx: float, cy: float,
+             angle: float, factor: float) -> list[tuple[int, int]]:
+    result = []
+    for x, y in points:
+        rx, ry = rotate(x, y, angle)
+        result.append((round((cx + rx) * factor), round((cy + ry) * factor)))
+    return result
+
+
+def body_points(height: float, top_w: float, waist_w: float, bottom_w: float) -> list[tuple[float, float]]:
+    top = -height / 2
+    waist = -height * 0.06
+    bottom = height / 2
+    return [
+        (-top_w / 2, top), (top_w / 2, top),
+        (waist_w / 2, waist), (bottom_w / 2, bottom),
+        (-bottom_w / 2, bottom), (-waist_w / 2, waist),
+    ]
+
+
+def ellipse_points(cx: float, cy: float, rx: float, ry: float, count: int = 48) -> list[tuple[float, float]]:
+    return [
+        (cx + rx * math.cos(2 * math.pi * i / count),
+         cy + ry * math.sin(2 * math.pi * i / count))
+        for i in range(count)
+    ]
+
+
+def lacing(height: float, top_w: float, waist_w: float) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    top = -height / 2
+    waist = -height * 0.06
+    return [
+        ((-top_w * 0.34, top + height * 0.14), (-waist_w * 0.34, waist + height * 0.08)),
+        ((-top_w * 0.11, top + height * 0.12), (-waist_w * 0.11, waist + height * 0.12)),
+        ((top_w * 0.11, top + height * 0.12), (waist_w * 0.11, waist + height * 0.12)),
+        ((top_w * 0.34, top + height * 0.14), (waist_w * 0.34, waist + height * 0.08)),
+        ((-top_w * 0.34, top + height * 0.14), (waist_w * 0.34, waist + height * 0.08)),
+    ]
+
+
+def draw_outline(draw: ImageDraw.ImageDraw, points: list[tuple[int, int]], width: int) -> None:
+    draw.line(points + [points[0]], fill=BLACK, width=width, joint="curve")
+
+
+def draw_drum(image: Image.Image, size: int, drum, detail: bool) -> None:
+    name, cx, cy, angle, height, top_w, waist_w, bottom_w, bells = drum
     factor = size / 1024
-    return [(round(x * factor), round(y * factor)) for x, y in points]
+    body = to_world(body_points(height, top_w, waist_w, bottom_w), cx, cy, angle, factor)
+    head = to_world(ellipse_points(0, -height / 2, top_w / 2, top_w * 0.105), cx, cy, angle, factor)
+    outline = max(2, round(22 * factor))
 
+    ImageDraw.Draw(image).polygon(body, fill=AMBER)
+    draw = ImageDraw.Draw(image)
+    draw_outline(draw, body, outline)
+    ImageDraw.Draw(image).polygon(head, fill=AMBER)
+    draw_outline(draw, head, max(2, round(13 * factor)))
 
-def drum_layer(size: int) -> tuple[Image.Image, Image.Image]:
-    """Return the finished drum layer and its silhouette mask."""
-    mask = Image.new("L", (size, size), 0)
-    ImageDraw.Draw(mask).polygon(scaled(DRUM, size), fill=255)
-    layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    layer.paste(gradient(size), (0, 0), mask)
-
-    cords = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    cord_draw = ImageDraw.Draw(cords)
-    width = max(2, round(size * 0.009))
-    for start, end in STRINGS:
-        cord_draw.line(
-            [tuple(round(v * size / 1024) for v in start),
-             tuple(round(v * size / 1024) for v in end)],
-            fill=CORD,
-            width=width,
-        )
-    cord_alpha = ImageChops.multiply(cords.split()[3], mask)
-    layer.paste(CORD, (0, 0), cord_alpha)
-    return layer, mask
+    if detail:
+        for start, end in lacing(height, top_w, waist_w):
+            a = to_world([start], cx, cy, angle, factor)[0]
+            b = to_world([end], cx, cy, angle, factor)[0]
+            draw.line([a, b], fill=BLACK, width=max(2, round(8 * factor)))
+        if bells:
+            band = to_world(ellipse_points(0, -height * 0.16, top_w * 0.52, top_w * 0.15), cx, cy, angle, factor)
+            draw_outline(draw, band, max(3, round(18 * factor)))
+            for i in range(7):
+                t = math.pi * (0.12 + 0.76 * i / 6)
+                local = (top_w * 0.52 * math.cos(t), -height * 0.16 + top_w * 0.15 * math.sin(t))
+                dot = to_world([local], cx, cy, angle, factor)[0]
+                radius = max(2, round(top_w * 0.035 * factor))
+                draw.ellipse([dot[0] - radius, dot[1] - radius, dot[0] + radius, dot[1] + radius], fill=AMBER)
 
 
 def render(size: int, rounded: bool) -> Image.Image:
-    # Draw at 4x and downsample so curves and cords stay clean at 16 px.
     work = size * 4
-    image = Image.new("RGBA", (work, work), BACKGROUND)
-    layer, _ = drum_layer(work)
-    image = Image.alpha_composite(image, layer)
+    image = Image.new("RGBA", (work, work), BLACK)
+    detail = size >= 64
+    for drum in DRUMS:
+        draw_drum(image, work, drum, detail)
     image = image.resize((size, size), Image.LANCZOS)
     if rounded:
         radius = round(size * FAVICON_CORNER)
@@ -104,26 +130,45 @@ def render(size: int, rounded: bool) -> Image.Image:
     return image
 
 
+def svg_drum(drum) -> str:
+    name, cx, cy, angle, height, top_w, waist_w, bottom_w, bells = drum
+    body = " ".join(f"{x:.1f},{y:.1f}" for x, y in body_points(height, top_w, waist_w, bottom_w))
+    lines = []
+    for start, end in lacing(height, top_w, waist_w):
+        lines.append(
+            f'      <line x1="{start[0]:.1f}" y1="{start[1]:.1f}" x2="{end[0]:.1f}" y2="{end[1]:.1f}"/>'
+        )
+    lacing_svg = ""
+    if lines:
+        lacing_svg = (
+            '    <g stroke="#0d0f13" stroke-width="8" stroke-linecap="round">\n' +
+            "\n".join(lines) + "\n    </g>\n"
+        )
+    bells_svg = ""
+    if bells:
+        dots = []
+        for i in range(7):
+            t = math.pi * (0.12 + 0.76 * i / 6)
+            x = top_w * 0.52 * math.cos(t)
+            y = -height * 0.16 + top_w * 0.15 * math.sin(t)
+            dots.append(f'      <circle cx="{x:.1f}" cy="{y:.1f}" r="{top_w * 0.035:.1f}" fill="#e6a44f"/>')
+        bells_svg = (
+            f'    <ellipse cx="0" cy="{-height * 0.16:.1f}" rx="{top_w * 0.52:.1f}" ry="{top_w * 0.15:.1f}" '
+            'fill="none" stroke="#0d0f13" stroke-width="18"/>\n' +
+            "\n".join(dots) + "\n"
+        )
+    return f'''  <g transform="translate({cx} {cy}) rotate({angle})">
+    <polygon points="{body}" fill="#e6a44f" stroke="#0d0f13" stroke-width="22" stroke-linejoin="round"/>
+    <ellipse cx="0" cy="{-height / 2:.1f}" rx="{top_w / 2:.1f}" ry="{top_w * 0.105:.1f}" fill="#e6a44f" stroke="#0d0f13" stroke-width="13"/>
+{lacing_svg}{bells_svg}  </g>'''
+
+
 def write_svg(path: Path) -> None:
-    points = " ".join(f"{x},{y}" for x, y in DRUM)
-    strings = "\n".join(
-        f'      <line x1="{a[0]}" y1="{a[1]}" x2="{b[0]}" y2="{b[1]}"/>'
-        for a, b in STRINGS
-    )
+    groups = "\n".join(svg_drum(drum) for drum in DRUMS)
     path.write_text(
         f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <defs>
-    <linearGradient id="amber" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#f4b963"/>
-      <stop offset="1" stop-color="#cf8427"/>
-    </linearGradient>
-    <clipPath id="drum"><polygon points="{points}"/></clipPath>
-  </defs>
   <rect width="1024" height="1024" rx="{SVG_RADIUS}" fill="#0d0f13"/>
-  <polygon points="{points}" fill="url(#amber)"/>
-  <g clip-path="url(#drum)" stroke="#0d0f13" stroke-width="12" stroke-linecap="round">
-{strings}
-  </g>
+{groups}
 </svg>
 ''',
         encoding="utf-8",
