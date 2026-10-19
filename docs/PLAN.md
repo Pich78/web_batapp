@@ -13,7 +13,8 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       Image/Text/Button/Slider/… instances, length *and* value checks).
 - [x] Read the lesson-player wiring out of the scenes (play/pause/stop,
       sliders, navigation).
-- [x] Recover app metadata: script class inventory, UI copy, credit links.
+- [x] Recover app metadata: script class inventory, UI copy, credit/shop link
+      inventory (the links are recorded as evidence but excluded from the port).
 - [x] Resolve the `SetVolume` targets: five sliders → `Audios/{Iya,Ito,Oko,Bit,Vox}`
       volume components, in all 61 lessons.
 - [x] Dump all 65 scenes to `.work/scenes/level*.json` (nodes, geometry,
@@ -22,10 +23,12 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 ## Next: finish the model
 
 - [x] **Export sprites and textures**: 32 sprites + 73 textures (3.7 MB) into
-      `assets/img/`, with rect/pivot/9-slice borders in
-      `docs/verification/sprite-export.json`. All 29 assets referenced by scene
+      `assets/img/` at export time; `tools/build_app_data.py` now keeps only the
+      22 the surviving drawables reference (~1.2 MB), with rect/pivot/9-slice
+      borders in
+      `docs/verification/sprite-export.json`. All assets referenced by scene
       `Image`/`RawImage` components resolve; the one non-sprite reference is the
-      `Video Book` RenderTexture.
+      `Video Book` RenderTexture (removed with the book area).
 - [x] **Decode `SimpleSpectrum` fields** (61/61 instances validate): 40 bars,
       `barXScale=2.2`, spacing `6`, `barYScale=40`, `barMinYScale=0.1`, the
       `SpectrumOrigin` node, white→cream value-gradient curve, attack/decay
@@ -39,12 +42,13 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 ## Next: build the app
 
 - [x] **Content model** → `js/data.js` (classic script, no JSON fetch):
-      volumes, lessons, stems, durations, credits, UI strings.
+      volumes, lessons, stems, durations, UI strings; credit/shop/promo
+      subtrees and the sprite entries only they used are omitted.
 - [x] **Layout model** → anchor-relative layout graphs for all 65 screens; the
       browser runs Unity's RectTransform math against the live canvas, with mask
       clipping, canvas ordering, local rotation, ContentSizeFitter labels,
       sprite tinting and a reactive clamp pass (verified at 720×1440,
-      1080×1920, 1600×900 and 2560×1080; the Playwright suite now has 60 checks).
+      1080×1920, 1600×900 and 2560×1080; the Playwright suite now has 64 checks).
 - [x] Wire the original's **portrait menu canvas**. The scene's menu and lesson
       canvases are authored in `584.69×1169.38` (1:2), matching the phone
       screenshots; `298.5×456` / `Expand` belongs to the inactive `Libri Video`
@@ -53,24 +57,31 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - [x] **Stage scaling**: authored canvas (`584.69×1169.38` for menus/player)
       scaled to the viewport, mirroring `CanvasScaler` match-height.
 - [x] **Screens**: opening → volume selector → toque index (Volume I) / oru seco
-      index (Volume II) → lesson player → credits/links, with hash routing.
+      index (Volume II) → lesson player, with hash routing. No credit/link view.
 - [x] **Mixer**: five `Slider_Volume` controls (0…1, not whole numbers), track
       labels `Iya/Itotele/Okonkolo/Beat/Vox`, Play/Pause/Stop; the Vox stem starts
       at volume 0 as in the original.
-- [ ] **Playback strategy**:
-      - `https://` (GitHub Pages): Web Audio, sample-accurate start, per-track
-        `GainNode`, live spectrum;
+- [x] **Playback strategy** → shared `js/mixer.js` (`window.BatappMixer`):
+      - `https://` (GitHub Pages): one `GainNode` per stem; the element volume
+        stays 1 so a stem that started at 0 (Vox) can be unmuted mid-playback,
+        and per-stem gain works on iOS, where `HTMLMediaElement.volume` is
+        ignored;
       - `file://`: `<audio>` elements with per-element volume and a drift
-        correction loop (Web Audio cannot read local media).
+        correction loop (Web Audio cannot read local media);
+      - all stems start in the same tick and every stem stays within 80 ms of
+        the reference.
 - [x] **Pause/resume semantics** matching `AudioSource.Pause`/`Stop` for all five
       stems, plus per-track mute without losing the slider value.
-- [ ] **Keyboard/pointer affordances** for Prev/Next/Home/Menu as in the
-      original bindings.
-- [ ] **Video area**: the Volume Selector shows a `RawImage` fed by a
-      `Video Book` RenderTexture. No video payload ships in the build, so the
-      original must stream it (`INTERNET` permission, `VideoPlayer` objects with
-      no bundled `VideoClip`). Offline port: render the frame area as a
-      placeholder and keep the "Libri Video" link instead of streaming.
+- [x] **Keyboard affordances**: Space toggles playback, arrows step lessons and
+      Escape returns to the list on the modern page; `Esc` keeps the original
+      pause layer on the shipped-layout page.
+- [x] **Modern layout** (`index_new.html` + `app-new.css` + `js/newapp.js`):
+      portrait-first library/player, progress ring, per-stem volume and mute,
+      system light/dark theme, rotate overlay on small landscape phones, no
+      external resources. Verified by `tests/verify-new.mjs` (file:// and HTTP,
+      all 61 lessons); summary in `docs/verification/new-ui-sweep-summary.json`.
+- [x] **Video area**: removed with the rest of the credit/book content; the port
+      ships the practice player only.
 - [ ] **Self-test page** (`selftest.html`): every lesson resolves its stems and
       sprites, durations match the manifest, no `fetch`/module syntax anywhere in
       the shipped scripts.
@@ -109,6 +120,10 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       the title and five ≥200-unit sliders, keep every visible widget inside the
       canvas, and report no console/network errors. Summary in
       `docs/verification/lesson-sweep-summary.json` (61/61 passed).
+- [x] Modern-layout sweep (`tests/verify-new.mjs`): library, mixer, mute
+      semantics, prev/next, keyboard, rotate overlay, light/dark themes, all 61
+      lessons and an HTTP pass exercising the Web Audio gains. Summary in
+      `docs/verification/new-ui-sweep-summary.json`.
 - [ ] Re-run `tools/unity_schema.py` and `tools/export_audio.py --verify` in CI
       fashion and store the summaries under `docs/verification/`.
 - [ ] Compare the port's rendered screens against the shipped scene data
@@ -154,13 +169,16 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 ## Publishing
 
 - [ ] Confirm the rights position with the maintainer before publishing audio
-      and scores to a public Pages site (the content belongs to the original
-      author; the port keeps the credit/links screen). **This is a human
-      decision; do not publish the audio until it is recorded.**
-- [x] Repository size check: the committed tree is ~91 MiB; `assets/audio` is
-      ~86 MiB and `assets/img` ~3.7 MiB. Pages serves the branch verbatim (no
-      LFS), so this stays well under the 1 GiB limit.
+      and scores to a public Pages site. **This is a human decision; do not
+      publish the audio until it is recorded.**
+- [x] Repository size check: the committed tree is ~86 MiB; `assets/audio` is
+      ~86 MiB and `assets/img` ~1.2 MiB (only the art the surviving drawables
+      reference; the social/book imagery was pruned). Pages serves the branch
+      verbatim (no LFS), so this stays well under the 1 GiB limit.
 - [x] GitHub Pages subpath smoke test: served the repo at `/batapp-web/` over
       HTTP; the lesson loads, all five stems play, the 40-bar spectrum runs and
       there are no console/network errors. Shipped paths are relative (no
       absolute `src`/`href`/`url` roots).
+- [x] Modern layout over HTTP: `tests/verify-new.mjs` serves the repo and checks
+      the Web Audio gain path (including raising Vox from its 0 default) with no
+      console errors; `index_new.html` works from the repository subpath.

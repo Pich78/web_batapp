@@ -20,15 +20,19 @@ source.
      drift correction on `file://`, Web Audio only when served over HTTP(S);
    - all paths relative (GitHub Pages serves from a repository subpath).
 4. **Original assets are reused, not redrawn**: audio comes from the APK's own
-   Vorbis packets; sprites and text come from the shipped scenes. Say so in any
-   UI that credits the author.
+   Vorbis packets; sprites and text come from the shipped scenes. Credit, shop
+   and third-party promo content of the original is deliberately omitted from
+   the port, which ships the practice player only — see the omission policy in
+   `tools/build_app_data.py`.
 5. Python/ffmpeg/UnityPy are **development-time tools only**. They are never
    required to run the app and must not leak into `index.html`, `js/` or `css/`.
 
 ## Repository layout
 
 ```
-index.html, app.css, js/     the app (classic scripts, no build)
+index.html, app.css, js/     the shipped-layout page (classic scripts, no build)
+index_new.html, app-new.css, js/newapp.js   the modern layout page
+js/mixer.js                  shared transport (window.BatappMixer) for both pages
 assets/audio/<slug>/<stem>.ogg   281 lesson stems (iya, ito, oko, vox, beat)
 assets/img/...               sprites and background art exported from the APK
 tools/                       extraction and export tools (development only)
@@ -74,7 +78,16 @@ $P tools/export_audio.py   --inventory .work/analysis/file_inventory.json \
 $P tools/dump_scenes.py    --data .work/unity/Data \
       --scene-map .work/analysis/scene_map.json --out .work/scenes
 $P tools/unity_schema.py   --data .work/unity/Data        # schema validation
+$P tools/build_app_data.py --scenes .work/scenes \
+      --sprites .work/analysis/sprites.json \
+      --audio-report .work/analysis/audio_export.json --out js/data.js
 ```
+
+`tools/build_app_data.py` owns the content model: it drops the credit/shop/
+promo subtrees (see `OMITTED_PATH_PARTS`), renames the volume switcher away
+from the book-era wording, prunes the sprite map to the art the surviving
+drawables reference and emits `js/data.js`. Run it after `dump_scenes.py`; it
+reads only `.work/` inputs, no XAPK.
 
 `tools/extract_fsb_setups.py` regenerates `tools/data/fsb_setups.json` from
 vgmstream's codebook table (needs network); the committed copy keeps the audio
@@ -167,6 +180,26 @@ A second `CanvasScaler` of **298.5×456** (`Expand`) exists in `Volume Selector`
 on the inactive `Libri Video / Canvas video` object; it is the video canvas, not
 the menu design space. Do not use it as the menu reference.
 
+## Modern layout (`index_new.html`)
+
+`index_new.html` + `app-new.css` + `js/newapp.js` are a fresh, portrait-first
+player, not a re-skin of the shipped scenes: no scene geometry and no sprites
+are used, only `js/data.js` (lessons, audio paths, durations) and the shared
+transport in `js/mixer.js`.
+
+- Two-tab library (Toques / Oru Seco) → lesson player with Play/Pause/Stop,
+  prev/next (clamped per volume), a progress ring and a mixer row per available
+  stem (Beat, Itotele, Iya, Okonkolo, Vox; Vox is absent in Volume II and in
+  `Egbi pami`). Each row has a volume slider and a mute that preserves the
+  slider value.
+- The mixer order and stem labels follow the shipped player's draw order.
+- `prefers-color-scheme` selects the theme; there is no toggle and no external
+  resource (inline SVG icons, data-URI favicon, system font stack).
+- Small landscape phones show a rotate-to-portrait overlay; wider screens get
+  the same portrait column centred (`max-width: 440px`).
+- Playback never autoplays on navigation; the user's first Play tap starts all
+  stems together. `window.__batapp_new` is a read-only test hook.
+
 ## Verification rules
 
 - **Never claim observed runtime behaviour.** There is no device or emulator in
@@ -182,6 +215,11 @@ the menu design space. Do not use it as the menu reference.
 - `tests/lesson-sweep.mjs` walks all 61 lesson routes in a real browser and
   checks stems/durations, the five sliders, the title, canvas bounds and
   console/network errors; record its summary under `docs/verification/`.
+- `tests/verify-new.mjs` covers the modern layout (`index_new.html`) over
+  `file://` and over HTTP: library and player, shared-transport sync, mute
+  semantics, prev/next, the rotate overlay, both colour schemes, no external
+  requests/links and a sweep of all 61 lessons; its summary is written to
+  `docs/verification/new-ui-sweep-summary.json`.
 - Record unresolved questions in `docs/REVERSE-ENGINEERING.md` under
   “Unknowns” instead of guessing.
 

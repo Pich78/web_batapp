@@ -1,9 +1,9 @@
 # BatApp — static offline port
 
-A reverse-engineered, dependency-free web port of **BatApp – Diario di un Omo
-Aña** by Paolo “Batà” Bianconcini: an Afro-Cuban Batá drum study app
-(Regla de Ocha / Santería) with Volume I (toques) and Volume II (oru seco),
-each lesson offering a five-stem practice mixer.
+A reverse-engineered, dependency-free web port of a freely distributed Android
+batá study app (Afro-Cuban Batá drumming, Regla de Ocha / Santería) with Volume
+I (toques) and Volume II (oru seco), each lesson offering a five-stem practice
+mixer.
 
 The original is a Unity 2019.3.7f1 IL2CPP Android app. This port reuses the
 app's own assets — the lesson audio is the original Vorbis stream, remuxed
@@ -16,9 +16,9 @@ losslessly — and rebuilds the interface as plain HTML/CSS/JavaScript.
 | Audio (281 stems, 61 lessons, 88.5 MB) | **done**, verified against the original bytes |
 | Reverse engineering of scene layout, UI schemas, widget wiring | **done** |
 | All 65 scenes dumped to a machine-readable model | **done** |
-| Sprites/textures exported (3.7 MB) | **done** |
 | Layout + content model emitted as `js/data.js` | **done** |
-| The web app itself (`index.html`, `js/`, `css/`) | **working first version** |
+| Shipped-layout page (`index.html`) | working; reconstructs the original screens |
+| Modern layout page (`index_new.html`) | working; fresh portrait-first player, same data and transport |
 
 See [docs/PLAN.md](docs/PLAN.md) for the next steps and
 [docs/REVERSE-ENGINEERING.md](docs/REVERSE-ENGINEERING.md) for the evidence
@@ -26,12 +26,32 @@ behind the reconstruction.
 
 ## Running the app
 
-- **Double-click `index.html`** — it runs from `file://` with no server.
-  Screens: opening → volume selector → toque/oru-seco index → lesson player
-  (five sliders, Play/Pause/Stop, Prev/Next/Home, pause layer on `Esc`), plus a
-  credits view with the author's links.
+- **Double-click `index_new.html`** — the modern layout. No server, no build:
+  library with the two volumes, lesson player with Play/Pause/Stop, Prev/Next,
+  loop progress and a five-stem mixer (volume + mute per stem).
+- **Double-click `index.html`** — the shipped-layout reconstruction: opening →
+  volume selector → toque/oru-seco index → lesson player, rendered from the
+  app's own scene geometry.
 - Or publish the repository with GitHub Pages (Settings → Pages → deploy from
-  the branch root). All paths are relative, so it works from a subpath too.
+  the branch root). All paths are relative, so it works from a subpath too; the
+  site root serves `index.html`, and `index_new.html` is reachable directly.
+
+## Playback
+
+Both pages share `js/mixer.js` (`window.BatappMixer`): one `<audio>` element per
+stem, all started in the same tick, each looping, with a 500 ms drift-correction
+pass that re-seeks any stem more than 80 ms off the reference.
+
+- On `file://` the element volume is the level control (Web Audio cannot read
+  local media).
+- On `http(s)` (e.g. GitHub Pages) a GainNode per stem controls the level, which
+  also works on iOS, where `HTMLMediaElement.volume` ignores writes. Every stem
+  is advanced even at volume 0, so Vox can be unmuted mid-playback.
+
+Stems within a lesson all have the exact same duration; the audible parts enter
+at different points (some start with several seconds of rest), which is part of
+the arrangement. The player always starts every stem at the same position and
+never trims that leading silence.
 
 ## Content
 
@@ -52,10 +72,11 @@ Chango, Yewa, Oya, Ochun, Yemaya (20A/20B), Obba, Oddudua.
 Each lesson has stems `iya`, `ito`, `oko`, `vox`, `beat` (Volume II lessons are
 instrumental: four stems, no voice).
 
-## Credits and rights
+## Provenance and rights
 
-All audio, scores, artwork and text are the work of the original author,
-Paolo “Batà” Bianconcini (batangoma.it, facebook.com/BataNgoma,
-instagram/paolobatablanco, youtube/paoloBata). This repository is a technical
-port of a freely distributed app; the underlying content is not licensed for
-redistribution here. Keep the app's credit/links screen intact.
+The port is reconstructed from a freely distributed Android build and reuses
+that build's own audio and UI assets; nothing was redrawn or re-recorded. The
+content, recordings and scores remain the property of their rights holders, and
+this repository is a technical port, not a redistribution license. Credit, shop
+and third-party promo screens of the original app are deliberately omitted:
+both pages ship the practice player only, with no external links.
