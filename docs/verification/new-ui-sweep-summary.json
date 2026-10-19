@@ -1,0 +1,779 @@
+{
+  "generated_at": "2026-10-19T13:01:16.217Z",
+  "target": "file:///home/apicciano/ai/batapp-web/index_new.html",
+  "viewport": "390x844",
+  "lessons": 61,
+  "passed": 61,
+  "failed": [],
+  "results": [
+    {
+      "slug": "volume-1/01-alubanche",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/02-tani-tani-cho-bi",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/03-oyankota",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/04-bariba-oguedema",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/05-kuru-kuru-bete",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/06-tiwi-tiwi",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/07-ekua-e",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/08-oricha-mpawa",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/09-odduaremuo",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/10-ochicambo",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/11-baba-lo-di-de",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/12-bonko-y-bonko",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/13-agayu-chola",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/14-oya-otagua",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/15-elekoto",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/16-ifa",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/17-elekete-melli",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/18-kele-kele-ya",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/19-egbi-pami",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/20-oferere",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/21-alado-okuo",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/22-oba-ere",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/23-eni-alado",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/24-fomaloguede",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/25-kowo-kowo",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/26-wemilere",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/27-emi-so",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/28-obatilemi",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/29-yewa-kunfe",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/30-bayuba-kante",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/31-tui-tui",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/32-cheke-cheke",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/33-tosun-tosun",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/34-bamila-ochun",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/35-ochinche-iwama",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/36-eni-o-bobo",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/37-sogun-tamiwo",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-1/38-taniboya",
+      "rows": 5,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko",
+        "vox"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/1-elegba",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/10-dada",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/11-ogue",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/12-agayu",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/13-orula",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/14-orichaoko",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/15-ibedy",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/16-chango",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/17-yewa",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/18-oya",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/19-ochun",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/2-oggun",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/20A-yemaya",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/20B-yemaya",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/21-obba",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/22-oddudua",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/3-ochosi",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/4-imbaloke",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/5-inle",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/6-babalu-aye",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/7-osain",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/8-osun",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/9-obatala",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    }
+  ]
+}

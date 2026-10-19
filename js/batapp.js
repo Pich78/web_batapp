@@ -1,13 +1,8 @@
-/* BatApp static port runtime.
+/* BatApp static port runtime for the shipped-layout page (index.html).
  *
  * Renders the geometry and wiring that tools/build_app_data.py lifted out of the
- * shipped Unity scenes, and plays the lessons from the remuxed Ogg stems.
- *
- * Two playback modes, chosen at runtime:
- *   - file:// (double-clicked page): five <audio> elements, per-element volume,
- *     drift correction. Web Audio cannot read local media without a server.
- *   - http(s) (e.g. GitHub Pages): Web Audio graph with one GainNode per stem,
- *     started in the same tick, plus master transport actions.
+ * shipped Unity scenes. Playback lives in js/mixer.js (window.BatappMixer) and
+ * is shared with the modern layout page (index_new.html).
  */
 (function () {
   "use strict";
@@ -386,145 +381,9 @@
     return node;
   }
 
-  /* --------------------------------------------------------------- transport */
+  /* Transport lives in js/mixer.js (window.BatappMixer), shared by
+   * both the scene renderer below and the modern layout page. */
 
-  function Mixer(lesson) {
-    this.lesson = lesson;
-    this.audio = document.createElement("audio");
-    this.tracks = [];
-    this.context = null;
-    this.gains = {};
-    this.analyser = null;
-    this.mode = location.protocol === "http:" || location.protocol === "https:" ? "webaudio" : "elements";
-    this.build();
-  }
-
-  Mixer.prototype.stemForTrack = function (track) {
-    var object = track.object || "";
-    var name = object.split("/").pop().toLowerCase();
-    return name;
-  };
-
-  Mixer.prototype.build = function () {
-    var self = this;
-    (this.lesson.audio || []).forEach(function (entry) {
-      var track = (self.lesson.tracks || []).filter(function (t) {
-        return self.stemForTrack(t) === entry.stem;
-      })[0] || {};
-      var source = new Audio("assets/audio/" + entry.path);
-      source.preload = "auto";
-      source.loop = !!track.loop;
-      var initial = track.volume === undefined || track.volume === null ? 1 : track.volume;
-      var startedAt = null;
-      var record = {
-        stem: entry.stem,
-        path: entry.path,
-        clip: entry.clip_name,
-        seconds: entry.seconds,
-        track: track,
-        element: source,
-        gain: null,
-        volume: initial,
-        started: false
-      };
-      source.volume = initial;
-      self.tracks.push(record);
-    });
-    if (this.mode === "webaudio") {
-      try {
-        var Ctx = window.AudioContext || window.webkitAudioContext;
-        this.context = new Ctx();
-        this.analyser = this.context.createAnalyser();
-        this.analyser.fftSize = 512;
-        this.analyser.smoothingTimeConstant = 0.5;
-        this.tracks.forEach(function (record) {
-          var node = self.context.createMediaElementSource(record.element);
-          var gain = self.context.createGain();
-          gain.gain.value = record.volume;
-          node.connect(gain);
-          gain.connect(self.analyser);
-          record.gain = gain;
-        });
-        this.analyser.connect(this.context.destination);
-      } catch (error) {
-        this.mode = "elements";
-        this.context = null;
-      }
-    }
-    this.tracks.forEach(function (record) {
-      record.element.addEventListener("ended", function () {
-        if (!record.element.loop) record.started = false;
-      });
-    });
-  };
-
-  Mixer.prototype.resume = function () {
-    if (this.context && this.context.state === "suspended") this.context.resume();
-  };
-
-  Mixer.prototype.play = function () {
-    this.resume();
-    var self = this;
-    // The original calls AudioSource.Play() on all five stems, so a stem at
-    // volume 0 (Vox uses VolumeValueChangefromzero) still advances and can be
-    // unmuted mid-playback.
-    var active = this.tracks;
-    var reference = null;
-    active.forEach(function (record) {
-      if (reference === null) reference = record;
-      var target = reference.started ? reference.element.currentTime : 0;
-      try {
-        record.element.currentTime = target;
-        var promise = record.element.play();
-        if (promise && promise.catch) promise.catch(function () {});
-        record.started = true;
-      } catch (error) { /* ignored: the browser will report it on the element */ }
-    });
-    this.startSync(reference);
-  };
-
-  Mixer.prototype.startSync = function (reference) {
-    var self = this;
-    if (this.syncTimer) clearInterval(this.syncTimer);
-    if (!reference) return;
-    this.syncTimer = setInterval(function () {
-      var target = reference.element.currentTime;
-      self.tracks.forEach(function (record) {
-        if (record === reference || !record.started || record.element.paused) return;
-        if (Math.abs(record.element.currentTime - target) > 0.08) {
-          record.element.currentTime = target;
-        }
-      });
-    }, 500);
-  };
-
-  Mixer.prototype.pause = function () {
-    this.tracks.forEach(function (record) {
-      if (!record.element.paused) record.element.pause();
-    });
-  };
-
-  Mixer.prototype.stop = function () {
-    this.tracks.forEach(function (record) {
-      record.element.pause();
-      try { record.element.currentTime = 0; } catch (error) { /* not seekable yet */ }
-      record.started = false;
-    });
-  };
-
-  Mixer.prototype.setVolume = function (stem, value) {
-    this.tracks.forEach(function (record) {
-      if (record.stem !== stem) return;
-      record.volume = value;
-      if (record.gain) {
-        record.gain.gain.value = value;
-      } else {
-        record.element.volume = value;
-      }
-    });
-  };
-
-  Mixer.prototype.zoom = function () { return this.tracks.length; };
 
   /* ------------------------------------------------------------------ router */
 
@@ -532,11 +391,7 @@
 
   function stopMixer() {
     if (state.mixer) {
-      state.mixer.stop();
-      if (state.mixer.syncTimer) clearInterval(state.mixer.syncTimer);
-      if (state.mixer.context) {
-        try { state.mixer.context.close(); } catch (error) { /* already closed */ }
-      }
+      state.mixer.dispose();
       state.mixer = null;
     }
   }
@@ -619,7 +474,7 @@
     if (drawable.kind === "text") return renderText(drawable, rect, container);
     if (drawable.kind === "video-placeholder") {
       var video = el("el video", rect);
-      video.textContent = (options && options.videoLabel) || "video";
+      video.textContent = (options && options.videoLabel) || "";
       container.appendChild(video);
       return video;
     }
@@ -965,9 +820,6 @@
         // mapped by routeForScene (which already returns a full route).
         var target = hook.target_lesson ? "lesson/" + hook.target_lesson : routeForScene(hook.string_argument, options);
         if (target) location.hash = "#/" + target;
-      } else if (hook.script === "WebURLScript") {
-        var url = hook.url || D.credits.site;
-        window.open(url, "_blank");
       } else if (options && options.onTap) {
         options.onTap(hook);
       }
@@ -1027,14 +879,7 @@
 
   function showVolumes() {
     stopMixer();
-    renderScreen(screenFor("volumeSelector"), {
-      videoLabel: "Libri Video\n(streamed in the original app)",
-      onTap: function () { location.hash = "#/credits"; }
-    });
-    var credits = el("el hit", [0, 0, 260, 90]);
-    credits.textContent = "";
-    credits.addEventListener("click", function () { location.hash = "#/credits"; });
-    stage.appendChild(credits);
+    renderScreen(screenFor("volumeSelector"));
   }
 
   function showIndex(volume) {
@@ -1104,7 +949,7 @@
     if (!lesson) return showIndex("volume-1");
     state.lesson = lesson;
     var screen = screenFor(lesson.level) || screenFor("player") || D.player;
-    var mixer = new Mixer(lesson);
+    var mixer = new window.BatappMixer(lesson);
     state.mixer = mixer;
     renderScreen(screen, {
       fallbackRoute: lesson.volume,
@@ -1146,39 +991,6 @@
     placed.push({ node: null, el: menuHit, menu: true });
   }
 
-  function showCredits() {
-    stopMixer();
-    var existing = document.getElementById("credits");
-    if (existing) existing.remove();
-    var box = document.createElement("div");
-    box.id = "credits";
-    var title = document.createElement("h1");
-    title.textContent = "BatApp - Diario di un Omo Aña";
-    var subtitle = document.createElement("h2");
-    subtitle.textContent = "Static port of the original Android app. Content, recordings and scores belong to Paolo Batà Bianconcini.";
-    box.appendChild(title); box.appendChild(subtitle);
-    [["site", "batangoma.it — didattica"], ["facebook", "Facebook — BataNgoma"],
-     ["instagram", "Instagram — paolobatablanco"], ["youtube", "YouTube — paoloBata"],
-     ["itunes", "iTunes — Batà Ngoma"]].forEach(function (pair) {
-      var link = document.createElement("a");
-      link.href = D.credits[pair[0]];
-      link.target = "_blank";
-      link.rel = "noreferrer";
-      link.textContent = pair[1];
-      box.appendChild(link);
-    });
-    var note = document.createElement("p");
-    note.textContent = D.credits.note + " The volume selector in the original streams a video (" +
-      "Libri Video); this offline port shows a placeholder instead.";
-    box.appendChild(note);
-    var close = document.createElement("div");
-    close.className = "close";
-    close.textContent = "✕";
-    close.addEventListener("click", function () { box.remove(); history.back(); });
-    box.appendChild(close);
-    document.body.appendChild(box);
-  }
-
   /* ------------------------------------------------------------------- routes */
 
   function route() {
@@ -1187,7 +999,6 @@
     if (hash === "volumes") return showVolumes();
     if (hash === "volume-1") return showIndex("volume-1");
     if (hash === "volume-2") return showIndex("volume-2");
-    if (hash === "credits") return showCredits();
     var lessonMatch = hash.match(/^lesson\/(.+)$/);
     if (lessonMatch) return showLesson(decodeURIComponent(lessonMatch[1]));
     showOpening();

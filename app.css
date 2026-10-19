@@ -120,19 +120,3 @@ html, body {
   color: rgba(255, 255, 255, 0.4);
   pointer-events: none;
 }
-
-#credits {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.92);
-  color: #dfe7f0;
-  padding: 80px 140px;
-  overflow: auto;
-}
-
-#credits h1 { font-size: 46px; margin: 0 0 12px; }
-#credits h2 { font-size: 26px; margin: 28px 0 8px; color: #9fb3c8; font-weight: 400; }
-#credits a { color: #7fc4ff; font-size: 24px; display: block; margin: 8px 0; text-decoration: none; }
-#credits a:hover { text-decoration: underline; }
-#credits p { font-size: 20px; line-height: 1.5; color: #a9b6c4; max-width: 1100px; }
-#credits .close { position: absolute; right: 60px; top: 40px; font-size: 30px; cursor: pointer; color: #fff; }

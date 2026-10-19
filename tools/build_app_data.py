@@ -33,6 +33,33 @@ IMAGE_TYPE = {0: "simple", 1: "sliced", 2: "tiled", 3: "filled"}
 FILL_METHOD = {0: "horizontal", 1: "vertical", 2: "radial-90", 3: "radial-180", 4: "radial-360"}
 SLIDER_DIRECTION = {0: "left-to-right", 1: "right-to-left", 2: "bottom-to-top", 3: "top-to-bottom"}
 
+# Credit, shop and third-party promo content of the shipped app is deliberately
+# omitted: the port exposes only the practice player. Matched on scene paths
+# (stable across dumps); text-only substitutions are listed separately.
+OMITTED_PATH_PARTS = (
+    "Menu/Socials",              # Facebook / Instagram / YouTube / Amazon / Apple music buttons
+    "Menu/Buy",                  # "Buy the book"
+    "Menu/Panel/Buy",            # "Buy the book"
+    "Menu/Panel/Panel/buy",      # "Where to buy"
+    "Menu/Attention",            # attention popups, incl. their "buy the book" art
+    "Menu/Attention-old",
+    "Menu/Banda Gialla/diario",  # letterspaced app/book title art
+    "Menu/Banda Gialla/paolo",   # author name art
+    "Libri Video",               # streamed video/book area
+)
+
+
+def omitted(path: str) -> bool:
+    return any(part in path for part in OMITTED_PATH_PARTS)
+
+
+def replace_text(path: str, text: str) -> str:
+    """Functional labels kept from the book-era UI are renamed to their volume."""
+    if text == "Change book":
+        return "Volume I" if "/Volume 1/" in path else "Volume II"
+    return text
+
+
 
 def local_angle(transform: dict) -> float:
     rotation = transform.get("local_rotation") or [0.0, 0.0, 0.0, 1.0]
@@ -113,6 +140,9 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
         transform = node.get("transform")
         if transform is None:
             return
+        if omitted(node.get("path") or ""):
+            # Credit/shop/promo subtree: no layout, drawables or wiring for it.
+            return
         canvas_component = next((c for c in node["components"] if c.get("type") == "Canvas"), None)
         current_clip = clip_id
         if canvas_component is not None:
@@ -191,7 +221,7 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
                     "fit_width": fit_fields.get("m_HorizontalFit", 0),
                     "fit_height": fit_fields.get("m_VerticalFit", 0),
                     "node": node_id,
-                    "text": fields.get("m_Text", ""),
+                    "text": replace_text(node["path"], fields.get("m_Text", "")),
                     "font_size": font.get("m_FontSize"),
                     "font_style": FONT_STYLE.get(font.get("m_FontStyle", 0), "normal"),
                     "alignment": TEXT_ANCHOR.get(font.get("m_Alignment", 0), "upper-left"),
@@ -477,15 +507,6 @@ def main() -> int:
         lesson["has_voice"] = any(node["clip"] and node["stem"] == "vox" for node in lesson["tracks"])
         lesson["tracks"] = sorted(lesson["tracks"], key=lambda node: node["stem"])
 
-    credits = {
-        "site": "http://www.batangoma.it/didattica/",
-        "facebook": "https://www.facebook.com/BataNgoma/",
-        "instagram": "https://www.instagram.com/paolobatablanco/",
-        "youtube": "http://www.youtube.com/user/paoloBata",
-        "itunes": "https://itunes.apple.com/it/artist/bata-ngoma/id1046842710",
-        "note": "Content, recordings and scores belong to Paolo Batà Bianconcini.",
-    }
-
     scene_stem_to_slug = {lesson["scene_stem"]: lesson["slug"] for lesson in lessons}
     slug_by_volume_number = {
         (lesson["volume"], str(lesson["number"])): lesson["slug"] for lesson in lessons
@@ -511,6 +532,17 @@ def main() -> int:
                 if slug:
                     drawable["target_lesson"] = slug
 
+    # Keep only the art the surviving drawables reference: the omitted social /
+    # book buttons must not ship their logos either.
+    used_sprites = {
+        drawable["sprite"]
+        for screen in screens.values()
+        for drawable in screen["drawables"]
+        if drawable.get("kind") == "image" and drawable.get("sprite")
+    }
+    sprite_paths = {name: path for name, path in sprite_paths.items() if name in used_sprites}
+    sprite_meta = {name: meta for name, meta in sprite_meta.items() if name in used_sprites}
+
     payload = {
         "generated_by": "tools/build_app_data.py",
         "scene_stem_to_slug": scene_stem_to_slug,
@@ -525,7 +557,6 @@ def main() -> int:
         },
         "player": screens.get(args.player_source),
         "lessons": sorted(lessons, key=lambda l: (l["volume"], str(l["number"]))),
-        "credits": credits,
     }
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

@@ -304,14 +304,28 @@ for (const [width, height] of layoutSizes) {
   await probe.close();
 }
 
-// --- credits ---------------------------------------------------------------
-await go("#/credits", 500);
-await shot("09-credits");
-const links = await page.locator("#credits a").count();
-check("credits exposes the author's links", links >= 5, links + " links");
+// --- no credit / shop / external-link surface -----------------------------
+// The port ships the practice player only: no author names, no shop links and
+// no third-party URLs anywhere in the rendered screens.
+const bannedSurface = /Bianconcini|batangoma|Buy the book|Where to buy|Libri Video|Amazon|iTunes|Apple music|Instagram|Facebook|YouTube/i;
+const bannedSeen = [];
+for (const route of ["#/credits", "#/opening", "#/volumes", "#/volume-1", "#/volume-2"]) {
+  await go(route, 600);
+  const found = await page.evaluate((pattern) => {
+    const source = document.body.innerText;
+    const match = source.match(new RegExp(pattern, "i"));
+    const external = Array.from(document.querySelectorAll("a[href], img[src], script[src], link[href]"))
+      .map((element) => element.getAttribute("href") || element.getAttribute("src") || "")
+      .filter((url) => /^https?:/i.test(url));
+    return { hit: match ? match[0] : null, external };
+  }, bannedSurface.source);
+  if (found.hit) bannedSeen.push(route + " text:" + found.hit);
+  if (found.external.length) bannedSeen.push(route + " url:" + found.external.join(","));
+}
+check("no author/shop text or external URL on any screen", bannedSeen.length === 0, bannedSeen.join(" | "));
 
 // --- file:// contract ------------------------------------------------------
-const shipped = ["js/batapp.js", "js/data.js"];
+const shipped = ["js/batapp.js", "js/data.js", "js/mixer.js", "js/newapp.js"];
 for (const file of shipped) {
   const text = fs.readFileSync(path.join(root, file), "utf8");
   const bad = /\bfetch\s*\(|type\s*=\s*["']module["']|import\s+.*from\s+["']/.test(text);
