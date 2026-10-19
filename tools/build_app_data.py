@@ -34,9 +34,13 @@ FILL_METHOD = {0: "horizontal", 1: "vertical", 2: "radial-90", 3: "radial-180", 
 SLIDER_DIRECTION = {0: "left-to-right", 1: "right-to-left", 2: "bottom-to-top", 3: "top-to-bottom"}
 
 
-def rect_of(transform: dict, parent_rect: list[float]) -> list[float]:
-    """Absolute [x, y, w, h] in canvas space (y up)."""
-    px, py, pw, ph = parent_rect
+def local_rect_of(transform: dict, parent_size: list[float]) -> list[float]:
+    """[x, y, w, h] relative to the parent's rect minimum, in the parent's local units.
+
+    Unity resolves anchors against the parent's *local* size; the parent's
+    localScale is applied afterwards when converting to canvas units.
+    """
+    px, py, pw, ph = 0.0, 0.0, parent_size[0], parent_size[1]
     amin, amax = transform["anchor_min"], transform["anchor_max"]
     pivot = transform["pivot"]
     delta = transform["size_delta"]
@@ -47,9 +51,7 @@ def rect_of(transform: dict, parent_rect: list[float]) -> list[float]:
     height = (max_y - min_y) + delta[1]
     pivot_x = min_x + (max_x - min_x) * pivot[0] + anchored[0]
     pivot_y = min_y + (max_y - min_y) * pivot[1] + anchored[1]
-    x = px + pivot_x - width * pivot[0]
-    y = py + pivot_y - height * pivot[1]
-    return [round(x, 2), round(y, 2), round(width, 2), round(height, 2)]
+    return [pivot_x - width * pivot[0], pivot_y - height * pivot[1], width, height]
 
 
 def sprite_key(ref) -> str | None:
@@ -76,15 +78,22 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
     drawables: list[dict] = []
     unresolved: list[str] = []
 
-    def walk(node: dict, parent_rect: list[float], order: list[int], canvas_order: int = 0, clip: list[float] | None = None, parent_active: bool = True) -> None:
+    rects_by_transform: dict[int, list[float]] = {}
+
+    def walk(node: dict, parent_origin: list[float], parent_size: list[float], parent_scale: float,
+             order: list[int], canvas_order: int = 0, clip: list[float] | None = None, parent_active: bool = True) -> None:
         transform = node.get("transform")
         if transform is None:
             return
         canvas_component = next((c for c in node["components"] if c.get("type") == "Canvas"), None)
         if canvas_component is not None:
-            # Unity drives a canvas RectTransform to the screen; anchors are ignored
-            rect = [0.0, 0.0, float(reference[0]), float(reference[1])]
+            # Unity drives a canvas RectTransform to the screen; its own canvas
+            # size (in reference units) is what its children anchor against.
+            local_scale = 1.0
             canvas_order = int(canvas_component.get("sorting_order", 0))
+            scaler = next((c for c in node["components"] if c.get("type") == "CanvasScaler"), None) if False else None
+            size = [float(reference[0]), float(reference[1])]
+            rect = [0.0, 0.0, size[0], size[1]]
         else:
             if "anchor_min" not in transform:
                 # A plain Transform (e.g. an "Actions" holder) is not drawable, but
@@ -92,9 +101,18 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
                 for child_transform in transform.get("children", []):
                     child = by_transform.get(child_transform)
                     if child is not None:
-                        walk(child, parent_rect, order, canvas_order, clip, parent_active)
+                        walk(child, parent_origin, parent_size, parent_scale, order, canvas_order, clip, parent_active)
                 return
-            rect = rect_of(transform, parent_rect)
+            local_scale = float(transform.get("local_scale", [1.0])[0] or 1.0)
+            local = local_rect_of(transform, parent_size)
+            rect = [
+                round(parent_origin[0] + local[0] * parent_scale, 2),
+                round(parent_origin[1] + local[1] * parent_scale, 2),
+                round(local[2] * parent_scale * local_scale, 2),
+                round(local[3] * parent_scale * local_scale, 2),
+            ]
+            size = [local[2], local[3]]
+        rects_by_transform[transform["path_id"]] = rect
         active = bool(node.get("active", True)) and parent_active
         if any(component.get("type") == "Mask" for component in node["components"]):
             clip = rect  # Mask/ScrollRect viewport: descendants are clipped to it
@@ -179,12 +197,12 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
                 order.append(1)
             elif kind in ("Slider", "Button"):
                 sub_rects = {}
+                sub_paths = {}
                 if kind == "Slider" and fields:
                     for key_field, label in (("m_FillRect", "fill"), ("m_HandleRect", "handle")):
                         ref = fields.get(key_field)
-                        target = by_go.get(ref.get("path_id")) if isinstance(ref, dict) else None
-                        if target and target.get("transform"):
-                            sub_rects[label] = rect_of(target["transform"], rect)
+                        if isinstance(ref, dict) and ref.get("path_id"):
+                            sub_paths[label] = ref["path_id"]
                 drawables.append(
                     {
                         "kind": kind.lower(),
@@ -198,6 +216,7 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
                         "canvas_order": canvas_order,
                         "clip": clip,
                         "overlay": (not active),
+                        "sub_paths": sub_paths or None,
                         **sub_rects,
                         **(
                             {
@@ -214,10 +233,12 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
                     }
                 )
                 order.append(1)
+        child_origin = [rect[0], rect[1]]
+        child_scale = parent_scale * local_scale
         for child_transform in transform.get("children", []):
             child = by_transform.get(child_transform)
             if child is not None:
-                walk(child, rect, order, canvas_order, clip, active)
+                walk(child, child_origin, size, child_scale, order, canvas_order, clip, active)
 
     roots = [
         node
@@ -225,7 +246,32 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
         if node.get("transform") and node["transform"]["parent"] not in by_transform
     ]
     for root in roots:
-        walk(root, [0.0, 0.0, reference[0], reference[1]], [])
+        walk(root, [0.0, 0.0], [float(reference[0]), float(reference[1])], 1.0, [])
+
+    for drawable in drawables:
+        if drawable["kind"] != "slider" or not drawable.get("sub_paths"):
+            continue
+        for label, transform_id in drawable["sub_paths"].items():
+            if transform_id in rects_by_transform:
+                drawable[label] = rects_by_transform[transform_id]
+        drawable.pop("sub_paths", None)
+
+    # Unity drives the fill's size at runtime, so a slider authored at value 0
+    # can carry a degenerate fill rect. Every slider in a scene comes from the
+    # same prefab, so take the modal fill geometry as the full-travel rect.
+    import collections as _collections
+
+    fills = _collections.Counter(
+        tuple(d["fill"]) for d in drawables if d["kind"] == "slider" and d.get("fill")
+    )
+    if fills:
+        modal, count = fills.most_common(1)[0]
+        for d in drawables:
+            if d["kind"] != "slider" or not d.get("fill"):
+                continue
+            if d["fill"][2] < 2 or d["fill"][3] < 2:
+                d["fill_source"] = "prefab-modal"
+                d["fill"] = list(modal)
     # wire hook names: element name -> resolved calls from the scene dump
     hooks_by_element: dict[str, list[dict]] = {}
     for entry in model.get("wiring", []):
