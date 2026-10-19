@@ -1,0 +1,21 @@
+{
+ "generated_at": "2026-10-19T11:40:54.498Z",
+ "target": "file:///home/apicciano/ai/batapp-web/index.html",
+ "viewport": {
+  "width": 720,
+  "height": 1440
+ },
+ "lessons": 61,
+ "passed": 61,
+ "failed": 0,
+ "failures": [],
+ "checks": [
+  "lesson route reaches the requested lesson",
+  "stem set matches the generated audio list",
+  "every stem reports a duration",
+  "the lesson title is rendered",
+  "five sliders, each at least 200 canvas units wide",
+  "no visible widget outside the canvas",
+  "no console or request errors"
+ ]
+}

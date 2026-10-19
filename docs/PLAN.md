@@ -99,6 +99,11 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
 ## Next: verification
 
+- [x] Per-lesson browser sweep (`tests/lesson-sweep.mjs`): all 61 lessons at
+      720×1440 reach their route, load the expected stems with durations, render
+      the title and five ≥200-unit sliders, keep every visible widget inside the
+      canvas, and report no console/network errors. Summary in
+      `docs/verification/lesson-sweep-summary.json` (61/61 passed).
 - [ ] Re-run `tools/unity_schema.py` and `tools/export_audio.py --verify` in CI
       fashion and store the summaries under `docs/verification/`.
 - [ ] Compare the port's rendered screens against the shipped scene data

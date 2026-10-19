@@ -168,6 +168,9 @@ the menu design space. Do not use it as the menu reference.
   `tools/unity_schema.py --data .work/unity/Data` reports 100% for `len ok` and
   `semantic ok`. A schema that merely consumes the right number of bytes is not
   enough — value plausibility is checked too.
+- `tests/lesson-sweep.mjs` walks all 61 lesson routes in a real browser and
+  checks stems/durations, the five sliders, the title, canvas bounds and
+  console/network errors; record its summary under `docs/verification/`.
 - Record unresolved questions in `docs/REVERSE-ENGINEERING.md` under
   “Unknowns” instead of guessing.
 
