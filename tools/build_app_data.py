@@ -60,6 +60,19 @@ def replace_text(path: str, text: str) -> str:
     return text
 
 
+def lesson_number_key(number: object) -> tuple[int, str]:
+    """Natural lesson order: 1, 2, 9, 10, … 20A, 20B, 21, 22.
+
+    The shipped scene list contains both zero-padded Volume I numbers ("01")
+    and unpadded Volume II numbers ("1", "20A"); sorting them as plain strings
+    produced 1, 10, 11, …, 2, 20A, 20B.
+    """
+    match = re.match(r"\s*(\d+)\s*(.*)", str(number))
+    if not match:
+        return (10 ** 9, str(number))
+    return (int(match.group(1)), match.group(2).upper())
+
+
 
 def local_angle(transform: dict) -> float:
     rotation = transform.get("local_rotation") or [0.0, 0.0, 0.0, 1.0]
@@ -556,7 +569,7 @@ def main() -> int:
             "oruSecoIndex": screens.get("level41"),
         },
         "player": screens.get(args.player_source),
-        "lessons": sorted(lessons, key=lambda l: (l["volume"], str(l["number"]))),
+        "lessons": sorted(lessons, key=lambda l: (l["volume"], lesson_number_key(l["number"]))),
     }
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
