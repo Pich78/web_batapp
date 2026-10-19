@@ -10,10 +10,9 @@
 <link rel="stylesheet" href="app-new.css">
 </head>
 <body>
-<div id="app" role="main"></div>
-<div id="rotate" role="alertdialog" aria-label="Rotate to portrait">
-  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4 9a9 9 0 0 1 3-6M2 7l2 2 2-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  <p>Rotate to portrait</p>
+<div id="app">
+  <aside id="library-pane" class="library-pane" aria-label="Rhythm library"></aside>
+  <main id="main-pane" class="main-pane"></main>
 </div>
 <script src="js/data.js"></script>
 <script src="js/mixer.js"></script>

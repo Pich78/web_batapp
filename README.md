@@ -18,7 +18,7 @@ losslessly — and rebuilds the interface as plain HTML/CSS/JavaScript.
 | All 65 scenes dumped to a machine-readable model | **done** |
 | Layout + content model emitted as `js/data.js` | **done** |
 | Shipped-layout page (`index.html`) | working; reconstructs the original screens |
-| Modern layout page (`index_new.html`) | working; fresh portrait-first player, same data and transport |
+| Modern layout page (`index_new.html`) | working; responsive player (portrait phone, landscape phone, desktop sidebar), same data and transport |
 
 See [docs/PLAN.md](docs/PLAN.md) for the next steps and
 [docs/REVERSE-ENGINEERING.md](docs/REVERSE-ENGINEERING.md) for the evidence
@@ -28,7 +28,9 @@ behind the reconstruction.
 
 - **Double-click `index_new.html`** — the modern layout. No server, no build:
   library with the two volumes, lesson player with Play/Pause/Stop, Prev/Next,
-  loop progress and a five-stem mixer (volume + mute per stem).
+  loop progress and a five-stem mixer (volume + mute per stem). It adapts from
+  a one-pane portrait phone view to a two-column landscape phone view and a
+  full desktop layout with a persistent library sidebar.
 - **Double-click `index.html`** — the shipped-layout reconstruction: opening →
   volume selector → toque/oru-seco index → lesson player, rendered from the
   app's own scene geometry.

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-19T13:01:16.217Z",
+  "generated_at": "2026-10-19T13:21:44.601Z",
   "target": "file:///home/apicciano/ai/batapp-web/index_new.html",
   "viewport": "390x844",
   "lessons": 61,
@@ -512,6 +512,102 @@
       "problems": []
     },
     {
+      "slug": "volume-2/2-oggun",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/3-ochosi",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/4-imbaloke",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/5-inle",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/6-babalu-aye",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/7-osain",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/8-osun",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
+      "slug": "volume-2/9-obatala",
+      "rows": 4,
+      "stems": [
+        "beat",
+        "ito",
+        "iya",
+        "oko"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    {
       "slug": "volume-2/10-dada",
       "rows": 4,
       "stems": [
@@ -632,18 +728,6 @@
       "problems": []
     },
     {
-      "slug": "volume-2/2-oggun",
-      "rows": 4,
-      "stems": [
-        "beat",
-        "ito",
-        "iya",
-        "oko"
-      ],
-      "passed": true,
-      "problems": []
-    },
-    {
       "slug": "volume-2/20A-yemaya",
       "rows": 4,
       "stems": [
@@ -681,90 +765,6 @@
     },
     {
       "slug": "volume-2/22-oddudua",
-      "rows": 4,
-      "stems": [
-        "beat",
-        "ito",
-        "iya",
-        "oko"
-      ],
-      "passed": true,
-      "problems": []
-    },
-    {
-      "slug": "volume-2/3-ochosi",
-      "rows": 4,
-      "stems": [
-        "beat",
-        "ito",
-        "iya",
-        "oko"
-      ],
-      "passed": true,
-      "problems": []
-    },
-    {
-      "slug": "volume-2/4-imbaloke",
-      "rows": 4,
-      "stems": [
-        "beat",
-        "ito",
-        "iya",
-        "oko"
-      ],
-      "passed": true,
-      "problems": []
-    },
-    {
-      "slug": "volume-2/5-inle",
-      "rows": 4,
-      "stems": [
-        "beat",
-        "ito",
-        "iya",
-        "oko"
-      ],
-      "passed": true,
-      "problems": []
-    },
-    {
-      "slug": "volume-2/6-babalu-aye",
-      "rows": 4,
-      "stems": [
-        "beat",
-        "ito",
-        "iya",
-        "oko"
-      ],
-      "passed": true,
-      "problems": []
-    },
-    {
-      "slug": "volume-2/7-osain",
-      "rows": 4,
-      "stems": [
-        "beat",
-        "ito",
-        "iya",
-        "oko"
-      ],
-      "passed": true,
-      "problems": []
-    },
-    {
-      "slug": "volume-2/8-osun",
-      "rows": 4,
-      "stems": [
-        "beat",
-        "ito",
-        "iya",
-        "oko"
-      ],
-      "passed": true,
-      "problems": []
-    },
-    {
-      "slug": "volume-2/9-obatala",
       "rows": 4,
       "stems": [
         "beat",

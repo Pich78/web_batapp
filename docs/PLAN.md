@@ -76,10 +76,12 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       Escape returns to the list on the modern page; `Esc` keeps the original
       pause layer on the shipped-layout page.
 - [x] **Modern layout** (`index_new.html` + `app-new.css` + `js/newapp.js`):
-      portrait-first library/player, progress ring, per-stem volume and mute,
-      system light/dark theme, rotate overlay on small landscape phones, no
-      external resources. Verified by `tests/verify-new.mjs` (file:// and HTTP,
-      all 61 lessons); summary in `docs/verification/new-ui-sweep-summary.json`.
+      responsive player with portrait-phone, landscape-phone and desktop modes
+      (persistent sidebar on desktop), progress ring, per-stem volume and mute,
+      natural lesson order (1, 2, … 20A, 20B, 21, 22), system light/dark theme,
+      no external resources. Verified by `tests/verify-new.mjs` (file:// and
+      HTTP, all 61 lessons); summary in
+      `docs/verification/new-ui-sweep-summary.json`.
 - [x] **Video area**: removed with the rest of the credit/book content; the port
       ships the practice player only.
 - [ ] **Self-test page** (`selftest.html`): every lesson resolves its stems and
@@ -120,9 +122,10 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       the title and five ≥200-unit sliders, keep every visible widget inside the
       canvas, and report no console/network errors. Summary in
       `docs/verification/lesson-sweep-summary.json` (61/61 passed).
-- [x] Modern-layout sweep (`tests/verify-new.mjs`): library, mixer, mute
-      semantics, prev/next, keyboard, rotate overlay, light/dark themes, all 61
-      lessons and an HTTP pass exercising the Web Audio gains. Summary in
+- [x] Modern-layout sweep (`tests/verify-new.mjs`): portrait, landscape-phone
+      and desktop modes, library order, mixer, mute semantics, prev/next,
+      keyboard, light/dark themes, all 61 lessons and an HTTP pass exercising
+      the Web Audio gains. Summary in
       `docs/verification/new-ui-sweep-summary.json`.
 - [ ] Re-run `tools/unity_schema.py` and `tools/export_audio.py --verify` in CI
       fashion and store the summaries under `docs/verification/`.

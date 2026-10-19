@@ -182,10 +182,10 @@ the menu design space. Do not use it as the menu reference.
 
 ## Modern layout (`index_new.html`)
 
-`index_new.html` + `app-new.css` + `js/newapp.js` are a fresh, portrait-first
-player, not a re-skin of the shipped scenes: no scene geometry and no sprites
-are used, only `js/data.js` (lessons, audio paths, durations) and the shared
-transport in `js/mixer.js`.
+`index_new.html` + `app-new.css` + `js/newapp.js` are a fresh player, not a
+re-skin of the shipped scenes: no scene geometry and no sprites are used, only
+`js/data.js` (lessons, audio paths, durations) and the shared transport in
+`js/mixer.js`.
 
 - Two-tab library (Toques / Oru Seco) → lesson player with Play/Pause/Stop,
   prev/next (clamped per volume), a progress ring and a mixer row per available
@@ -193,10 +193,15 @@ transport in `js/mixer.js`.
   `Egbi pami`). Each row has a volume slider and a mute that preserves the
   slider value.
 - The mixer order and stem labels follow the shipped player's draw order.
+- Three responsive modes built from one DOM:
+  - portrait phones: one pane at a time (library or player);
+  - landscape phones (`orientation: landscape` and `max-height: 559px`):
+    full-bleed two-column player and a two-column library;
+  - desktop (`min-width: 900px` and `min-height: 600px`): full-bleed persistent
+    library sidebar + player/empty main pane, with a narrower stacked player
+    below 1200 px.
 - `prefers-color-scheme` selects the theme; there is no toggle and no external
   resource (inline SVG icons, data-URI favicon, system font stack).
-- Small landscape phones show a rotate-to-portrait overlay; wider screens get
-  the same portrait column centred (`max-width: 440px`).
 - Playback never autoplays on navigation; the user's first Play tap starts all
   stems together. `window.__batapp_new` is a read-only test hook.
 
@@ -216,10 +221,10 @@ transport in `js/mixer.js`.
   checks stems/durations, the five sliders, the title, canvas bounds and
   console/network errors; record its summary under `docs/verification/`.
 - `tests/verify-new.mjs` covers the modern layout (`index_new.html`) over
-  `file://` and over HTTP: library and player, shared-transport sync, mute
-  semantics, prev/next, the rotate overlay, both colour schemes, no external
-  requests/links and a sweep of all 61 lessons; its summary is written to
-  `docs/verification/new-ui-sweep-summary.json`.
+  `file://` and over HTTP: portrait, landscape-phone and desktop modes, library
+  order, shared-transport sync, mute semantics, prev/next, both colour schemes,
+  no external requests/links and a sweep of all 61 lessons; its summary is
+  written to `docs/verification/new-ui-sweep-summary.json`.
 - Record unresolved questions in `docs/REVERSE-ENGINEERING.md` under
   “Unknowns” instead of guessing.
 

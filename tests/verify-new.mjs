@@ -70,6 +70,11 @@ let rows = await page.locator(".row").count();
 check("Toques lists 38 rhythms", rows === 38, rows + " rows");
 const first = await page.locator(".row .name").first().textContent();
 check("first toque is Alubanche", first.trim() === "Alubanche", first.trim());
+const toqueOrder = await page.locator(".row .num").allTextContents();
+check("Toques follows lesson order 01…38",
+  toqueOrder[0] === "01" && toqueOrder[9] === "10" && toqueOrder[toqueOrder.length - 1] === "38" &&
+  toqueOrder.join(",") === Array.from({ length: 38 }, (_, i) => String(i + 1).padStart(2, "0")).join(","),
+  toqueOrder.join(","));
 const fits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
 check("library has no horizontal overflow at 390px", fits);
 const fills = await page.evaluate(() => document.getElementById("app").getBoundingClientRect().height >= window.innerHeight - 1);
@@ -79,6 +84,10 @@ await page.locator(".tab").nth(1).click();
 await page.waitForTimeout(300);
 rows = await page.locator(".row").count();
 check("Oru Seco lists 23 lessons", rows === 23, rows + " rows");
+const oruOrder = await page.locator(".row .num").allTextContents();
+check("Oru Seco follows natural lesson order 1, 2, … 20A, 20B, 21, 22",
+  oruOrder.join(",") === "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20A,20B,21,22",
+  oruOrder.join(","));
 await shot("02-library-oru-seco");
 
 // --- player ----------------------------------------------------------------
@@ -193,32 +202,153 @@ for (const hash of ["#/", "#/v/2", "#/lesson/volume-1/01-alubanche", "#/lesson/v
 }
 check("no author/shop text, no links, no external URLs", surface.length === 0, surface.join(" | "));
 
-// --- rotate overlay + desktop column --------------------------------------
+// --- mobile landscape ------------------------------------------------------
 const landscape = await browser.newPage({ viewport: { width: 844, height: 390 } });
 await landscape.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
+await landscape.waitForTimeout(700);
+const landscapeLayout = await landscape.evaluate(() => {
+  const box = (node) => {
+    const rect = node.getBoundingClientRect();
+    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+  };
+  const rows = Array.from(document.querySelectorAll(".stem")).map(box);
+  const app = document.getElementById("app").getBoundingClientRect();
+  return {
+    hero: box(document.querySelector(".hero")),
+    mixer: box(document.querySelector(".mixer")),
+    rows,
+    app: { left: app.left, top: app.top, right: app.right, bottom: app.bottom },
+    viewport: [window.innerWidth, window.innerHeight],
+    scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight]
+  };
+});
+check("landscape player uses two columns",
+  landscapeLayout.hero.right <= landscapeLayout.mixer.left + 2,
+  JSON.stringify({ hero: landscapeLayout.hero, mixer: landscapeLayout.mixer }));
+check("landscape shows all five mixer rows inside the viewport",
+  landscapeLayout.rows.length === 5 && landscapeLayout.rows.every((row) =>
+    row.top >= -1 && row.bottom <= landscapeLayout.viewport[1] + 1 &&
+    row.left >= -1 && row.right <= landscapeLayout.viewport[0] + 1),
+  JSON.stringify(landscapeLayout.rows));
+check("landscape player fills the viewport without page scroll",
+  landscapeLayout.app.left === 0 &&
+  landscapeLayout.app.right === landscapeLayout.viewport[0] &&
+  landscapeLayout.scroll[0] <= landscapeLayout.viewport[0] &&
+  landscapeLayout.scroll[1] <= landscapeLayout.viewport[1],
+  JSON.stringify(landscapeLayout));
+await landscape.locator(".play").click();
+await landscape.waitForTimeout(1300);
+const landscapeTimes = await landscape.evaluate(() => window.__batapp_new.tracks().map((track) => track.currentTime));
+check("landscape playback starts every stem together",
+  landscapeTimes.every((time) => time > 0.3) && Math.max(...landscapeTimes) - Math.min(...landscapeTimes) < 0.12,
+  JSON.stringify(landscapeTimes.map((time) => +time.toFixed(2))));
+await landscape.screenshot({ path: path.join(shots, "06-landscape-player.png") });
+
+await landscape.goto(pageUrl + "#/v/1");
 await landscape.waitForTimeout(500);
-const rotateState = await landscape.evaluate(() => ({
-  overlay: getComputedStyle(document.getElementById("rotate")).display,
-  app: getComputedStyle(document.getElementById("app")).visibility,
-  size: document.getElementById("rotate").getBoundingClientRect().width
-}));
-check("small landscape phones show the rotate overlay",
-  rotateState.overlay !== "none" && rotateState.app === "hidden" && rotateState.size > 0,
-  JSON.stringify(rotateState));
-await landscape.screenshot({ path: path.join(shots, "06-rotate.png") });
+const landscapeLibrary = await landscape.evaluate(() => {
+  const lefts = Array.from(document.querySelectorAll(".row")).slice(0, 4)
+    .map((row) => Math.round(row.getBoundingClientRect().left));
+  return {
+    columns: new Set(lefts).size,
+    lefts,
+    scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+    viewport: [window.innerWidth, window.innerHeight]
+  };
+});
+check("landscape library uses two columns", landscapeLibrary.columns === 2, JSON.stringify(landscapeLibrary.lefts));
+check("landscape library does not scroll the page",
+  landscapeLibrary.scroll[0] <= landscapeLibrary.viewport[0] &&
+  landscapeLibrary.scroll[1] <= landscapeLibrary.viewport[1],
+  JSON.stringify(landscapeLibrary));
+await landscape.screenshot({ path: path.join(shots, "07-landscape-library.png") });
 await landscape.close();
 
-const desktop = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+// --- desktop ---------------------------------------------------------------
+const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 await desktop.goto(pageUrl + "#/");
 await desktop.waitForTimeout(500);
-const desktopState = await desktop.evaluate(() => ({
-  column: document.getElementById("app").getBoundingClientRect().width,
-  overlay: getComputedStyle(document.getElementById("rotate")).display
+const desktopEmpty = await desktop.evaluate(() => {
+  const library = document.getElementById("library-pane").getBoundingClientRect();
+  const main = document.getElementById("main-pane").getBoundingClientRect();
+  return {
+    library: { width: library.width, left: library.left },
+    main: { width: main.width, left: main.left },
+    empty: !!document.querySelector(".empty"),
+    scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+    viewport: [window.innerWidth, window.innerHeight]
+  };
+});
+check("desktop shows the library sidebar and main pane",
+  desktopEmpty.library.width >= 340 && desktopEmpty.library.width <= 380 &&
+  desktopEmpty.main.width > 800 && desktopEmpty.main.left >= desktopEmpty.library.width - 1,
+  JSON.stringify(desktopEmpty));
+check("desktop shows the empty state before a rhythm is selected", desktopEmpty.empty);
+check("desktop layout has no page overflow",
+  desktopEmpty.scroll[0] <= desktopEmpty.viewport[0] &&
+  desktopEmpty.scroll[1] <= desktopEmpty.viewport[1],
+  JSON.stringify(desktopEmpty.scroll));
+await desktop.screenshot({ path: path.join(shots, "08-desktop-empty.png") });
+
+await desktop.locator(".row").first().click();
+await desktop.waitForTimeout(800);
+await ready(desktop);
+const desktopPlayer = await desktop.evaluate(() => {
+  const library = document.getElementById("library-pane").getBoundingClientRect();
+  const hero = document.querySelector(".hero").getBoundingClientRect();
+  const mixer = document.querySelector(".mixer").getBoundingClientRect();
+  const back = document.querySelector(".player-top .icon-btn");
+  return {
+    lesson: window.__batapp_new.state().lesson,
+    active: window.__batapp_new.ui().active,
+    libraryWidth: library.width,
+    twoCols: hero.right <= mixer.left + 2,
+    mixerRows: document.querySelectorAll(".stem").length,
+    backVisible: !!(back && back.getClientRects().length),
+    scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+    viewport: [window.innerWidth, window.innerHeight]
+  };
+});
+check("desktop sidebar persists while a lesson is open", desktopPlayer.libraryWidth >= 340, desktopPlayer.libraryWidth + "px");
+check("desktop marks the active sidebar row", desktopPlayer.active === "Alubanche", desktopPlayer.active);
+check("desktop player shows hero and mixer side by side", desktopPlayer.twoCols, JSON.stringify(desktopPlayer));
+check("desktop hides the back button", !desktopPlayer.backVisible);
+check("desktop mixer has five rows", desktopPlayer.mixerRows === 5, desktopPlayer.mixerRows + " rows");
+check("desktop player has no page overflow",
+  desktopPlayer.scroll[0] <= desktopPlayer.viewport[0] &&
+  desktopPlayer.scroll[1] <= desktopPlayer.viewport[1],
+  JSON.stringify(desktopPlayer.scroll));
+await desktop.screenshot({ path: path.join(shots, "09-desktop-player.png") });
+
+await desktop.locator(".transport .ghost").nth(1).click();
+await desktop.waitForTimeout(700);
+const desktopNext = await desktop.evaluate(() => ({
+  lesson: window.__batapp_new.state().lesson,
+  active: window.__batapp_new.ui().active
 }));
-check("desktop centres a portrait column (<=460px)", desktopState.column <= 460, desktopState.column + "px");
-check("desktop does not show the rotate overlay", desktopState.overlay === "none", desktopState.overlay);
-await desktop.screenshot({ path: path.join(shots, "07-desktop.png") });
+check("desktop next updates the lesson and the active row",
+  desktopNext.lesson === "volume-1/02-tani-tani-cho-bi" && desktopNext.active === "Tani tani cho bi",
+  JSON.stringify(desktopNext));
 await desktop.close();
+
+// Narrow desktop/tablet: both panes must remain, player stacks vertically.
+const tablet = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+await tablet.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
+await tablet.waitForTimeout(700);
+const tabletState = await tablet.evaluate(() => ({
+  libraryWidth: document.getElementById("library-pane").getBoundingClientRect().width,
+  columns: getComputedStyle(document.querySelector(".player-body")).gridTemplateColumns,
+  mixer: !!document.querySelector(".mixer"),
+  scrollWidth: document.documentElement.scrollWidth,
+  viewportWidth: window.innerWidth
+}));
+check("tablet keeps the sidebar and stacks the player",
+  tabletState.libraryWidth >= 340 && tabletState.columns.split(" ").length === 1 && tabletState.mixer,
+  JSON.stringify(tabletState));
+check("tablet layout has no horizontal overflow", tabletState.scrollWidth <= tabletState.viewportWidth + 1,
+  tabletState.scrollWidth + " > " + tabletState.viewportWidth);
+await tablet.screenshot({ path: path.join(shots, "10-tablet-player.png") });
+await tablet.close();
 
 // --- theme follows the system ---------------------------------------------
 const dark = await browser.newPage({ viewport: { width: 390, height: 844 }, colorScheme: "dark" });
@@ -231,8 +361,14 @@ const darkState = await dark.evaluate(() => ({
 check("dark theme follows prefers-color-scheme",
   darkState.scheme === "dark" && darkState.background === "rgb(13, 15, 19)",
   JSON.stringify(darkState));
-await dark.screenshot({ path: path.join(shots, "08-dark-player.png") });
+await dark.screenshot({ path: path.join(shots, "11-dark-player.png") });
 await dark.close();
+
+const darkDesktop = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: "dark" });
+await darkDesktop.goto(pageUrl + "#/lesson/volume-1/14-oya-otagua");
+await darkDesktop.waitForTimeout(800);
+await darkDesktop.screenshot({ path: path.join(shots, "12-dark-desktop.png") });
+await darkDesktop.close();
 
 // --- all 61 lessons --------------------------------------------------------
 const lessons = await page.evaluate(() => window.__batapp_new.data.lessons);

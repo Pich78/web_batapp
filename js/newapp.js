@@ -1,15 +1,19 @@
 /* Modern layout runtime (index_new.html).
  *
- * A static, dependency-free player: rhythm list with two volumes, a lesson
- * screen with Play/Pause/Stop, Prev/Next and a five-stem mixer (volume +
- * mute). Playback is the shared transport in js/mixer.js, so all stems start
- * in the same tick and stay aligned exactly like the shipped-layout page.
+ * Static, dependency-free player shared by three responsive modes:
+ *   - portrait phone: one pane at a time (library or player);
+ *   - landscape phone: full-bleed two-column player / two-column library;
+ *   - desktop: persistent library sidebar + player/empty main pane.
+ *
+ * Playback is the shared transport in js/mixer.js, so all stems start in the
+ * same tick and stay aligned exactly like the shipped-layout page.
  */
 (function () {
   "use strict";
 
   var D = window.BATAPP;
-  var app = document.getElementById("app");
+  var libraryPane = document.getElementById("library-pane");
+  var mainPane = document.getElementById("main-pane");
 
   var STEMS = [
     { key: "beat", label: "Beat" },
@@ -28,6 +32,7 @@
   var state = {
     view: "library",
     volume: "volume-1",
+    libraryVolume: null,
     lesson: null,
     mixer: null,
     playing: false,
@@ -107,42 +112,64 @@
 
   /* --------------------------------------------------------------- library */
 
-  function renderLibrary(volume) {
-    state.view = "library";
+  function renderLibrary(volume, activeSlug) {
     state.volume = volume;
-    app.innerHTML = "";
+    if (state.libraryVolume !== volume) {
+      state.libraryVolume = volume;
+      libraryPane.innerHTML = "";
+      var view = element("div", "library-view");
+      view.appendChild(element("header", "brand",
+        "<h1>Batá</h1><p>Toques &amp; Oru Seco</p>"));
 
-    var screen = element("div", "screen");
-    screen.appendChild(element("header", "brand",
-      "<h1>Batá</h1><p>Toques &amp; Oru Seco</p>"));
-
-    var tabs = element("div", "tabs");
-    tabs.setAttribute("role", "tablist");
-    Object.keys(VOLUMES).forEach(function (id) {
-      var button = element("button", "tab" + (id === volume ? " active" : ""), VOLUMES[id].tab);
-      button.setAttribute("role", "tab");
-      button.setAttribute("aria-selected", id === volume ? "true" : "false");
-      button.addEventListener("click", function () {
-        location.hash = hashForLibrary(id);
+      var tabs = element("div", "tabs");
+      tabs.setAttribute("role", "tablist");
+      Object.keys(VOLUMES).forEach(function (id) {
+        var button = element("button", "tab" + (id === volume ? " active" : ""), VOLUMES[id].tab);
+        button.setAttribute("role", "tab");
+        button.setAttribute("aria-selected", id === volume ? "true" : "false");
+        button.addEventListener("click", function () {
+          location.hash = hashForLibrary(id);
+        });
+        tabs.appendChild(button);
       });
-      tabs.appendChild(button);
-    });
-    screen.appendChild(tabs);
+      view.appendChild(tabs);
 
-    var list = element("div", "list");
-    lessonsFor(volume).forEach(function (lesson) {
-      var row = element("button", "row",
-        '<span class="num">' + lesson.number + '</span>' +
-        '<span class="name"></span>' + ICONS.chevron);
-      row.querySelector(".name").textContent = lesson.title;
-      row.setAttribute("aria-label", VOLUMES[volume].kicker + ", " + lesson.number + " " + lesson.title);
-      row.addEventListener("click", function () {
-        location.hash = "#/lesson/" + lesson.slug;
+      var list = element("div", "list");
+      lessonsFor(volume).forEach(function (lesson) {
+        var row = element("button", "row",
+          '<span class="num">' + lesson.number + '</span>' +
+          '<span class="name"></span>' + ICONS.chevron);
+        row.dataset.slug = lesson.slug;
+        row.querySelector(".name").textContent = lesson.title;
+        row.setAttribute("aria-label", VOLUMES[volume].kicker + ", " + lesson.number + " " + lesson.title);
+        row.addEventListener("click", function () {
+          location.hash = "#/lesson/" + lesson.slug;
+        });
+        list.appendChild(row);
       });
-      list.appendChild(row);
+      view.appendChild(list);
+      libraryPane.appendChild(view);
+    }
+
+    var active = null;
+    Array.prototype.forEach.call(libraryPane.querySelectorAll(".row"), function (row) {
+      var selected = !!activeSlug && row.dataset.slug === activeSlug;
+      row.classList.toggle("active", selected);
+      if (selected) {
+        row.setAttribute("aria-current", "true");
+        active = row;
+      } else {
+        row.removeAttribute("aria-current");
+      }
     });
-    screen.appendChild(list);
-    app.appendChild(screen);
+    if (active) active.scrollIntoView({ block: "nearest" });
+  }
+
+  function emptyView() {
+    return element("div", "empty",
+      '<div class="glyph">' + ICONS.play + "</div>" +
+      "<h2>Choose a rhythm</h2>" +
+      "<p>Select a toque or an oru seco from the library.</p>");
   }
 
   /* ---------------------------------------------------------------- player */
@@ -191,13 +218,7 @@
     return row;
   }
 
-  function renderPlayer(slug) {
-    var lesson = lessonFor(slug);
-    if (!lesson) {
-      location.hash = "#/";
-      return;
-    }
-    state.view = "player";
+  function playerView(lesson) {
     state.volume = lesson.volume;
     state.lesson = lesson;
     state.playing = false;
@@ -207,9 +228,7 @@
 
     var pool = lessonsFor(lesson.volume);
     var index = pool.indexOf(lesson);
-
-    app.innerHTML = "";
-    var screen = element("div", "screen");
+    var player = element("div", "player-view");
 
     var top = element("div", "player-top");
     var back = element("button", "icon-btn", ICONS.back);
@@ -224,7 +243,10 @@
     title.querySelector(".kicker").textContent = VOLUMES[lesson.volume].kicker + " · " + lesson.number;
     title.querySelector("h2").textContent = lesson.title;
     top.appendChild(title);
-    screen.appendChild(top);
+    player.appendChild(top);
+
+    var body = element("div", "player-body");
+    var hero = element("div", "hero");
 
     var transport = element("div", "transport");
     var prev = element("button", "ghost", ICONS.prev);
@@ -246,13 +268,14 @@
     dial.appendChild(play);
 
     [prev, dial, next].forEach(function (node) { transport.appendChild(node); });
-    screen.appendChild(transport);
+    hero.appendChild(transport);
 
     var stopRow = element("div", "stop-row");
     var stop = element("button", "stop", ICONS.stop + "<span>Stop</span>");
     stop.setAttribute("aria-label", "Stop");
     stopRow.appendChild(stop);
-    screen.appendChild(stopRow);
+    hero.appendChild(stopRow);
+    body.appendChild(hero);
 
     var mixerBox = element("div", "mixer");
     STEMS.map(function (entry) {
@@ -260,8 +283,8 @@
     }).filter(Boolean).forEach(function (record) {
       mixerBox.appendChild(stemRow(record, mixer));
     });
-    screen.appendChild(mixerBox);
-    app.appendChild(screen);
+    body.appendChild(mixerBox);
+    player.appendChild(body);
 
     function paintPlaying() {
       play.innerHTML = state.playing ? ICONS.pause : ICONS.play;
@@ -292,6 +315,13 @@
       var ratio = progress.duration > 0 ? Math.min(1, progress.current / progress.duration) : 0;
       ring.setAttribute("stroke-dashoffset", (RING_LENGTH * (1 - ratio)).toFixed(2));
     }, 250);
+
+    return player;
+  }
+
+  function renderMain(lesson) {
+    mainPane.innerHTML = "";
+    mainPane.appendChild(lesson ? playerView(lesson) : emptyView());
   }
 
   /* ----------------------------------------------------------------- router */
@@ -299,11 +329,29 @@
   function route() {
     teardown();
     var hash = location.hash.replace(/^#\/?/, "");
-    if (hash === "v/2") return renderLibrary("volume-2");
-    if (hash === "v/1") return renderLibrary("volume-1");
-    var lessonMatch = hash.match(/^lesson\/(.+)$/);
-    if (lessonMatch) return renderPlayer(decodeURIComponent(lessonMatch[1]));
-    renderLibrary(state.volume);
+    var volume = state.volume;
+    var lesson = null;
+
+    if (hash === "v/2") {
+      volume = "volume-2";
+    } else if (hash === "v/1") {
+      volume = "volume-1";
+    } else {
+      var lessonMatch = hash.match(/^lesson\/(.+)$/);
+      if (lessonMatch) {
+        lesson = lessonFor(decodeURIComponent(lessonMatch[1]));
+        if (!lesson) {
+          location.hash = "#/";
+          return;
+        }
+        volume = lesson.volume;
+      }
+    }
+
+    state.view = lesson ? "player" : "library";
+    document.body.dataset.view = state.view;
+    renderLibrary(volume, lesson ? lesson.slug : null);
+    renderMain(lesson);
   }
 
   function step(delta) {
@@ -364,13 +412,18 @@
       });
     },
     ui: function () {
+      var active = document.querySelector(".row.active");
       return {
         rows: document.querySelectorAll(".stem").length,
         tabs: document.querySelectorAll(".tab").length,
         title: (document.querySelector(".player-title h2") || {}).textContent || null,
         ringOffset: (document.querySelector(".ring-fg") || {}).getAttribute
           ? document.querySelector(".ring-fg").getAttribute("stroke-dashoffset")
-          : null
+          : null,
+        empty: !!document.querySelector(".empty"),
+        active: active ? active.querySelector(".name").textContent : null,
+        libraryVisible: !!(libraryPane.getClientRects().length),
+        mainVisible: !!(mainPane.getClientRects().length)
       };
     }
   };

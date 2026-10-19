@@ -1,9 +1,12 @@
 /* Modern layout (index_new.html) — static, dependency-free.
  *
- * A fresh interface, not a re-skin of the shipped scenes: portrait-first
- * column, a progress-ring transport, custom sliders and a two-tab library.
- * Follows the system theme. No external resources: inline SVG icons, system
- * font stack, no network requests. */
+ * Three responsive modes from one DOM:
+ *   - portrait phone: single pane, library or player (base styles);
+ *   - landscape phone ((orientation: landscape) and (max-height: 559px)):
+ *     full-bleed two-column player, two-column library;
+ *   - desktop ((min-width: 900px) and (min-height: 600px)): full-bleed
+ *     sidebar + main pane, both always visible.
+ * Follows the system theme. No external resources. */
 
 :root {
   color-scheme: dark;
@@ -73,28 +76,43 @@ button:disabled { cursor: default; opacity: 0.3; }
 
 #app {
   display: flex;
-  flex-direction: column;
   width: 100%;
-  max-width: 440px;
   min-height: 100vh;
   min-height: 100dvh;
   margin: 0 auto;
+  background: var(--bg);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
 
-@media (min-width: 520px) {
+.library-pane,
+.main-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Only one pane is visible on phone-sized viewports; the router sets
+   data-view and the desktop block below re-enables both. */
+@media (max-width: 899px), (max-height: 599px) {
+  #app { max-width: 440px; }
+  body[data-view="library"] .main-pane { display: none; }
+  body[data-view="player"] .library-pane { display: none; }
+}
+
+@media (min-width: 520px) and (max-width: 899px),
+       (min-width: 520px) and (max-height: 599px) {
   #app {
     border-left: 1px solid var(--line);
     border-right: 1px solid var(--line);
   }
 }
 
-.screen {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
+.library-view,
+.player-view,
+.empty {
   animation: rise 0.22s ease both;
 }
 
@@ -104,6 +122,13 @@ button:disabled { cursor: default; opacity: 0.3; }
 }
 
 /* ------------------------------------------------------------- library */
+
+.library-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
 
 .brand {
   padding: calc(24px + env(safe-area-inset-top)) 22px 4px;
@@ -154,7 +179,19 @@ button:disabled { cursor: default; opacity: 0.3; }
   padding: 2px 12px calc(24px + env(safe-area-inset-bottom));
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
+
+.list::-webkit-scrollbar,
+.main-pane::-webkit-scrollbar { width: 8px; }
+.list::-webkit-scrollbar-thumb,
+.main-pane::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 4px;
+}
+.list::-webkit-scrollbar-track,
+.main-pane::-webkit-scrollbar-track { background: transparent; }
 
 .row {
   display: flex;
@@ -182,6 +219,7 @@ button:disabled { cursor: default; opacity: 0.3; }
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .row .name {
@@ -201,7 +239,18 @@ button:disabled { cursor: default; opacity: 0.3; }
   color: var(--muted);
 }
 
+.row.active { background: var(--accent-soft); }
+.row.active .num { background: var(--accent); color: var(--accent-ink); }
+.row.active svg { color: var(--accent); }
+
 /* -------------------------------------------------------------- player */
+
+.player-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
 
 .player-top {
   display: flex;
@@ -436,28 +485,240 @@ button:disabled { cursor: default; opacity: 0.3; }
 
 .stem.muted input[type="range"]::-moz-range-progress { background: var(--muted); }
 
-/* ------------------------------------------------------ rotate overlay */
+/* ---------------------------------------------------------- empty state */
 
-#rotate { display: none; }
+.empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 32px;
+  text-align: center;
+  color: var(--muted);
+}
 
-@media (orientation: landscape) and (max-height: 520px) {
-  #app { visibility: hidden; }
+.empty .glyph {
+  display: grid;
+  place-items: center;
+  width: 86px;
+  height: 86px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+}
 
-  #rotate {
-    position: fixed;
-    inset: 0;
-    display: grid;
-    place-content: center;
-    justify-items: center;
-    gap: 14px;
-    padding: 24px;
-    background: var(--bg);
-    color: var(--muted);
-    text-align: center;
+.empty .glyph svg { width: 30px; height: 30px; }
+
+.empty h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.empty p {
+  max-width: 300px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* ------------------------------------------------- mobile landscape mode */
+
+@media (orientation: landscape) and (max-height: 559px) {
+  #app {
+    max-width: none;
+    height: 100dvh;
+    border: 0;
+    overflow: hidden;
   }
 
-  #rotate svg { width: 44px; height: 44px; color: var(--accent); }
-  #rotate p { margin: 0; font-size: 15px; }
+  .library-view { min-height: 0; }
+
+  .brand { padding: calc(10px + env(safe-area-inset-top)) 20px 0; }
+  .brand h1 { font-size: 20px; }
+  .brand p { display: none; }
+
+  .tabs {
+    margin: 8px 16px 8px;
+    padding: 3px;
+  }
+  .tab { padding: 7px 8px; font-size: 13px; }
+
+  .list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 12px;
+    align-content: start;
+    padding: 0 12px calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .row { padding: 9px 10px; gap: 12px; }
+  .row .num { width: 32px; height: 32px; border-radius: 10px; font-size: 12px; }
+  .row .name { font-size: 15px; }
+
+  .player-top {
+    padding: calc(8px + env(safe-area-inset-top)) 16px 0;
+  }
+
+  .player-title h2 { font-size: 18px; }
+  .player-title .kicker { font-size: 10.5px; }
+
+  .player-body {
+    display: grid;
+    flex: 1;
+    min-height: 0;
+    grid-template-columns: minmax(260px, 0.85fr) minmax(340px, 1.15fr);
+    gap: 22px;
+    align-items: center;
+    padding: 2px 20px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .transport { padding: 0; gap: 18px; }
+  .ghost { width: 44px; height: 44px; }
+  .ghost svg { width: 20px; height: 20px; }
+  .dial { width: 84px; height: 84px; }
+  .play { inset: 8px; }
+  .play svg { width: 24px; height: 24px; }
+  .stop-row { padding: 8px 0 0; }
+
+  .mixer {
+    width: 100%;
+    max-height: 100%;
+    margin: 0;
+    overflow-y: auto;
+    box-shadow: none;
+  }
+
+  .stem {
+    grid-template-columns: 90px minmax(0, 1fr) 34px;
+    grid-template-areas: "name slider mute";
+    row-gap: 0;
+    padding: 5px 12px;
+  }
+
+  .stem-name { grid-area: name; }
+  .stem input[type="range"] { grid-area: slider; height: 26px; }
+  .mute { grid-area: mute; width: 30px; height: 30px; }
+}
+
+/* --------------------------------------------------------------- desktop */
+
+@media (min-width: 900px) and (min-height: 600px) {
+  #app {
+    display: grid;
+    grid-template-columns: 360px minmax(0, 1fr);
+    max-width: none;
+    height: 100dvh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+  }
+
+  .library-pane {
+    display: flex;
+    min-height: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+  }
+
+  .main-pane {
+    display: flex;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .brand { padding: 34px 24px 6px; }
+  .brand h1 { font-size: 26px; }
+  .brand p { font-size: 13px; }
+
+  .tabs { margin: 12px 18px 12px; }
+
+  .list {
+    padding: 0 10px calc(24px + env(safe-area-inset-bottom));
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+  }
+
+  .row { padding: 11px 12px; }
+  .row .name { font-size: 15.5px; }
+
+  .player-view {
+    width: 100%;
+    max-width: 1060px;
+    min-height: 100dvh;
+    margin: 0 auto;
+    padding: 0 44px;
+  }
+
+  .player-top { padding-top: 38px; }
+  .player-top .icon-btn { display: none; }
+  .player-title h2 { font-size: 30px; }
+  .player-title .kicker { font-size: 12px; }
+
+  .player-body {
+    display: grid;
+    flex: 1;
+    grid-template-columns: minmax(320px, 1fr) minmax(380px, 440px);
+    gap: 56px;
+    align-items: center;
+    padding: 0 0 48px;
+  }
+
+  .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .transport { padding: 0; gap: 30px; }
+  .dial { width: 170px; height: 170px; }
+  .play { inset: 18px; }
+  .play svg { width: 44px; height: 44px; }
+  .stop-row { padding-top: 20px; }
+
+  .mixer {
+    width: 100%;
+    margin: 0;
+  }
+
+  .stem { padding: 14px 18px 12px; }
+  .stem-name { font-size: 15px; }
+
+  .empty { min-height: 100dvh; }
+}
+
+/* Narrow desktops/tablets: keep both panes, but stack the player instead of
+   squeezing the hero and the mixer into one row. */
+@media (min-width: 900px) and (max-width: 1199px) and (min-height: 600px) {
+  .player-view { padding: 0 32px; }
+  .player-body {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    gap: 20px;
+    max-width: 540px;
+    margin: 0 auto;
+    padding: 8px 0 36px;
+  }
+  .dial { width: 132px; height: 132px; }
+  .play { inset: 14px; }
+  .play svg { width: 34px; height: 34px; }
+  .stop-row { padding-top: 12px; }
+  .mixer { max-height: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
