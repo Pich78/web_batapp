@@ -389,6 +389,7 @@
 
     var seeking = false;
     var duration = 0;
+    var transportBusy = false;
 
     function showStatus(message) {
       status.textContent = message;
@@ -410,18 +411,21 @@
         paintPlaying();
         return;
       }
+      if (transportBusy) return;
+      transportBusy = true;
       mixer.play();
       state.playing = true;
       hideStatus();
       paintPlaying();
       setTimeout(function () {
+        transportBusy = false;
         if (!state.playing) return;
         if (!mixer.playing()) {
           state.playing = false;
           paintPlaying();
           showStatus("Playback was blocked. Tap Play again.");
         }
-      }, 450);
+      }, 500);
     });
 
     stop.addEventListener("click", function () {
@@ -692,10 +696,15 @@
   }
 
   document.addEventListener("keydown", function (event) {
-    if (event.target && event.target.tagName === "INPUT") return;
     if (event.key === "Escape" && state.view === "player") {
       location.hash = hashForLibrary(state.volume);
-    } else if (state.view === "player" && event.key === " ") {
+      return;
+    }
+    // Let focused controls handle their own activation; otherwise Space on the
+    // play button would fire both the native click and the synthetic one.
+    if (event.target && event.target.closest &&
+        event.target.closest("button, input, textarea, select, a")) return;
+    if (state.view === "player" && event.key === " ") {
       event.preventDefault();
       var play = document.querySelector("button.play");
       if (play) play.click();
@@ -719,6 +728,7 @@
         volume: state.volume,
         lesson: state.lesson ? state.lesson.slug : null,
         playing: state.playing,
+        mixerPlaying: state.mixer ? state.mixer.playing() : false,
         loading: state.loading,
         error: state.error,
         mode: state.mixer ? state.mixer.mode : null,
@@ -738,6 +748,8 @@
           currentTime: record.element.currentTime,
           duration: record.element.duration || null,
           paused: record.element.paused,
+          loop: record.element.loop,
+          ended: record.element.ended,
           error: record.element.error ? record.element.error.code : null
         };
       });

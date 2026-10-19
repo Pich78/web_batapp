@@ -19,6 +19,9 @@
 (function (global) {
   "use strict";
 
+  // Scene track objects use "Bit"; the exported audio stem is "beat".
+  var TRACK_STEM_ALIAS = { bit: "beat" };
+
   function clamp01(value) {
     var number = typeof value === "number" ? value : parseFloat(value);
     if (!(number >= 0)) number = 0;
@@ -32,6 +35,8 @@
     this.context = null;
     this.analyser = null;
     this.syncTimer = 0;
+    this.reference = null;
+    this.seekToken = 0;
     var protocol = (global.location && global.location.protocol) || "file:";
     var served = protocol === "http:" || protocol === "https:";
     this.mode = options.webAudio === undefined ? (served ? "webaudio" : "elements")
@@ -41,7 +46,8 @@
 
   BatappMixer.prototype.stemForTrack = function (track) {
     var object = track.object || "";
-    return object.split("/").pop().toLowerCase();
+    var name = object.split("/").pop().toLowerCase();
+    return TRACK_STEM_ALIAS[name] || name;
   };
 
   BatappMixer.prototype.build = function (options) {
@@ -54,7 +60,9 @@
         ? options.resolveSource(entry)
         : "assets/audio/" + entry.path);
       source.preload = "auto";
-      source.loop = !!track.loop;
+      // Missing metadata must never silently stop a stem: the original loops
+      // every AudioSource, so default to true.
+      source.loop = track.loop === undefined ? true : !!track.loop;
       var initial = track.volume === undefined || track.volume === null ? 1 : clamp01(track.volume);
       var record = {
         stem: entry.stem,
@@ -66,7 +74,8 @@
         gain: null,
         volume: initial,
         muted: false,
-        started: false
+        started: false,
+        lastTime: 0
       };
       self.tracks.push(record);
       self.applyLevel(record);
@@ -105,9 +114,12 @@
     }
     this.tracks.forEach(function (record) {
       record.element.addEventListener("ended", function () {
-        if (!record.element.loop) record.started = false;
+        if (record.element.loop) return;
+        record.started = false;
+        if (self.reference === record) self.pickReference();
       });
     });
+    this.reference = this.tracks[0] || null;
   };
 
   BatappMixer.prototype.applyLevel = function (record) {
@@ -120,52 +132,118 @@
     if (this.context && this.context.state === "suspended") this.context.resume();
   };
 
+  BatappMixer.prototype.liveTracks = function () {
+    return this.tracks.filter(function (record) {
+      return record.started && !record.element.paused && !record.element.ended;
+    });
+  };
+
+  BatappMixer.prototype.pickReference = function () {
+    var live = this.liveTracks();
+    this.reference = live[0] || this.tracks[0] || null;
+    return this.reference;
+  };
+
   BatappMixer.prototype.play = function () {
     this.resume();
     var self = this;
-    // The original calls AudioSource.Play() on all five stems, so a stem at
-    // volume 0 (Vox uses VolumeValueChangefromzero) still advances and can be
-    // unmuted mid-playback.
-    var reference = this.tracks[0] || null;
+    // A second play() while every stem is already running must not reset the
+    // transport to the reference position again.
+    if (this.tracks.length && this.liveTracks().length === this.tracks.length) {
+      this.startSync();
+      return;
+    }
+    if (this.syncTimer) clearInterval(this.syncTimer);
+    this.syncTimer = 0;
+    this.seekToken += 1;
+
+    var live = this.liveTracks();
+    var reference = live[0] || (this.reference && this.reference.started ? this.reference : this.tracks[0] || null);
     var target = reference && reference.started ? reference.element.currentTime : 0;
+    this.reference = reference;
+
     this.tracks.forEach(function (record) {
       try {
         record.element.currentTime = target;
         var promise = record.element.play();
         if (promise && promise.catch) promise.catch(function () {});
         record.started = true;
+        record.lastTime = target;
       } catch (error) { /* ignored: the browser reports it on the element */ }
     });
-    this.startSync(reference);
+    this.startSync();
   };
 
-  BatappMixer.prototype.startSync = function (reference) {
+  BatappMixer.prototype.startSync = function () {
     var self = this;
     if (this.syncTimer) clearInterval(this.syncTimer);
-    if (!reference) return;
+    if (!this.tracks.length) return;
+    this.tracks.forEach(function (record) {
+      record.lastTime = record.element.currentTime || 0;
+    });
     this.syncTimer = setInterval(function () {
+      var records = self.tracks.filter(function (record) {
+        return record.started && !record.element.paused && !record.element.ended;
+      });
+      if (!records.length) return;
+
+      var reference = self.reference;
+      if (!reference || !reference.started || reference.element.paused || reference.element.ended) {
+        reference = records[0];
+        self.reference = reference;
+      }
+
+      // A native loop restarts each element independently. Detect any element
+      // that wrapped and pull the whole transport to the same new position;
+      // otherwise a just-wrapped stem would look "seconds behind" and be sent
+      // back to the end.
+      var wrapped = null;
+      records.forEach(function (record) {
+        var now = record.element.currentTime;
+        if (record.lastTime && now + 0.25 < record.lastTime) wrapped = wrapped || record;
+        record.lastTime = now;
+      });
+      if (wrapped) {
+        var position = wrapped.element.currentTime;
+        records.forEach(function (record) {
+          record.lastTime = position;
+          if (record === wrapped) return;
+          record.element.currentTime = position;
+        });
+        return;
+      }
+
       var target = reference.element.currentTime;
-      self.tracks.forEach(function (record) {
-        if (record === reference || !record.started || record.element.paused) return;
+      records.forEach(function (record) {
+        if (record === reference) return;
         if (Math.abs(record.element.currentTime - target) > 0.08) {
           record.element.currentTime = target;
         }
+        record.lastTime = record.element.currentTime;
       });
-    }, 500);
+    }, 250);
   };
 
   BatappMixer.prototype.pause = function () {
+    if (this.syncTimer) clearInterval(this.syncTimer);
+    this.syncTimer = 0;
+    this.seekToken += 1;
     this.tracks.forEach(function (record) {
       if (!record.element.paused) record.element.pause();
     });
   };
 
   BatappMixer.prototype.stop = function () {
+    if (this.syncTimer) clearInterval(this.syncTimer);
+    this.syncTimer = 0;
+    this.seekToken += 1;
     this.tracks.forEach(function (record) {
       record.element.pause();
       try { record.element.currentTime = 0; } catch (error) { /* not seekable yet */ }
       record.started = false;
+      record.lastTime = 0;
     });
+    this.reference = this.tracks[0] || null;
   };
 
   BatappMixer.prototype.setVolume = function (stem, value) {
@@ -204,12 +282,12 @@
 
   BatappMixer.prototype.playing = function () {
     return this.tracks.some(function (record) {
-      return record.started && !record.element.paused;
+      return record.started && !record.element.paused && !record.element.ended;
     });
   };
 
   BatappMixer.prototype.progress = function () {
-    var reference = this.tracks[0];
+    var reference = this.reference || this.tracks[0];
     if (!reference) return { current: 0, duration: 0 };
     var duration = reference.element.duration;
     return {
@@ -219,17 +297,52 @@
   };
 
   BatappMixer.prototype.seek = function (seconds) {
-    // One position for every stem: the drift loop keeps them together after
-    // the seek, whether playback is paused or running.
+    // Keep playing (the UI applies the value on release) but suspend the drift
+    // loop while the elements seek, so it cannot drag a backward jump forward
+    // again before the browser has applied it.
+    var self = this;
+    var wasPlaying = this.playing();
     var duration = this.progress().duration;
     var target = Math.max(0, duration > 0 ? Math.min(seconds, duration) : seconds);
+    if (this.syncTimer) clearInterval(this.syncTimer);
+    this.syncTimer = 0;
+    var token = ++this.seekToken;
+    var pending = [];
+
     this.tracks.forEach(function (record) {
       try { record.element.currentTime = target; } catch (error) { /* not seekable yet */ }
+      record.lastTime = target;
+      if (record.element.paused) return;
+      pending.push(new Promise(function (resolve) {
+        var settled = false;
+        var timer = setTimeout(done, 600);
+        function cleanup() {
+          record.element.removeEventListener("seeked", done);
+          clearTimeout(timer);
+        }
+        function done() {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve();
+        }
+        if (Math.abs(record.element.currentTime - target) < 0.05) {
+          done();
+          return;
+        }
+        record.element.addEventListener("seeked", done);
+      }));
+    });
+
+    Promise.all(pending).then(function () {
+      if (token !== self.seekToken) return;
+      if (wasPlaying && self.playing()) self.startSync();
     });
     return target;
   };
 
   BatappMixer.prototype.dispose = function () {
+    this.seekToken += 1;
     this.stop();
     if (this.syncTimer) clearInterval(this.syncTimer);
     this.syncTimer = 0;

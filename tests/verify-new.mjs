@@ -78,6 +78,8 @@ const modernHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const legacyHtml = fs.readFileSync(path.join(root, "index_old.html"), "utf8");
 check("modern page loads lessons.js only",
   modernHtml.includes("js/lessons.js") && !modernHtml.includes("js/data.js"));
+check("modern assets are cache-versioned",
+  /app-new\.css\?v=/.test(modernHtml) && /newapp\.js\?v=/.test(modernHtml) && /mixer\.js\?v=/.test(modernHtml));
 check("legacy page keeps the full data.js",
   legacyHtml.includes("js/data.js") && !legacyHtml.includes("js/lessons.js"));
 
@@ -136,6 +138,41 @@ async function ready(scope = page) {
   );
 }
 
+/* Count real media elements and play/pause calls in the test page. */
+function installMediaProbe() {
+  window.__mediaProbe = { audios: [], plays: 0, pauses: 0 };
+  const Native = window.Audio;
+  window.Audio = function (src) {
+    const audio = new Native(src);
+    audio.__probeStem = (src || "").split("/").slice(-1)[0];
+    window.__mediaProbe.audios.push(audio);
+    return audio;
+  };
+  window.Audio.prototype = Native.prototype;
+  const nativePlay = HTMLMediaElement.prototype.play;
+  HTMLMediaElement.prototype.play = function () {
+    window.__mediaProbe.plays += 1;
+    return nativePlay.call(this);
+  };
+  const nativePause = HTMLMediaElement.prototype.pause;
+  HTMLMediaElement.prototype.pause = function () {
+    window.__mediaProbe.pauses += 1;
+    return nativePause.call(this);
+  };
+  window.__mediaProbeSummary = function () {
+    const audios = window.__mediaProbe.audios;
+    return {
+      created: audios.length,
+      active: audios.filter((audio) => !audio.paused).length,
+      loops: audios.map((audio) => audio.loop),
+      rates: Array.from(new Set(audios.map((audio) => audio.playbackRate))),
+      stems: audios.map((audio) => audio.__probeStem),
+      plays: window.__mediaProbe.plays,
+      pauses: window.__mediaProbe.pauses
+    };
+  };
+}
+
 // --- library ---------------------------------------------------------------
 await go("#/");
 await shot("01-library-toques");
@@ -191,6 +228,9 @@ check("Vox starts at 100%",
 check("all stems start at 100%",
   initial.every((track) => track.volume === 1),
   JSON.stringify(initial.map((track) => track.stem + "=" + track.volume)));
+check("every stem loops, including Beat",
+  initial.every((track) => track.loop === true),
+  JSON.stringify(initial.map((track) => track.stem + ":loop=" + track.loop)));
 
 // Play: every stem advances, in sync, and the progress ring moves
 await page.locator("button.play").click();
@@ -282,6 +322,112 @@ check("Space pauses playback", !(await page.evaluate(() => window.__batapp_new.s
 await page.keyboard.press("Escape");
 await page.waitForTimeout(400);
 check("Escape returns to the library", (await page.evaluate(() => window.__batapp_new.state().view)) === "library");
+
+// --- transport regression: pause → mute → play → backward seek ------------
+const transport = await browser.newPage({ viewport });
+await transport.bringToFront();
+await transport.addInitScript(installMediaProbe);
+await transport.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
+await transport.waitForFunction(
+  () => window.__batapp_new && window.__batapp_new.state().lesson === "volume-1/01-alubanche" &&
+    !window.__batapp_new.state().loading,
+  null,
+  { timeout: 25000 }
+);
+let media = await transport.evaluate(() => window.__mediaProbeSummary());
+check("one media element per stem", media.created === 5 && media.active === 0, JSON.stringify(media));
+check("all five media elements loop", media.loops.length === 5 && media.loops.every(Boolean), JSON.stringify(media.loops));
+
+await transport.locator("button.play").click();
+await transport.waitForTimeout(900);
+media = await transport.evaluate(() => window.__mediaProbeSummary());
+check("transport plays exactly five elements at rate 1",
+  media.created === 5 && media.active === 5 && media.rates.length === 1 && media.rates[0] === 1,
+  JSON.stringify(media));
+
+await transport.locator("button.play").click();
+await transport.waitForTimeout(250);
+await transport.locator(".stem[data-stem='iya'] .mute").click();
+await transport.waitForTimeout(200);
+await transport.locator("button.play").click();
+await transport.waitForTimeout(700);
+await transport.locator(".seek-input").evaluate((input) => {
+  input.value = "2";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+});
+await transport.waitForTimeout(500);
+const sequence = await transport.evaluate(() => ({
+  media: window.__mediaProbeSummary(),
+  tracks: window.__batapp_new.tracks(),
+  state: window.__batapp_new.state()
+}));
+check("pause + mute + play + backward seek keeps five active stems",
+  sequence.media.created === 5 && sequence.media.active === 5 &&
+  sequence.media.rates.length === 1 && sequence.media.rates[0] === 1 &&
+  sequence.state.mixerPlaying === true,
+  JSON.stringify(sequence.media));
+check("the backward seek lands every stem at ~2 s",
+  sequence.tracks.every((track) => track.currentTime >= 1.9 && track.currentTime < 4) &&
+  Math.max(...sequence.tracks.map((track) => track.currentTime)) -
+    Math.min(...sequence.tracks.map((track) => track.currentTime)) < 0.12,
+  JSON.stringify(sequence.tracks.map((track) => ({ stem: track.stem, t: +track.currentTime.toFixed(2) }))));
+check("the mute survives the seek",
+  sequence.tracks.find((track) => track.stem === "iya").muted === true);
+
+// Cross the loop boundary after the same interactions.
+const duration = await transport.evaluate(() => window.__batapp_new.tracks()[0].duration);
+await transport.locator(".seek-input").evaluate((input, value) => {
+  input.value = String(value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}, duration - 0.7);
+let wrappedConverged = true;
+try {
+  await transport.waitForFunction(() => {
+    const times = window.__batapp_new.tracks().map((track) => track.currentTime);
+    return times.every((time) => time < 2.5) &&
+      Math.max(...times) - Math.min(...times) < 0.1;
+  }, null, { timeout: 5000 });
+} catch (error) {
+  wrappedConverged = false;
+}
+const wrapped = await transport.evaluate(() => ({
+  media: window.__mediaProbeSummary(),
+  tracks: window.__batapp_new.tracks()
+}));
+const wrapTimes = wrapped.tracks.map((track) => track.currentTime);
+check("loop boundary keeps all five stems together",
+  wrappedConverged &&
+  wrapped.media.created === 5 && wrapped.media.active === 5 && wrapped.media.loops.every(Boolean) &&
+  wrapTimes.every((time) => time < 2.5) &&
+  Math.max(...wrapTimes) - Math.min(...wrapTimes) < 0.12,
+  JSON.stringify({ media: wrapped.media, times: wrapTimes.map((time) => +time.toFixed(2)) }));
+
+await transport.locator("button.play").click();
+await transport.waitForTimeout(250);
+await transport.locator(".stem[data-stem='vox'] .mute").click();
+await transport.waitForTimeout(150);
+await transport.locator("button.play").click();
+await transport.waitForTimeout(700);
+await transport.locator(".seek-input").evaluate((input) => {
+  input.value = "3";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+});
+await transport.waitForTimeout(500);
+const afterWrap = await transport.evaluate(() => ({
+  media: window.__mediaProbeSummary(),
+  tracks: window.__batapp_new.tracks()
+}));
+const afterTimes = afterWrap.tracks.map((track) => track.currentTime);
+check("pause + mute + backward seek after the loop keeps Beat playing",
+  afterWrap.media.created === 5 && afterWrap.media.active === 5 &&
+  afterWrap.tracks.find((track) => track.stem === "beat").paused === false &&
+  afterTimes.every((time) => time >= 2.9) &&
+  Math.max(...afterTimes) - Math.min(...afterTimes) < 0.12,
+  JSON.stringify({ media: afterWrap.media, times: afterTimes.map((time) => +time.toFixed(2)) }));
+await transport.close();
 
 // Volume II: four stems, no Vox row
 await go("#/lesson/volume-2/1-elegba", 600);
@@ -526,6 +672,7 @@ for (const lesson of sweepLessons) {
   const snapshot = await page.evaluate(() => ({
     lesson: window.__batapp_new.state().lesson,
     stems: window.__batapp_new.tracks().map((track) => track.stem),
+    loops: window.__batapp_new.tracks().map((track) => track.loop),
     rows: window.__batapp_new.ui().rows,
     title: window.__batapp_new.ui().title,
     documentTitle: document.title,
@@ -535,6 +682,7 @@ for (const lesson of sweepLessons) {
   const expected = lesson.audio.map((entry) => entry.stem).sort().join(",");
   if (snapshot.lesson !== lesson.slug) lessonProblems.push("route " + snapshot.lesson);
   if (snapshot.stems.slice().sort().join(",") !== expected) lessonProblems.push("stems " + snapshot.stems.join(",") + " != " + expected);
+  if (!snapshot.loops.every(Boolean)) lessonProblems.push("loops " + JSON.stringify(snapshot.loops));
   if (snapshot.rows !== lesson.audio.length) lessonProblems.push("rows " + snapshot.rows);
   if (snapshot.title !== lesson.title) lessonProblems.push("title " + snapshot.title);
   if (snapshot.documentTitle.indexOf(lesson.title) !== 0) lessonProblems.push("document title " + snapshot.documentTitle);
@@ -569,6 +717,7 @@ await new Promise((resolve) => setTimeout(resolve, 900));
 try {
   const served = await browser.newPage({ viewport });
   await served.bringToFront();
+  await served.addInitScript(installMediaProbe);
   const servedErrors = [];
   served.on("console", (message) => {
     if (message.type() === "error") servedErrors.push(message.text().slice(0, 150));
@@ -598,6 +747,29 @@ try {
   check("served page starts every stem together",
     servedTimes.every((time) => time > 0.3) && Math.max(...servedTimes) - Math.min(...servedTimes) < 0.12,
     JSON.stringify(servedTimes.map((time) => +time.toFixed(2))));
+  await served.locator("button.play").click();
+  await served.waitForTimeout(250);
+  await served.locator(".stem[data-stem='iya'] .mute").click();
+  await served.waitForTimeout(150);
+  await served.locator("button.play").click();
+  await served.waitForTimeout(700);
+  await served.locator(".seek-input").evaluate((input) => {
+    input.value = "10";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await served.waitForTimeout(500);
+  const servedSequence = await served.evaluate(() => ({
+    media: window.__mediaProbeSummary(),
+    tracks: window.__batapp_new.tracks(),
+    state: window.__batapp_new.state()
+  }));
+  check("HTTP pause + mute + play + backward seek keeps five active stems",
+    servedSequence.media.created === 5 && servedSequence.media.active === 5 &&
+    servedSequence.media.rates.length === 1 && servedSequence.state.mixerPlaying === true &&
+    servedSequence.tracks.every((track) => track.currentTime >= 9.9 && track.currentTime < 12) &&
+    servedSequence.tracks.find((track) => track.stem === "iya").muted === true,
+    JSON.stringify({ media: servedSequence.media, tracks: servedSequence.tracks.map((track) => ({ stem: track.stem, t: +track.currentTime.toFixed(2), muted: track.muted })) }));
   check("no console errors over HTTP", servedErrors.length === 0, servedErrors.slice(0, 2).join(" | "));
   await served.close();
 
