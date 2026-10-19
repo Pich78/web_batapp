@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-10-19T16:09:22.882Z",
+  "generated_at": "2026-10-19T22:17:31.521Z",
   "target": "file:///home/apicciano/ai/batapp-web/index.html",
   "note": "Chromium runs the full sweep; Firefox/WebKit run representative lessons. Real iPhone Safari and Android Chrome are covered by the manual device pass.",
   "browsers": [
     {
       "browser": "chromium",
       "status": "passed",
-      "checks_passed": 97,
-      "checks_total": 97,
+      "checks_passed": 131,
+      "checks_total": 131,
       "full_sweep": true,
       "exit_code": 0,
       "reason": "",
@@ -16,8 +16,8 @@
     {
       "browser": "firefox",
       "status": "passed",
-      "checks_passed": 97,
-      "checks_total": 97,
+      "checks_passed": 131,
+      "checks_total": 131,
       "full_sweep": false,
       "exit_code": 0,
       "reason": "",

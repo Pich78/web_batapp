@@ -452,18 +452,19 @@ button:disabled { cursor: default; opacity: 0.3; }
 .stop {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 7px 14px;
+  gap: 8px;
+  min-height: 40px;
+  padding: 10px 19px;
   border-radius: 999px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.02em;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
 .stop:hover { background: var(--surface); color: var(--text); }
-.stop svg { width: 14px; height: 14px; }
+.stop svg { width: 17px; height: 17px; }
 
 /* --------------------------------------------------------------- mixer */
 
@@ -682,12 +683,27 @@ button:disabled { cursor: default; opacity: 0.3; }
 /* ------------------------------------------------- mobile landscape mode */
 
 @media (orientation: landscape) and (max-height: 559px) {
+  html,
+  body {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
   #app {
     max-width: none;
     height: 100dvh;
     border: 0;
     overflow: hidden;
   }
+
+  .library-pane,
+  .main-pane {
+    overflow: hidden;
+  }
+
+  /* The player must fit the viewport: the only scroll left is the library
+     list, whose 38 lessons cannot fit a short phone height. */
+  .library-pane { overflow-y: auto; }
 
   .library-view { min-height: 0; }
 
@@ -713,62 +729,118 @@ button:disabled { cursor: default; opacity: 0.3; }
   .row .num { width: 32px; height: 32px; border-radius: 10px; font-size: 12px; }
   .row .name { font-size: 15px; }
 
-  .player-top {
-    padding: calc(8px + env(safe-area-inset-top)) 16px 0;
+  .player-view {
+    min-height: 0;
+    overflow: hidden;
   }
 
-  .player-title h2 { font-size: 18px; }
-  .player-title .kicker { font-size: 10.5px; }
+  .player-top {
+    padding: calc(4px + env(safe-area-inset-top)) 14px 0;
+  }
 
-  .seek { padding: 3px 20px 0; }
+  .player-title h2 { font-size: 16px; }
+  .player-title .kicker { font-size: 10px; }
 
-  .loading .dial { width: 80px; height: 80px; }
-  .loading { gap: 12px; padding: 16px; }
+  .seek { padding: 1px 16px 0; }
+  .time { font-size: 11px; }
+
+  .loading .dial { width: 72px; height: 72px; }
+  .loading { gap: 8px; padding: 10px; }
+  .load-status { font-size: 12px; }
+  .load-detail { font-size: 11px; }
 
   .player-body {
     display: grid;
     flex: 1;
     min-height: 0;
-    grid-template-columns: minmax(260px, 0.85fr) minmax(340px, 1.15fr);
-    gap: 22px;
-    align-items: center;
-    padding: 2px 20px calc(10px + env(safe-area-inset-bottom));
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 14px;
+    align-items: stretch;
+    padding: 0 14px calc(4px + env(safe-area-inset-bottom));
+    overflow: hidden;
   }
 
+  /* Stop moves beside the transport so the hero needs no extra row. */
   .hero {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
+    gap: 10px;
     min-width: 0;
+    min-height: 0;
   }
 
-  .transport { padding: 0; gap: 18px; }
-  .ghost { width: 44px; height: 44px; }
-  .ghost svg { width: 20px; height: 20px; }
-  .dial { width: 84px; height: 84px; }
-  .play { inset: 8px; }
-  .play svg { width: 24px; height: 24px; }
-  .stop-row { padding: 8px 0 0; }
+  .transport { padding: 0; gap: 14px; }
+  .ghost { width: 40px; height: 40px; }
+  .ghost svg { width: 18px; height: 18px; }
+  .dial { width: 76px; height: 76px; }
+  .play { inset: 7px; }
+  .play svg { width: 22px; height: 22px; }
+  .stop-row { padding: 0; }
+  .stop { min-height: 36px; padding: 8px 14px; font-size: 13px; }
+  .stop svg { width: 15px; height: 15px; }
 
   .mixer {
+    display: grid;
+    grid-auto-rows: minmax(0, 1fr);
     width: 100%;
-    max-height: 100%;
+    min-height: 0;
+    max-height: none;
     margin: 0;
-    overflow-y: auto;
+    overflow: hidden;
     box-shadow: none;
   }
 
   .stem {
-    grid-template-columns: 90px minmax(0, 1fr) 34px;
+    grid-template-columns: 80px minmax(0, 1fr) 30px;
     grid-template-areas: "name slider mute";
     row-gap: 0;
-    padding: 5px 12px;
+    min-height: 0;
+    padding: 3px 10px;
+    overflow: hidden;
   }
 
-  .stem-name { grid-area: name; }
-  .stem input[type="range"] { grid-area: slider; height: 26px; }
-  .mute { grid-area: mute; width: 30px; height: 30px; }
+  .stem-name { grid-area: name; font-size: 12.5px; }
+  .stem input[type="range"] { grid-area: slider; height: 22px; }
+  .stem input[type="range"]::-webkit-slider-runnable-track { height: 6px; }
+  .stem input[type="range"]::-webkit-slider-thumb { width: 16px; height: 16px; margin-top: -5px; }
+  .stem input[type="range"]::-moz-range-track,
+  .stem input[type="range"]::-moz-range-progress { height: 6px; }
+  .stem input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; }
+  .mute { grid-area: mute; width: 26px; height: 26px; }
+  .mute svg { width: 16px; height: 16px; }
+}
+
+/* Very short landscape: shrink the transport and rows further rather than
+   introducing any player scroll. */
+@media (orientation: landscape) and (max-height: 399px) {
+  .player-title h2 { font-size: 15px; }
+  .seek { padding-top: 0; }
+  .dial { width: 68px; height: 68px; }
+  .play { inset: 6px; }
+  .play svg { width: 20px; height: 20px; }
+  .ghost { width: 36px; height: 36px; }
+  .stop { min-height: 34px; padding: 7px 12px; font-size: 12.5px; }
+  .stem { padding: 2px 8px; }
+  .stem-name { font-size: 12px; }
+  .stem input[type="range"] { height: 20px; }
+}
+
+/* Narrow landscape (small phones): keep the side stop compact. */
+@media (orientation: landscape) and (max-width: 560px) and (max-height: 559px) {
+  .player-body { gap: 8px; padding: 0 8px calc(2px + env(safe-area-inset-bottom)); }
+  .transport { gap: 8px; }
+  .ghost { width: 32px; height: 32px; }
+  .ghost svg { width: 16px; height: 16px; }
+  .dial { width: 58px; height: 58px; }
+  .play { inset: 5px; }
+  .play svg { width: 18px; height: 18px; }
+  .stop { min-height: 32px; padding: 6px 10px; font-size: 12px; }
+  .stop svg { width: 14px; height: 14px; }
+  .stem { grid-template-columns: 70px minmax(0, 1fr) 26px; padding: 2px 7px; }
+  .stem-name { font-size: 11.5px; }
+  .mute { width: 24px; height: 24px; }
 }
 
 /* --------------------------------------------------------------- desktop */

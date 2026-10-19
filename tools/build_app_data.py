@@ -20,6 +20,7 @@ import argparse
 import json
 import math
 import re
+import zlib
 from pathlib import Path
 
 TEXT_ANCHOR = {
@@ -59,6 +60,15 @@ def replace_text(path: str, text: str) -> str:
     if text == "Change book":
         return "Volume I" if "/Volume 1/" in path else "Volume II"
     return text
+
+
+def file_crc32(path: Path) -> str:
+    """CRC-32 of one exported audio file, as lowercase hex."""
+    crc = 0
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            crc = zlib.crc32(chunk, crc)
+    return f"{crc & 0xFFFFFFFF:08x}"
 
 
 def lesson_number_key(number: object) -> tuple[int, str]:
@@ -444,6 +454,9 @@ def main() -> int:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--lessons-out", type=Path,
                         help="optional compact lessons-only script for index.html")
+    parser.add_argument("--audio-root", type=Path,
+                        default=Path(__file__).resolve().parent.parent / "assets/audio",
+                        help="exported audio root used to compute the slim integrity manifest")
     parser.add_argument("--player-source", default="level4")
     args = parser.parse_args()
 
@@ -610,6 +623,9 @@ def main() -> int:
                         "path": entry["path"],
                         "clip_name": entry["clip_name"],
                         "seconds": entry["seconds"],
+                        "bytes": entry["bytes"],
+                        "sha256": entry["sha256"],
+                        "crc32": file_crc32(args.audio_root / entry["path"]),
                     }
                     for entry in lesson["audio"]
                 ],

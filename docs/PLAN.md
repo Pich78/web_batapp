@@ -62,23 +62,23 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       labels `Iya/Itotele/Okonkolo/Beat/Vox`, Play/Pause/Stop; the scene page
       keeps the shipped Vox-at-0 default, while the modern page starts every
       stem (including Vox) at 100%.
-- [x] **Playback strategy** → shared `js/mixer.js` (`window.BatappMixer`):
-      - `https://` (GitHub Pages): one `GainNode` per stem; the element volume
-        stays 1 so a stem that started at 0 (Vox) can be unmuted mid-playback,
-        and per-stem gain works on iOS, where `HTMLMediaElement.volume` is
-        ignored;
-      - `file://`: `<audio>` elements with per-element volume and a drift
-        correction loop (Web Audio cannot read local media);
+- [x] **Playback strategy** → `js/player.js` (`window.BatappPlayer`) for the
+      modern page; the legacy scene page keeps `js/mixer.js`:
+      - opening the library creates no audio element, context or request;
+      - HTTP(S): every stem is fetched with `cache: "no-store"` and a unique
+        per-load URL, checked against byte count and SHA-256/CRC-32 in
+        `js/lessons.js`, and awaited until it can play through;
+      - `file://`: local elements are awaited and their durations checked;
+      - one `GainNode` per stem controls the level where Web Audio is
+        available; otherwise the element volume is the fallback;
       - scene `Audios/Bit` maps to the exported `beat` stem, so Beat loops like
         every other stem; a missing loop flag defaults to true;
-      - the 250 ms drift loop is wrap-aware: when any stem loops, all stems are
-        pulled to the same restart position;
-      - the reference is re-selected from live stems if it pauses/ends; seek
-        suspends the drift loop until `seeked`, then restarts it;
-      - Stop pauses/rewinds every stem to 0 and cannot be undone by a pending
-        `play()`; the next Play starts from the beginning;
-      - all stems start in the same tick and every stem stays within 80 ms of
-        the reference.
+      - all stems reset to 0 together at the loop boundary; no per-stem
+        wrap-seek can leave a stem behind or add loop noise;
+      - Pause keeps the stems loaded and resumes them from one shared position;
+        Stop rewinds all stems to 0 and the next Play starts from the beginning;
+      - Back aborts pending transfers, clears the elements, revokes Blob URLs
+        and closes the AudioContext; reopening downloads all stems again.
 - [x] **Pause/resume semantics** matching `AudioSource.Pause`/`Stop` for all five
       stems, plus per-track mute without losing the slider value.
 - [x] **Keyboard affordances**: Space toggles playback, arrows step lessons and
@@ -89,11 +89,16 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       (persistent sidebar on desktop), progress ring, draggable seek bar,
       per-lesson titles, per-stem volume and mute, natural lesson order
       (1, 2, … 20A, 20B, 21, 22), system light/dark theme, generated
-      two-colour three-drum icon set, no external resources. The generated `js/lessons.js` is a compact
-      lessons-only payload for this page; the scene page keeps `js/data.js`.
-      Vox starts at 100% in the modern model. All stems are loaded (fetch-to-Blob
-      on HTTP, local elements on file://) before Play is enabled, with named
-      errors and Retry. Verified by `tests/verify-new.mjs` (file:// and HTTP,
+      two-colour three-drum icon set, no external resources. Landscape fits the
+      whole player without page or mixer scrolling and places Stop beside the
+      transport. The generated `js/lessons.js` is a compact lessons-only payload
+      for this page; the scene page keeps `js/data.js`.
+      Vox starts at 100% in the modern model. All stems are loaded and verified
+      (fetch-to-Blob with checksums on HTTP, local elements with duration checks
+      on file://) before the playing screen appears, with named errors and
+      Retry. A no-store manifest version check reloads an installed home-screen
+      app once when a newer release is deployed, without a service worker.
+      Verified by `tests/verify-new.mjs` (file:// and HTTP,
       Chromium/representative Firefox+WebKit); summary in
       `docs/verification/new-ui-sweep-summary.json` and
       `docs/verification/cross-browser-summary.json`.
@@ -144,12 +149,15 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       and desktop modes, load gate, seek, titles, library order, mixer, mute
       semantics, prev/next, keyboard, light/dark themes, all 61 lessons and an
       HTTP pass exercising fetch-to-Blob, the gate, named errors/Retry and the
-      Web Audio gains. Chromium runs the full sweep; Firefox/WebKit run
-      representative lessons. The instrumented transport regression covers
-      pause → mute → play → backward seek and the loop-boundary wrap with one
-      media element per stem. Summary in
-      `docs/verification/new-ui-sweep-summary.json`; cross-browser record in
-      `docs/verification/cross-browser-summary.json`.
+      Web Audio gains. Landscape runs at five sizes up to 480×320 and asserts
+      no page, player or mixer scroll, all five stems visible and Stop beside
+      the transport. The HTTP pass also checks the manifest version reload.
+      Chromium runs the full sweep; Firefox/WebKit run representative lessons.
+      The instrumented transport regression covers zero audio on open, one slow
+      stem, corrupt transfers, pause → mute → play → backward seek, the
+      loop restart to zero, volume-only changes, Back unloading and fresh
+      reloads. Summary in `docs/verification/new-ui-sweep-summary.json`;
+      cross-browser record in `docs/verification/cross-browser-summary.json`.
 - [ ] Re-run `tools/unity_schema.py` and `tools/export_audio.py --verify` in CI
       fashion and store the summaries under `docs/verification/`.
 - [ ] Compare the port's rendered screens against the shipped scene data
@@ -206,6 +214,7 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       there are no console/network errors. Shipped paths are relative (no
       absolute `src`/`href`/`url` roots).
 - [x] Modern layout over HTTP: `tests/verify-new.mjs` serves the repo and checks
-      the fetch-to-Blob load gate, named errors/Retry, the Web Audio gain path
-      (Vox from 100% down/up) and no console errors; `index.html` works from the
+      the fetch-to-Blob load gate, SHA-256/CRC-32 integrity failure, named
+      errors/Retry, the Web Audio gain path (Vox from 100% down/up), fresh
+      reloads after Back and no console errors; `index.html` works from the
       repository subpath. Live at <https://pich78.github.io/web_batapp/>.

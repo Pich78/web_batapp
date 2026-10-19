@@ -1,8 +1,8 @@
 /* Behavioural verification of the modern layout (index.html).
  *
  * Opens the page over file:// and over HTTP, walks the library, exercises the
- * load gate, seek bar, shared mixer and layouts, sweeps the lessons, and writes
- * screenshots plus JSON reports.
+ * integrity load gate, seek bar, verified player, resource teardown and
+ * layouts, sweeps the lessons, and writes screenshots plus JSON reports.
  *
  *   cd tests && node verify-new.mjs                  # Chromium, full sweep
  *   BROWSER=firefox node verify-new.mjs              # representative lessons
@@ -10,9 +10,11 @@
  */
 import { chromium, firefox, webkit } from "playwright";
 import { spawn } from "child_process";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import vm from "vm";
+import zlib from "zlib";
 import { fileURLToPath } from "url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -69,19 +71,65 @@ function projectLesson(lesson) {
     }))
   };
 }
+function coreLessons(lessons) {
+  return lessons.map((lesson) => ({
+    ...projectLesson(lesson),
+    audio: lesson.audio.map((entry) => ({
+      stem: entry.stem,
+      path: entry.path,
+      clip_name: entry.clip_name,
+      seconds: entry.seconds
+    }))
+  }));
+}
 check("slim lessons match the full data (with modern Vox at 100%)",
-  JSON.stringify(slim.lessons) === JSON.stringify(full.lessons.map(projectLesson)),
+  JSON.stringify(coreLessons(slim.lessons)) === JSON.stringify(coreLessons(full.lessons)),
   "slim=" + slim.lessons.length + " full=" + full.lessons.length);
+
+const integrityProblems = [];
+for (const lesson of slim.lessons) {
+  for (const entry of lesson.audio) {
+    const file = path.join(root, "assets/audio", entry.path);
+    if (!fs.existsSync(file)) {
+      integrityProblems.push(entry.path + ": missing");
+      continue;
+    }
+    const bytes = fs.readFileSync(file);
+    const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
+    const crc32 = (zlib.crc32(bytes) >>> 0).toString(16).padStart(8, "0");
+    if (entry.bytes !== bytes.length) integrityProblems.push(entry.path + ": bytes");
+    if (entry.sha256 !== sha256) integrityProblems.push(entry.path + ": sha256");
+    if (entry.crc32 !== crc32) integrityProblems.push(entry.path + ": crc32");
+  }
+}
+check("every slim stem carries a matching byte count, SHA-256 and CRC-32",
+  integrityProblems.length === 0, integrityProblems.slice(0, 3).join(", "));
+
 const slimBytes = fs.statSync(path.join(root, "js/lessons.js")).size;
 check("slim modern data stays compact", slimBytes < 200000, slimBytes + " bytes");
 const modernHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const legacyHtml = fs.readFileSync(path.join(root, "index_old.html"), "utf8");
-check("modern page loads lessons.js only",
-  modernHtml.includes("js/lessons.js") && !modernHtml.includes("js/data.js"));
+check("modern page loads lessons.js and the new player only",
+  modernHtml.includes("js/lessons.js") && modernHtml.includes("js/player.js") &&
+  !modernHtml.includes("js/data.js") && !modernHtml.includes("js/mixer.js"));
 check("modern assets are cache-versioned",
-  /app-new\.css\?v=/.test(modernHtml) && /newapp\.js\?v=/.test(modernHtml) && /mixer\.js\?v=/.test(modernHtml));
-check("legacy page keeps the full data.js",
-  legacyHtml.includes("js/data.js") && !legacyHtml.includes("js/lessons.js"));
+  /app-new\.css\?v=/.test(modernHtml) && /lessons\.js\?v=/.test(modernHtml) &&
+  /newapp\.js\?v=/.test(modernHtml) && /player\.js\?v=/.test(modernHtml));
+check("legacy page keeps the full data.js and old mixer",
+  legacyHtml.includes("js/data.js") && legacyHtml.includes("js/mixer.js") &&
+  !legacyHtml.includes("js/lessons.js"));
+
+const versionMatch = modernHtml.match(/<meta name="batapp-version" content="([^"]+)">/);
+const manifestVersion = JSON.parse(fs.readFileSync(path.join(root, "site.webmanifest"), "utf8"));
+check("PWA manifest carries the same version and a versioned start_url",
+  !!versionMatch && manifestVersion.version === versionMatch[1] &&
+  manifestVersion.start_url === "./?v=" + versionMatch[1],
+  JSON.stringify({ page: versionMatch && versionMatch[1], manifest: manifestVersion.version, start_url: manifestVersion.start_url }));
+check("both pages use one release query",
+  modernHtml.includes("js/player.js?v=" + (versionMatch ? versionMatch[1] : "")) &&
+  legacyHtml.includes("js/mixer.js?v=" + (versionMatch ? versionMatch[1] : "")) &&
+  legacyHtml.includes("app.css?v=" + (versionMatch ? versionMatch[1] : "")),
+  JSON.stringify({ modern: /v=[\d.]+/.exec(modernHtml), legacy: /v=[\d.]+/.exec(legacyHtml) }));
 
 const iconFiles = [
   "assets/icon.svg", "assets/icon-16.png", "assets/icon-32.png",
@@ -138,9 +186,9 @@ async function ready(scope = page) {
   );
 }
 
-/* Count real media elements and play/pause calls in the test page. */
+/* Count real media elements, contexts, seeks and play/pause calls. */
 function installMediaProbe() {
-  window.__mediaProbe = { audios: [], plays: 0, pauses: 0 };
+  window.__mediaProbe = { audios: [], plays: 0, pauses: 0, contexts: 0, seeks: [] };
   const Native = window.Audio;
   window.Audio = function (src) {
     const audio = new Native(src);
@@ -149,6 +197,16 @@ function installMediaProbe() {
     return audio;
   };
   window.Audio.prototype = Native.prototype;
+  const NativeContext = window.AudioContext || window.webkitAudioContext;
+  if (NativeContext) {
+    const CountingContext = function () {
+      window.__mediaProbe.contexts += 1;
+      return new NativeContext();
+    };
+    CountingContext.prototype = NativeContext.prototype;
+    window.AudioContext = CountingContext;
+    if (window.webkitAudioContext) window.webkitAudioContext = CountingContext;
+  }
   const nativePlay = HTMLMediaElement.prototype.play;
   HTMLMediaElement.prototype.play = function () {
     window.__mediaProbe.plays += 1;
@@ -159,6 +217,18 @@ function installMediaProbe() {
     window.__mediaProbe.pauses += 1;
     return nativePause.call(this);
   };
+  const descriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "currentTime");
+  if (descriptor && descriptor.get && descriptor.set) {
+    Object.defineProperty(HTMLMediaElement.prototype, "currentTime", {
+      configurable: true,
+      enumerable: descriptor.enumerable,
+      get: function () { return descriptor.get.call(this); },
+      set: function (value) {
+        window.__mediaProbe.seeks.push({ value: Number(value), at: performance.now() });
+        return descriptor.set.call(this, value);
+      }
+    });
+  }
   window.__mediaProbeSummary = function () {
     const audios = window.__mediaProbe.audios;
     return {
@@ -168,7 +238,9 @@ function installMediaProbe() {
       rates: Array.from(new Set(audios.map((audio) => audio.playbackRate))),
       stems: audios.map((audio) => audio.__probeStem),
       plays: window.__mediaProbe.plays,
-      pauses: window.__mediaProbe.pauses
+      pauses: window.__mediaProbe.pauses,
+      contexts: window.__mediaProbe.contexts,
+      seeks: window.__mediaProbe.seeks.slice()
     };
   };
 }
@@ -192,6 +264,24 @@ const fits = await page.evaluate(() => document.documentElement.scrollWidth <= w
 check("library has no horizontal overflow at 390px", fits);
 const fills = await page.evaluate(() => document.getElementById("app").getBoundingClientRect().height >= window.innerHeight - 1);
 check("app column fills the phone viewport", fills);
+const startup = await browser.newPage({ viewport });
+await startup.addInitScript(installMediaProbe);
+const startupRequests = [];
+startup.on("request", (request) => {
+  if (request.url().includes("/assets/audio/")) startupRequests.push(request.url());
+});
+await startup.goto(pageUrl + "#/");
+await startup.waitForTimeout(500);
+const startupProbe = await startup.evaluate(() => ({
+  media: window.__mediaProbeSummary(),
+  state: window.__batapp_new.state()
+}));
+check("opening the library creates no audio element, context or request",
+  startupProbe.media.created === 0 && startupProbe.media.contexts === 0 &&
+  startupRequests.length === 0 && startupProbe.state.stems.length === 0,
+  JSON.stringify({ media: { created: startupProbe.media.created, contexts: startupProbe.media.contexts }, requests: startupRequests }));
+await startup.close();
+
 const iconLinks = await page.evaluate(() =>
   Array.from(document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"], link[rel="manifest"]'))
     .map((link) => link.getAttribute("href").split("?")[0]));
@@ -221,6 +311,13 @@ check("player shows the lesson title", ui.title === "Alubanche", ui.title);
 check("lesson page title", ui.documentTitle === "Alubanche · Toque 01 · Batá", ui.documentTitle);
 check("voiced toque gets five mixer rows", ui.rows === 5, ui.rows + " rows");
 check("loading gate is gone and Play is enabled", !ui.loader && ui.playEnabled, JSON.stringify(ui));
+const stopBox = await page.locator(".stop").evaluate((node) => {
+  const box = node.getBoundingClientRect();
+  return { width: box.width, height: box.height, font: parseFloat(getComputedStyle(node).fontSize) };
+});
+check("Stop button is visibly larger",
+  stopBox.height >= 35 && stopBox.width >= 78 && stopBox.font >= 14,
+  JSON.stringify(stopBox));
 const initial = await page.evaluate(() => window.__batapp_new.tracks());
 check("Vox starts at 100%",
   initial.find((track) => track.stem === "vox").volume === 1,
@@ -382,6 +479,8 @@ await transport.locator(".seek-input").evaluate((input, value) => {
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }, duration - 0.7);
+await transport.waitForTimeout(300);
+await transport.evaluate(() => { window.__mediaProbe.seeks = []; });
 let wrappedConverged = true;
 try {
   await transport.waitForFunction(() => {
@@ -397,12 +496,16 @@ const wrapped = await transport.evaluate(() => ({
   tracks: window.__batapp_new.tracks()
 }));
 const wrapTimes = wrapped.tracks.map((track) => track.currentTime);
+const wrapSeeks = wrapped.media.seeks.slice(-5);
 check("loop boundary keeps all five stems together",
   wrappedConverged &&
   wrapped.media.created === 5 && wrapped.media.active === 5 && wrapped.media.loops.every(Boolean) &&
   wrapTimes.every((time) => time < 2.5) &&
   Math.max(...wrapTimes) - Math.min(...wrapTimes) < 0.12,
-  JSON.stringify({ media: wrapped.media, times: wrapTimes.map((time) => +time.toFixed(2)) }));
+  JSON.stringify({ media: { created: wrapped.media.created, active: wrapped.media.active, loops: wrapped.media.loops }, times: wrapTimes.map((time) => +time.toFixed(2)) }));
+check("loop restart rewinds every stem to zero together",
+  wrapSeeks.length === 5 && wrapSeeks.every((seek) => seek.value === 0),
+  JSON.stringify(wrapSeeks));
 
 await transport.locator("button.play").click();
 await transport.waitForTimeout(250);
@@ -516,72 +619,102 @@ for (const hash of ["#/", "#/v/2", "#/lesson/volume-1/01-alubanche", "#/lesson/v
 check("no author/shop text, no links, no external URLs", surface.length === 0, surface.join(" | "));
 
 // --- mobile landscape ------------------------------------------------------
-const landscape = await browser.newPage({ viewport: { width: 844, height: 390 } });
-await landscape.bringToFront();
-await landscape.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
-await landscape.waitForTimeout(800);
-await landscape.waitForFunction(() => window.__batapp_new.state().lesson && !window.__batapp_new.state().loading, null, { timeout: 20000 });
-const landscapeLayout = await landscape.evaluate(() => {
-  const box = (node) => {
-    const rect = node.getBoundingClientRect();
-    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
-  };
-  const rows = Array.from(document.querySelectorAll(".stem")).map(box);
-  const app = document.getElementById("app").getBoundingClientRect();
-  return {
-    hero: box(document.querySelector(".hero")),
-    mixer: box(document.querySelector(".mixer")),
-    seek: box(document.querySelector(".seek")),
-    rows,
-    app: { left: app.left, top: app.top, right: app.right, bottom: app.bottom },
-    viewport: [window.innerWidth, window.innerHeight],
-    scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight]
-  };
-});
-check("landscape player uses two columns",
-  landscapeLayout.hero.right <= landscapeLayout.mixer.left + 2,
-  JSON.stringify({ hero: landscapeLayout.hero, mixer: landscapeLayout.mixer }));
-check("landscape shows the seek bar inside the viewport",
-  landscapeLayout.seek.top >= 0 && landscapeLayout.seek.bottom <= landscapeLayout.viewport[1],
-  JSON.stringify(landscapeLayout.seek));
-check("landscape shows all five mixer rows inside the viewport",
-  landscapeLayout.rows.length === 5 && landscapeLayout.rows.every((row) =>
-    row.top >= -1 && row.bottom <= landscapeLayout.viewport[1] + 1 &&
-    row.left >= -1 && row.right <= landscapeLayout.viewport[0] + 1),
-  JSON.stringify(landscapeLayout.rows));
-check("landscape player fills the viewport without page scroll",
-  landscapeLayout.app.left === 0 &&
-  landscapeLayout.app.right === landscapeLayout.viewport[0] &&
-  landscapeLayout.scroll[0] <= landscapeLayout.viewport[0] &&
-  landscapeLayout.scroll[1] <= landscapeLayout.viewport[1],
-  JSON.stringify(landscapeLayout));
-await landscape.locator("button.play").click();
-await landscape.waitForTimeout(2200);
-const landscapeTimes = await landscape.evaluate(() => window.__batapp_new.tracks().map((track) => track.currentTime));
-check("landscape playback starts every stem together",
-  landscapeTimes.every((time) => time > 0.3) && Math.max(...landscapeTimes) - Math.min(...landscapeTimes) < 0.12,
-  JSON.stringify(landscapeTimes.map((time) => +time.toFixed(2))));
-await landscape.screenshot({ path: path.join(shots, "06-landscape-player.png") });
+function landscapeSnapshot(page) {
+  return page.evaluate(() => {
+    const box = (node) => {
+      const rect = node.getBoundingClientRect();
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+    };
+    const main = document.getElementById("main-pane");
+    const playerView = document.querySelector(".player-view");
+    const mixer = document.querySelector(".mixer");
+    return {
+      hero: box(document.querySelector(".hero")),
+      transport: box(document.querySelector(".transport")),
+      stop: box(document.querySelector(".stop")),
+      mixer: box(mixer),
+      seek: box(document.querySelector(".seek")),
+      rows: Array.from(document.querySelectorAll(".stem")).map(box),
+      app: box(document.getElementById("app")),
+      viewport: [window.innerWidth, window.innerHeight],
+      scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+      mainScroll: [main.scrollWidth, main.scrollHeight, main.clientWidth, main.clientHeight],
+      playerScroll: [playerView.scrollWidth, playerView.scrollHeight, playerView.clientWidth, playerView.clientHeight],
+      mixerScroll: [mixer.scrollWidth, mixer.scrollHeight, mixer.clientWidth, mixer.clientHeight]
+    };
+  });
+}
 
-await landscape.goto(pageUrl + "#/v/1");
-await landscape.waitForTimeout(500);
-const landscapeLibrary = await landscape.evaluate(() => {
+const landscapeSizes = [[844, 390], [740, 360], [667, 375], [568, 320], [480, 320]];
+for (const [width, height] of landscapeSizes) {
+  const label = width + "x" + height;
+  const page = await browser.newPage({ viewport: { width, height } });
+  await page.bringToFront();
+  await page.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
+  await ready(page);
+  await page.waitForTimeout(400);
+  const snap = await landscapeSnapshot(page);
+  check(label + " landscape has no page scroll",
+    snap.app.left === 0 && snap.app.right === snap.viewport[0] &&
+    snap.scroll[0] <= snap.viewport[0] && snap.scroll[1] <= snap.viewport[1],
+    JSON.stringify({ app: snap.app, scroll: snap.scroll, viewport: snap.viewport }));
+  check(label + " landscape player and mixer keep all content visible",
+    snap.playerScroll[1] <= snap.playerScroll[3] + 1 &&
+    snap.mixerScroll[1] <= snap.mixerScroll[3] + 1 &&
+    snap.mainScroll[1] <= snap.mainScroll[3] + 1,
+    JSON.stringify({ player: snap.playerScroll, mixer: snap.mixerScroll, main: snap.mainScroll }));
+  check(label + " landscape shows the seek bar and all mixer rows",
+    snap.seek.top >= 0 && snap.seek.bottom <= snap.viewport[1] &&
+    snap.rows.length === 5 && snap.rows.every((row) =>
+      row.top >= -1 && row.bottom <= snap.viewport[1] + 1 &&
+      row.left >= -1 && row.right <= snap.viewport[0] + 1),
+    JSON.stringify({ seek: snap.seek, rows: snap.rows }));
+  check(label + " landscape places Stop beside the transport",
+    snap.stop.left >= 0 && snap.stop.right <= snap.viewport[0] &&
+    snap.stop.top >= 0 && snap.stop.bottom <= snap.viewport[1] &&
+    Math.abs((snap.stop.top + snap.stop.bottom) / 2 - (snap.transport.top + snap.transport.bottom) / 2) < 12 &&
+    snap.hero.right <= snap.mixer.left + 2,
+    JSON.stringify({ transport: snap.transport, stop: snap.stop, hero: snap.hero, mixer: snap.mixer }));
+  if (label === "844x390") {
+    await page.locator("button.play").click();
+    await page.waitForTimeout(2200);
+    const times = await page.evaluate(() => window.__batapp_new.tracks().map((track) => track.currentTime));
+    check("landscape playback starts every stem together",
+      times.every((time) => time > 0.3) && Math.max(...times) - Math.min(...times) < 0.12,
+      JSON.stringify(times.map((time) => +time.toFixed(2))));
+    await page.screenshot({ path: path.join(shots, "06-landscape-player.png") });
+  }
+  if (label === "568x320") {
+    await page.screenshot({ path: path.join(shots, "07-landscape-player-small.png") });
+  }
+  await page.close();
+}
+
+// Library landscape: the page must not scroll; the lesson list may scroll
+// inside its own pane because 38 rows cannot fit a short phone height.
+const landscapeLibrary = await browser.newPage({ viewport: { width: 844, height: 390 } });
+await landscapeLibrary.bringToFront();
+await landscapeLibrary.goto(pageUrl + "#/v/1");
+await landscapeLibrary.waitForTimeout(500);
+const librarySnap = await landscapeLibrary.evaluate(() => {
   const lefts = Array.from(document.querySelectorAll(".row")).slice(0, 4)
     .map((row) => Math.round(row.getBoundingClientRect().left));
+  const pane = document.getElementById("library-pane");
   return {
     columns: new Set(lefts).size,
     lefts,
     scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
-    viewport: [window.innerWidth, window.innerHeight]
+    viewport: [window.innerWidth, window.innerHeight],
+    paneScroll: [pane.scrollWidth, pane.scrollHeight, pane.clientWidth, pane.clientHeight]
   };
 });
-check("landscape library uses two columns", landscapeLibrary.columns === 2, JSON.stringify(landscapeLibrary.lefts));
+check("landscape library uses two columns", librarySnap.columns === 2, JSON.stringify(librarySnap.lefts));
 check("landscape library does not scroll the page",
-  landscapeLibrary.scroll[0] <= landscapeLibrary.viewport[0] &&
-  landscapeLibrary.scroll[1] <= landscapeLibrary.viewport[1],
-  JSON.stringify(landscapeLibrary));
-await landscape.screenshot({ path: path.join(shots, "07-landscape-library.png") });
-await landscape.close();
+  librarySnap.scroll[0] <= librarySnap.viewport[0] &&
+  librarySnap.scroll[1] <= librarySnap.viewport[1],
+  JSON.stringify(librarySnap));
+await landscapeLibrary.screenshot({ path: path.join(shots, "08-landscape-library.png") });
+await landscapeLibrary.close();
 
 // --- desktop ---------------------------------------------------------------
 const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } });
@@ -775,9 +908,61 @@ const servedUrl = `http://127.0.0.1:${port}/index.html`;
 const server = spawn("python3", ["-m", "http.server", String(port), "--bind", "127.0.0.1"], { cwd: root, stdio: "ignore" });
 await new Promise((resolve) => setTimeout(resolve, 900));
 try {
+  const servedStartup = await browser.newPage({ viewport });
+  await servedStartup.addInitScript(installMediaProbe);
+  const servedStartupAudio = [];
+  servedStartup.on("request", (request) => {
+    if (request.url().includes("/assets/audio/")) servedStartupAudio.push(request.url());
+  });
+  await servedStartup.goto(servedUrl + "#/");
+  await servedStartup.waitForTimeout(500);
+  const servedStartupProbe = await servedStartup.evaluate(() => ({
+    media: window.__mediaProbeSummary(),
+    state: window.__batapp_new.state()
+  }));
+  check("served library opens without loading audio",
+    servedStartupAudio.length === 0 && servedStartupProbe.media.created === 0 &&
+    servedStartupProbe.media.contexts === 0 && servedStartupProbe.state.stems.length === 0,
+    JSON.stringify({ requests: servedStartupAudio, media: { created: servedStartupProbe.media.created, contexts: servedStartupProbe.media.contexts } }));
+  await servedStartup.close();
+
+  // PWA version check: a matching manifest is a no-op.
+  const versionOk = await browser.newPage({ viewport });
+  await versionOk.goto(servedUrl + "#/");
+  await versionOk.waitForTimeout(700);
+  check("PWA version check does not reload when the manifest matches",
+    !versionOk.url().includes("?v="), versionOk.url());
+  await versionOk.close();
+
+  // PWA version check: a newer manifest forces one cache-busted reload.
+  const versionNew = await browser.newPage({ viewport });
+  await versionNew.route("**/site.webmanifest*", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/manifest+json",
+    body: JSON.stringify({
+      name: "Batá · Toques & Oru Seco",
+      short_name: "Batá",
+      version: "9.9.9",
+      start_url: "./?v=9.9.9",
+      scope: "./",
+      icons: []
+    })
+  }));
+  await versionNew.goto(servedUrl + "#/");
+  await versionNew.waitForFunction(() => location.search.indexOf("v=9.9.9") >= 0, null, { timeout: 10000 });
+  check("PWA version check reloads with the new version", true, versionNew.url());
+  await versionNew.waitForTimeout(600);
+  check("PWA version reload happens only once",
+    (versionNew.url().match(/v=9\.9\.9/g) || []).length === 1, versionNew.url());
+  await versionNew.close();
+
   const served = await browser.newPage({ viewport });
   await served.bringToFront();
   await served.addInitScript(installMediaProbe);
+  const servedAudioRequests = [];
+  served.on("request", (request) => {
+    if (request.url().includes("/assets/audio/")) servedAudioRequests.push(request.url());
+  });
   const servedErrors = [];
   served.on("console", (message) => {
     if (message.type() === "error") servedErrors.push(message.text().slice(0, 150));
@@ -785,6 +970,10 @@ try {
   served.on("pageerror", (error) => servedErrors.push("pageerror: " + error.message.slice(0, 150)));
   await served.goto(servedUrl + "#/lesson/volume-1/01-alubanche");
   await ready(served);
+  const firstLoadIds = Array.from(new Set(servedAudioRequests.map((url) => new URL(url).searchParams.get("load"))));
+  check("first lesson load fetches five versioned stems",
+    servedAudioRequests.length === 5 && firstLoadIds.length === 1,
+    JSON.stringify(servedAudioRequests));
   check("served page uses the Web Audio mixer", (await served.evaluate(() => window.__batapp_new.state().mode)) === "webaudio");
   let vox = await served.evaluate(() => window.__batapp_new.tracks().find((track) => track.stem === "vox"));
   check("Vox starts at 100% on HTTP",
@@ -830,6 +1019,63 @@ try {
     servedSequence.tracks.every((track) => track.currentTime >= 9.9 && track.currentTime < 12) &&
     servedSequence.tracks.find((track) => track.stem === "iya").muted === true,
     JSON.stringify({ media: servedSequence.media, tracks: servedSequence.tracks.map((track) => ({ stem: track.stem, t: +track.currentTime.toFixed(2), muted: track.muted })) }));
+
+  // Volume and mute must not touch the transport.
+  const beforeLevel = await served.evaluate(() => ({
+    media: window.__mediaProbeSummary(),
+    position: window.__batapp_new.state().position
+  }));
+  await served.locator(".stem[data-stem='oko'] input").evaluate((input) => {
+    input.value = "40";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await served.locator(".stem[data-stem='iya'] .mute").click();
+  await served.waitForTimeout(700);
+  const afterLevel = await served.evaluate(() => ({
+    media: window.__mediaProbeSummary(),
+    tracks: window.__batapp_new.tracks(),
+    state: window.__batapp_new.state()
+  }));
+  const oko = afterLevel.tracks.find((track) => track.stem === "oko");
+  const iya = afterLevel.tracks.find((track) => track.stem === "iya");
+  check("volume and mute change only the gain, never the transport",
+    afterLevel.media.created === beforeLevel.media.created &&
+    afterLevel.media.plays === beforeLevel.media.plays &&
+    afterLevel.media.pauses === beforeLevel.media.pauses &&
+    afterLevel.media.seeks.length === beforeLevel.media.seeks.length &&
+    afterLevel.state.mixerPlaying === true &&
+    afterLevel.state.position > beforeLevel.position + 0.4 &&
+    Math.abs(oko.volume - 0.4) < 0.02 && Math.abs(oko.gain - 0.4) < 0.02 &&
+    iya.muted === false && Math.abs(iya.gain - iya.volume) < 0.02,
+    JSON.stringify({ before: { plays: beforeLevel.media.plays, pauses: beforeLevel.media.pauses, seeks: beforeLevel.media.seeks.length }, after: { plays: afterLevel.media.plays, pauses: afterLevel.media.pauses, seeks: afterLevel.media.seeks.length }, oko: { volume: oko.volume, gain: oko.gain }, iya: { muted: iya.muted, gain: iya.gain, volume: iya.volume } }));
+
+  // Back releases every audio resource; reopening downloads fresh stems.
+  await served.locator(".player-top .icon-btn").click();
+  await served.waitForTimeout(400);
+  const unloaded = await served.evaluate(() => ({
+    state: window.__batapp_new.state(),
+    media: window.__mediaProbeSummary(),
+    elements: window.__mediaProbe.audios.map((audio) => ({
+      src: audio.getAttribute("src"),
+      paused: audio.paused,
+      readyState: audio.readyState
+    }))
+  }));
+  check("Back unloads every stem, Blob and context",
+    unloaded.state.lesson === null && unloaded.state.loaded === false &&
+    unloaded.state.disposed === true && unloaded.media.active === 0 &&
+    unloaded.elements.every((element) => !element.src &&
+      element.paused && element.readyState === 0),
+    JSON.stringify({ state: { lesson: unloaded.state.lesson, loaded: unloaded.state.loaded, disposed: unloaded.state.disposed }, media: { active: unloaded.media.active }, elements: unloaded.elements }));
+
+  await served.locator(".row[data-slug='volume-1/01-alubanche']").click();
+  await ready(served);
+  const reloadIds = Array.from(new Set(servedAudioRequests.map((url) => new URL(url).searchParams.get("load"))));
+  check("reopening a rhythm downloads all stems again from scratch",
+    servedAudioRequests.length === 10 && reloadIds.length === 2 &&
+    firstLoadIds.every((id) => reloadIds.indexOf(id) >= 0),
+    JSON.stringify({ requests: servedAudioRequests.length, loadIds: reloadIds }));
+
   check("no console errors over HTTP", servedErrors.length === 0, servedErrors.slice(0, 2).join(" | "));
   await served.close();
 
@@ -864,17 +1110,71 @@ try {
     JSON.stringify(readyState));
   await slow.close();
 
+  // One slow stem must keep the playing screen hidden until it is ready.
+  const oneSlow = await browser.newPage({ viewport });
+  await oneSlow.bringToFront();
+  await oneSlow.route("**/vox.ogg*", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1800));
+    await route.continue();
+  });
+  await oneSlow.goto(servedUrl + "#/lesson/volume-1/01-alubanche");
+  await oneSlow.waitForSelector(".loading", { timeout: 5000 });
+  await oneSlow.waitForTimeout(900);
+  const held = await oneSlow.evaluate(() => ({
+    loader: !!document.querySelector(".loading"),
+    mixer: !!document.querySelector(".mixer"),
+    play: !!document.querySelector("button.play"),
+    status: (document.querySelector(".load-status") || {}).textContent || ""
+  }));
+  check("playing screen stays hidden until the last stem is ready",
+    held.loader && !held.mixer && !held.play,
+    JSON.stringify(held));
+  await ready(oneSlow);
+  check("the last stem opens the playing screen",
+    await oneSlow.evaluate(() => !!document.querySelector(".mixer") && !window.__batapp_new.state().loading));
+  await oneSlow.close();
+
+  // A corrupted transfer must fail closed before the player is shown.
+  const corrupt = await browser.newPage({ viewport });
+  await corrupt.bringToFront();
+  await corrupt.route("**/vox.ogg*", (route) => route.fulfill({
+    status: 200,
+    contentType: "audio/ogg",
+    body: Buffer.from("corrupt")
+  }));
+  await corrupt.goto(servedUrl + "#/lesson/volume-1/01-alubanche");
+  await corrupt.waitForSelector(".loading.error", { timeout: 15000 });
+  await corrupt.waitForTimeout(250);
+  const corruptState = await corrupt.evaluate(() => ({
+    text: (document.querySelector(".load-status") || {}).textContent || "",
+    detail: (document.querySelector(".load-detail") || {}).textContent || "",
+    mixer: !!document.querySelector(".mixer"),
+    play: !!document.querySelector("button.play"),
+    state: window.__batapp_new.state()
+  }));
+  check("corrupted stem fails the integrity gate and names the stem",
+    corruptState.text.indexOf("Vox") >= 0 && !corruptState.mixer && !corruptState.play &&
+    corruptState.state.loading === false && !!corruptState.state.error,
+    JSON.stringify(corruptState));
+  await corrupt.screenshot({ path: path.join(shots, "14-http-checksum-error.png") });
+  await corrupt.unroute("**/vox.ogg*");
+  await corrupt.locator(".retry").click();
+  await ready(corrupt);
+  check("Retry recovers after an integrity failure",
+    await corrupt.evaluate(() => !window.__batapp_new.state().loading && window.__batapp_new.ui().playEnabled));
+  await corrupt.close();
+
   // Error + Retry: abort the Vox fetch, then retry with the route removed.
   const failing = await browser.newPage({ viewport });
   await failing.bringToFront();
-  await failing.route("**/vox.ogg", (route) => route.abort());
+  await failing.route("**/vox.ogg*", (route) => route.abort());
   await failing.goto(servedUrl + "#/lesson/volume-1/01-alubanche");
   await failing.waitForSelector(".loading.error", { timeout: 15000 });
   await failing.waitForTimeout(250);
   const errorText = (await failing.locator(".load-status").textContent()).trim();
   check("failed stem is named in the error state", errorText.indexOf("Vox") >= 0, errorText);
   await failing.screenshot({ path: path.join(shots, "14-http-error.png") });
-  await failing.unroute("**/vox.ogg");
+  await failing.unroute("**/vox.ogg*");
   await failing.locator(".retry").click();
   await ready(failing);
   check("Retry completes the load after a failure",

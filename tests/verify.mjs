@@ -325,17 +325,17 @@ for (const route of ["#/credits", "#/opening", "#/volumes", "#/volume-1", "#/vol
 check("no author/shop text or external URL on any screen", bannedSeen.length === 0, bannedSeen.join(" | "));
 
 // --- file:// contract ------------------------------------------------------
-const shipped = ["js/batapp.js", "js/data.js", "js/lessons.js", "js/mixer.js", "js/newapp.js"];
+const shipped = ["js/batapp.js", "js/data.js", "js/lessons.js", "js/player.js", "js/newapp.js", "js/mixer.js"];
 for (const file of shipped) {
   const text = fs.readFileSync(path.join(root, file), "utf8");
   const moduleUse = /type\s*=\s*["']module["']|import\s+.*from\s+["']/.test(text);
-  // The modern page fetches its own audio on HTTP(S) to satisfy the load gate
-  // and iOS preloading; only file:// is forbidden from fetching. All other
-  // shipped scripts must stay fetch-free, and even newapp.js has no absolute URL.
+  // The modern player fetches its own audio on HTTP(S) to satisfy the load gate
+  // and checksum verification. The legacy scene page keeps the fetch-free
+  // mixer, and no shipped script contains an absolute URL.
   const fetchUse = /\bfetch\s*\(/.test(text);
   const externalUrl = /https?:\/\//.test(text);
   check(file + " is a classic script (no modules)", !moduleUse, moduleUse ? "module syntax found" : "clean");
-  if (file === "js/newapp.js") {
+  if (file === "js/player.js") {
     check(file + " fetches only same-origin audio", fetchUse && !externalUrl,
       fetchUse ? (externalUrl ? "absolute URL found" : "relative-only") : "fetch hook missing");
   } else {

@@ -5,10 +5,11 @@
  *   - landscape phone: full-bleed two-column player / two-column library;
  *   - desktop: persistent library sidebar + player/empty main pane.
  *
- * On HTTP(S) every stem is fetched into a Blob before Play is enabled, so the
+ * On HTTP(S) every stem is fetched into a Blob, checked against the integrity
+ * manifest in js/lessons.js, and awaited before the player is shown, so the
  * lesson is truly local and iOS Safari's "never preload" rule does not block
  * the loading gate. On file:// the audio is already local and the elements are
- * awaited directly. Playback uses the shared transport in js/mixer.js.
+ * awaited directly. Playback uses js/player.js.
  */
 (function () {
   "use strict";
@@ -30,21 +31,18 @@
   };
   var RING_RADIUS = 52;
   var RING_LENGTH = 2 * Math.PI * RING_RADIUS;
-  var LOAD_TIMEOUT = 30000;
 
   var state = {
     view: "library",
     volume: "volume-1",
     libraryVolume: null,
     lesson: null,
-    mixer: null,
+    player: null,
     playing: false,
     loading: false,
     error: null,
     timer: 0,
-    loadToken: 0,
-    loadAbort: null,
-    objectUrls: []
+    loadToken: 0
   };
 
   /* ------------------------------------------------------------------ icons */
@@ -124,27 +122,15 @@
     }
   }
 
-  function revokeObjectUrls() {
-    state.objectUrls.forEach(function (url) {
-      try { URL.revokeObjectURL(url); } catch (error) { /* already revoked */ }
-    });
-    state.objectUrls = [];
-  }
-
   /* --------------------------------------------------------------- teardown */
 
   function teardown() {
     state.loadToken += 1;
-    if (state.loadAbort) {
-      try { state.loadAbort.abort(); } catch (error) { /* already aborted */ }
-      state.loadAbort = null;
-    }
-    revokeObjectUrls();
     if (state.timer) clearInterval(state.timer);
     state.timer = 0;
-    if (state.mixer) {
-      state.mixer.dispose();
-      state.mixer = null;
+    if (state.player) {
+      state.player.dispose();
+      state.player = null;
     }
     state.playing = false;
     state.loading = false;
@@ -250,15 +236,20 @@
     return view;
   }
 
-  function updateLoading(view, done, total) {
+  function updateLoading(view, done, total, stage) {
     var ring = view.querySelector(".ring-fg");
     var status = view.querySelector(".load-status");
-    var ratio = total ? done / total : 0;
+    var ratio = 0;
+    if (total) {
+      // Verification and media preparation are equally weighted, so the ring
+      // never jumps backwards between the two phases.
+      ratio = stage === "verify" ? done / (2 * total) : (total + done) / (2 * total);
+    }
     if (ring) ring.setAttribute("stroke-dashoffset", (RING_LENGTH * (1 - ratio)).toFixed(2));
     if (status) {
-      status.textContent = total
-        ? "Loading stems " + done + "/" + total + "…"
-        : "Loading stems…";
+      if (!total) status.textContent = "Loading stems…";
+      else if (stage === "verify") status.textContent = "Checking stems " + done + "/" + total + "…";
+      else status.textContent = "Loading stems " + done + "/" + total + "…";
     }
   }
 
@@ -282,7 +273,7 @@
     return view;
   }
 
-  function stemRow(record, mixer) {
+  function stemRow(record, player) {
     var row = element("div", "stem");
     row.dataset.stem = record.stem;
 
@@ -306,27 +297,27 @@
     row.appendChild(slider);
 
     function paint() {
-      var muted = mixer.isMuted(record.stem);
+      var muted = player.isMuted(record.stem);
       row.classList.toggle("muted", muted);
       mute.setAttribute("aria-pressed", muted ? "true" : "false");
       mute.innerHTML = muted ? ICONS.speakerOff : ICONS.speaker;
     }
 
     mute.addEventListener("click", function () {
-      mixer.setMuted(record.stem, !mixer.isMuted(record.stem));
+      player.setMuted(record.stem, !player.isMuted(record.stem));
       paint();
     });
     slider.addEventListener("input", function () {
       var ratio = Number(slider.value) / 100;
-      mixer.setVolume(record.stem, ratio);
-      if (mixer.isMuted(record.stem)) mixer.setMuted(record.stem, false);
+      player.setVolume(record.stem, ratio);
+      if (player.isMuted(record.stem)) player.setMuted(record.stem, false);
       setFill(slider, ratio);
       paint();
     });
     return row;
   }
 
-  function playerView(lesson, mixer) {
+  function playerView(lesson, audio) {
     var pool = lessonsFor(lesson.volume);
     var index = pool.indexOf(lesson);
     var player = element("div", "player-view");
@@ -380,9 +371,9 @@
 
     var mixerBox = element("div", "mixer");
     STEMS.map(function (entry) {
-      return mixer.trackFor(entry.key);
+      return audio.trackFor(entry.key);
     }).filter(Boolean).forEach(function (record) {
-      mixerBox.appendChild(stemRow(record, mixer));
+      mixerBox.appendChild(stemRow(record, audio));
     });
     body.appendChild(mixerBox);
     player.appendChild(body);
@@ -406,30 +397,45 @@
 
     play.addEventListener("click", function () {
       if (state.playing) {
-        mixer.pause();
+        audio.pause();
         state.playing = false;
         paintPlaying();
         return;
       }
       if (transportBusy) return;
       transportBusy = true;
-      mixer.play();
+      if (!audio.play()) {
+        transportBusy = false;
+        return;
+      }
       state.playing = true;
       hideStatus();
       paintPlaying();
-      setTimeout(function () {
-        transportBusy = false;
-        if (!state.playing) return;
-        if (!mixer.playing()) {
-          state.playing = false;
-          paintPlaying();
-          showStatus("Playback was blocked. Tap Play again.");
+      var attempts = 0;
+      function watchPlayback() {
+        if (!state.playing) {
+          transportBusy = false;
+          return;
         }
-      }, 500);
+        if (audio.playing()) {
+          transportBusy = false;
+          return;
+        }
+        attempts += 1;
+        if (attempts < 8) {
+          setTimeout(watchPlayback, 250);
+          return;
+        }
+        transportBusy = false;
+        state.playing = false;
+        paintPlaying();
+        showStatus("Playback was blocked. Tap Play again.");
+      }
+      setTimeout(watchPlayback, 250);
     });
 
     stop.addEventListener("click", function () {
-      mixer.stop();
+      audio.stop();
       state.playing = false;
       transportBusy = false;
       paintPlaying();
@@ -455,18 +461,19 @@
       setFill(seekInput, duration > 0 ? value / duration : 0);
     });
     seekInput.addEventListener("change", function () {
-      mixer.seek(Number(seekInput.value));
+      audio.seek(Number(seekInput.value));
       seeking = false;
     });
 
-    mixer.tracks.forEach(function (record) {
+    audio.tracks.forEach(function (record) {
+      if (!record.element) return;
       record.element.addEventListener("error", function () {
         showStatus("Couldn't play " + label(record.stem) + ".");
       });
     });
 
     state.timer = setInterval(function () {
-      var progress = mixer.progress();
+      var progress = audio.progress();
       if (progress.duration > 0) {
         duration = progress.duration;
         seekInput.disabled = false;
@@ -487,131 +494,12 @@
 
   /* ----------------------------------------------------------- load / route */
 
-  function loadHttp(lesson, onProgress) {
-    var entries = lesson.audio || [];
-    var total = entries.length;
-    var done = 0;
-    var urls = [];
-    var controller = new AbortController();
-    state.loadAbort = controller;
-    var timeoutId;
-    var timeout = new Promise(function (resolve, reject) {
-      timeoutId = setTimeout(function () {
-        reject({ failed: [], message: "Timed out while loading" });
-      }, LOAD_TIMEOUT);
-    });
-
-    var fetches = Promise.all(entries.map(function (entry) {
-      return fetch("assets/audio/" + entry.path, {
-        signal: controller.signal,
-        credentials: "same-origin"
-      }).then(function (response) {
-        if (!response.ok) throw new Error("HTTP " + response.status);
-        return response.blob();
-      }).then(function (blob) {
-        urls.push({ path: entry.path, url: URL.createObjectURL(blob) });
-        done += 1;
-        onProgress(done, total);
-      }).catch(function (error) {
-        if (error && error.name === "AbortError") throw error;
-        throw {
-          failed: [entry.stem],
-          message: /^HTTP \d/.test(error && error.message)
-            ? "Server returned " + error.message.slice(5)
-            : "Check your connection and try again."
-        };
-      });
-    }));
-
-    return Promise.race([fetches, timeout]).then(function () {
-      clearTimeout(timeoutId);
-      var byPath = {};
-      urls.forEach(function (entry) { byPath[entry.path] = entry.url; });
-      state.objectUrls = urls.map(function (entry) { return entry.url; });
-      state.loadAbort = null;
-      return new window.BatappMixer(lesson, {
-        analyser: false,
-        resolveSource: function (entry) { return byPath[entry.path]; }
-      });
-    }).catch(function (error) {
-      clearTimeout(timeoutId);
-      try { controller.abort(); } catch (abortError) { /* already aborted */ }
-      state.loadAbort = null;
-      urls.forEach(function (entry) {
-        try { URL.revokeObjectURL(entry.url); } catch (revokeError) { /* already revoked */ }
-      });
-      state.objectUrls = [];
-      if (error && error.name === "AbortError") throw error;
-      throw error;
-    });
-  }
-
-  function waitForElements(mixer, onProgress) {
-    var records = mixer.tracks;
-    var total = records.length;
-    var done = 0;
-    return Promise.all(records.map(function (record) {
-      return new Promise(function (resolve, reject) {
-        var element = record.element;
-        var settled = false;
-        var timer = 0;
-
-        function cleanup() {
-          element.removeEventListener("loadeddata", ready);
-          element.removeEventListener("canplaythrough", ready);
-          element.removeEventListener("error", failed);
-          if (timer) clearTimeout(timer);
-        }
-        function ready() {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          done += 1;
-          onProgress(done, total);
-          resolve();
-        }
-        function failed() {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          reject({ failed: [record.stem], message: "Audio failed to load" });
-        }
-
-        if (element.readyState >= 2) {
-          ready();
-          return;
-        }
-        timer = setTimeout(function () {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          reject({ failed: [record.stem], message: "Timed out while loading" });
-        }, 10000);
-        element.addEventListener("loadeddata", ready);
-        element.addEventListener("canplaythrough", ready);
-        element.addEventListener("error", failed);
-        try { element.load(); } catch (error) { failed(); }
-      });
-    })).then(function () { return mixer; });
-  }
-
-  function loadFile(lesson, onProgress) {
-    var mixer = new window.BatappMixer(lesson, { analyser: false });
-    return waitForElements(mixer, onProgress).catch(function (error) {
-      mixer.dispose();
-      throw error;
-    });
-  }
-
-  function loadLesson(lesson, onProgress) {
-    if (location.protocol === "http:" || location.protocol === "https:") {
-      return loadHttp(lesson, onProgress);
-    }
-    return loadFile(lesson, onProgress);
-  }
-
   function renderMain(lesson) {
     mainPane.innerHTML = "";
+    if (state.player) {
+      state.player.dispose();
+      state.player = null;
+    }
     if (!lesson) {
       state.loading = false;
       state.error = null;
@@ -626,29 +514,26 @@
     var view = loadingView(lesson);
     mainPane.appendChild(view);
 
-    loadLesson(lesson, function (done, total) {
-      if (token === state.loadToken) updateLoading(view, done, total);
-    }).then(function (mixer) {
-      if (token !== state.loadToken) {
-        mixer.dispose();
-        revokeObjectUrls();
+    var audio = new window.BatappPlayer(lesson);
+    state.player = audio;
+    audio.load(function (done, total, stage) {
+      if (token === state.loadToken) updateLoading(view, done, total, stage);
+    }).then(function () {
+      if (token !== state.loadToken || state.player !== audio) {
+        audio.dispose();
         return;
       }
       state.loading = false;
       state.lesson = lesson;
-      state.mixer = mixer;
       mainPane.innerHTML = "";
-      mainPane.appendChild(playerView(lesson, mixer));
+      mainPane.appendChild(playerView(lesson, audio));
     }).catch(function (error) {
       if (token !== state.loadToken || (error && error.name === "AbortError")) return;
+      audio.dispose();
+      if (state.player === audio) state.player = null;
       state.loading = false;
       state.lesson = lesson;
       state.error = (error && error.message) || "Load failed";
-      revokeObjectUrls();
-      if (state.mixer) {
-        state.mixer.dispose();
-        state.mixer = null;
-      }
       mainPane.innerHTML = "";
       mainPane.appendChild(errorView(lesson, error));
     });
@@ -689,7 +574,7 @@
   }
 
   function step(delta) {
-    if (!state.lesson || !state.mixer || state.loading) return;
+    if (!state.lesson || !state.player || state.loading) return;
     var pool = lessonsFor(state.lesson.volume);
     var index = pool.indexOf(state.lesson);
     var target = pool[index + delta];
@@ -729,29 +614,38 @@
         volume: state.volume,
         lesson: state.lesson ? state.lesson.slug : null,
         playing: state.playing,
-        mixerPlaying: state.mixer ? state.mixer.playing() : false,
+        mixerPlaying: state.player ? state.player.playing() : false,
         loading: state.loading,
         error: state.error,
-        mode: state.mixer ? state.mixer.mode : null,
-        stems: state.mixer ? state.mixer.tracks.map(function (record) { return record.stem; }) : []
+        mode: state.player ? state.player.mode : null,
+        loaded: state.player ? state.player.isLoaded() : false,
+        disposed: state.player ? state.player.isDisposed() : true,
+        integrity: state.player ? state.player.integritySummary() : null,
+        position: state.player ? state.player.position() : 0,
+        duration: state.player ? state.player.duration() : 0,
+        stems: state.player ? state.player.tracks.map(function (record) { return record.stem; }) : []
       };
     },
     tracks: function () {
-      if (!state.mixer) return [];
-      return state.mixer.tracks.map(function (record) {
+      if (!state.player) return [];
+      return state.player.tracks.map(function (record) {
+        var element = record.element;
         return {
           stem: record.stem,
           volume: record.volume,
           muted: record.muted,
           effective: record.muted ? 0 : record.volume,
-          elementVolume: record.element.volume,
+          elementVolume: element ? element.volume : null,
           gain: record.gain ? record.gain.gain.value : null,
-          currentTime: record.element.currentTime,
-          duration: record.element.duration || null,
-          paused: record.element.paused,
-          loop: record.element.loop,
-          ended: record.element.ended,
-          error: record.element.error ? record.element.error.code : null
+          currentTime: element ? element.currentTime : 0,
+          duration: element && isFinite(element.duration) ? element.duration : (record.seconds || null),
+          paused: element ? element.paused : true,
+          loop: element ? element.loop : false,
+          ended: element ? element.ended : false,
+          error: element && element.error ? element.error.code : null,
+          ready: !!record.ready,
+          integrity: record.integrity,
+          src: element && element.getAttribute("src") ? element.getAttribute("src") : null
         };
       });
     },

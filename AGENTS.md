@@ -18,8 +18,9 @@ source.
      over HTTP(S) for the load gate, never on `file://`;
    - no ES modules (`type="module"`) → plain scripts and globals;
    - no Web Workers, no Service Worker, no `history.pushState` → hash routing;
-   - Web Audio cannot read local media (tainted) → element-based playback with
-     drift correction on `file://`, Web Audio only when served over HTTP(S);
+   - Web Audio may be unavailable or tainted for local media. The modern player
+     attempts it on `file://` and falls back to element volume; the legacy
+     `js/mixer.js` keeps its element-based fallback and drift correction;
    - all paths relative (GitHub Pages serves from a repository subpath).
 4. **Original assets are reused, not redrawn**: audio comes from the APK's own
    Vorbis packets; sprites and text come from the shipped scenes. Credit, shop
@@ -34,8 +35,9 @@ source.
 ```
 index_old.html, app.css, js/     the shipped-layout page (classic scripts, no build)
 index.html, app-new.css, js/newapp.js   the modern layout page
-js/mixer.js                  shared transport (window.BatappMixer) for both pages
-js/lessons.js                slim generated data for the modern page
+js/player.js                 modern transport (window.BatappPlayer), used by index.html
+js/mixer.js                  legacy transport (window.BatappMixer), used by index_old.html
+js/lessons.js                slim generated data + audio integrity for the modern page
 assets/icon*.png, icon.svg, site.webmanifest   app icon set (tools/make_icons.py)
 assets/audio/<slug>/<stem>.ogg   281 lesson stems (iya, ito, oko, vox, beat)
 assets/img/...               sprites and background art exported from the APK
@@ -193,8 +195,9 @@ the menu design space. Do not use it as the menu reference.
 
 `index.html` + `app-new.css` + `js/newapp.js` are a fresh player, not a
 re-skin of the shipped scenes: no scene geometry and no sprites are used, only
-the generated `js/lessons.js` (lessons, audio paths, durations) and the shared
-transport in `js/mixer.js`.
+the generated `js/lessons.js` (lessons, audio paths, durations and per-stem
+integrity) and the transport in `js/player.js`. `index_old.html` keeps the
+legacy `js/mixer.js` transport.
 
 - Two-tab library (Toques / Oru Seco) → lesson player with Play/Pause/Stop,
   prev/next (clamped per volume), a draggable seek bar, a progress ring and a
@@ -202,26 +205,37 @@ transport in `js/mixer.js`.
   in Volume II and in `Egbi pami`). Each row has a volume slider and a mute that
   preserves the slider value. Every stem, including Vox, starts at 100%.
 - The mixer order and stem labels follow the shipped player's draw order.
-- Opening a lesson runs a load gate: on HTTP(S) all stems are fetched into Blobs
-  (with `fetch`, same origin) so iOS Safari's preload restriction cannot stall
-  the gate; on `file://` the local elements are awaited. Play is disabled until
-  every stem is local, with a spinner/ring progress, named errors and Retry.
+- Opening a lesson runs a load gate: on HTTP(S) every stem is fetched into a
+  Blob with `cache: "no-store"` and a fresh per-load URL, checked against the
+  byte count and SHA-256/CRC-32 manifest in `js/lessons.js`, and awaited until
+  it can play through. On `file://` the local elements are awaited and their
+  durations checked. The playing screen is not shown until every stem is ready;
+  failures are named and Retry restarts the whole load.
 - Transport: every stem loops (the scene object `Bit` maps to the exported
-  `beat` stem); the drift loop runs every 250 ms and detects a loop wrap on any
-  stem, aligning all five to the restarted position. Seek keeps playback running
-  and applies on release, suspending the drift loop until the elements report
-  `seeked`; mute is a pure gain change. Stop pauses and rewinds all stems to 0,
-  wins against a pending `play()`, and the next Play starts from the beginning.
+  `beat` stem). The transport resets all stems to 0 together at the loop
+  boundary, so a browser that recalculates one stem's duration after a near-end
+  seek cannot leave that stem behind. Pause captures one shared position and
+  resumes all stems there; Stop rewinds all stems to 0 and the next Play starts
+  from the beginning. Mute and volume only change per-stem gain. Back disposes
+  the player, revokes Blob URLs and closes the AudioContext.
 - The seek bar under the title seeks all stems together; the title format is
   `Title · Toque/Oru Seco NN · Batá`, with `Toques · Batá`, `Oru Seco · Batá`
   and the root title for library routes.
 - Three responsive modes built from one DOM:
   - portrait phones: one pane at a time (library or player);
   - landscape phones (`orientation: landscape` and `max-height: 559px`):
-    full-bleed two-column player and a two-column library;
+    full-bleed two-column player that fits the viewport without page or player
+    scrolling (Stop sits beside the transport) and a two-column library whose
+    own lesson list may scroll when 38 rows cannot fit;
   - desktop (`min-width: 900px` and `min-height: 600px`): full-bleed persistent
     library sidebar + player/empty main pane, with a narrower stacked player
     below 1200 px.
+- Home-screen/PWA update check without a service worker: the page reads
+  `site.webmanifest` (`cache: "no-store"`), compares `version` with its own
+  `<meta name="batapp-version">`, and reloads once with `?v=` when a newer
+  version is deployed. Manifest `start_url` and icon URLs carry the same
+  version. The first update of an already installed app may need one manual
+  cache clear or reinstall.
 - `prefers-color-scheme` selects the theme; there is no toggle and no external
   resource (inline SVG icons, generated two-colour three-drum icon set, system
   font stack).
@@ -248,12 +262,15 @@ transport in `js/mixer.js`.
 - `tests/verify-new.mjs` covers the modern layout (`index.html`) over
   `file://` and over HTTP: portrait, landscape-phone and desktop modes, load
   gate, seek, titles, mute semantics, prev/next, both colour schemes, lesson
-  order, slim-data equivalence, icon links, no external requests/links and a
-  lesson sweep. It also runs an instrumented transport regression (exactly one
-  media element per stem, loop flags, pause → mute → play → backward seek, and
-  a loop-boundary wrap). Chromium runs all 61 lessons; `BROWSER=firefox|webkit`
-  runs representative lessons (and the HTTP gate/error paths). Its Chromium
-  summary is written to `docs/verification/new-ui-sweep-summary.json`;
+  order, slim-data equivalence, integrity manifest, icon links, no external
+  requests/links and a lesson sweep. It also runs instrumented transport
+  regressions (zero audio on library open, one slow stem keeps the player
+  hidden, corrupted transfers fail closed, one media element per stem, pause →
+  mute → play → backward seek, loop restart to zero, volume/mute leaving the
+  transport untouched, Back unloading every resource and reopening downloading
+  fresh stems). Chromium runs all 61 lessons; `BROWSER=firefox|webkit` runs
+  representative lessons (and the HTTP gate/error paths). Its Chromium summary
+  is written to `docs/verification/new-ui-sweep-summary.json`;
   `tests/verify-browsers.mjs` records all engines in
   `docs/verification/cross-browser-summary.json`.
 - WebKit needs host libraries for local runs:

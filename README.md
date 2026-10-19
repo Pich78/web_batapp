@@ -40,7 +40,13 @@ behind the reconstruction.
   mixer (volume + mute per stem). Every stem starts at 100%, including Vox. The
   player loads all stems first and only enables Play when they are local. It
   adapts from a one-pane portrait phone view to a two-column landscape phone
-  view and a full desktop layout with a persistent library sidebar.
+  view (the full player fits the viewport without scrolling, with Stop beside
+  the transport) and a full desktop layout with a persistent library sidebar.
+- **Home-screen / PWA updates** — there is no service worker. The page compares
+  its own version with `site.webmanifest` through a `no-store` request and, when
+  a newer version is deployed, reloads once with a versioned URL. The manifest
+  `start_url` and icons are versioned too. The first update of an already
+  installed home-screen app may still need one manual cache clear or reinstall.
 - **Double-click `index_old.html`** — the shipped-layout reconstruction: opening
   → volume selector → toque/oru-seco index → lesson player, rendered from the
   app's own scene geometry.
@@ -76,27 +82,30 @@ iPhone Safari (iOS 18.4+), Android Chrome and Windows Chrome/Edge checklist.
 
 ## Playback
 
-Both pages share `js/mixer.js` (`window.BatappMixer`): one `<audio>` element per
-stem, all started in the same tick, each looping, with a 500 ms drift-correction
-pass that re-seeks any stem more than 80 ms off the reference.
+`index.html` uses `js/player.js` (`window.BatappPlayer`). `index_old.html` keeps
+the original scene-reconstruction transport in `js/mixer.js`.
 
-- On `file://` the element volume is the level control (Web Audio cannot read
-  local media).
-- On `http(s)` (e.g. GitHub Pages) a GainNode per stem controls the level, which
-  also works on iOS, where `HTMLMediaElement.volume` ignores writes. Every stem
-  is advanced even at volume 0, so a muted stem stays in sync.
-- The modern page preloads the stems: on HTTP it fetches them into Blobs with a
-  visible loading gate, then enables Play; on `file://` it waits for the local
-  media to be ready. A failed stem is named and can be retried.
-- Every stem loops — including Beat, whose scene object is `Bit` while its
-  exported stem is `beat`. The drift loop detects a loop wrap and pulls all
-  stems to the same restart position.
-- Seeking moves all five stems to the same position before playback continues;
-  the drift timer is suspended during the seek so it cannot undo a backward
-  jump.
-- Stop pauses and rewinds every stem to 0. A pending `play()` from a quick tap
-  cannot restart them: Stop wins the race, and the next Play starts from the
-  beginning.
+- Opening the library creates no audio element, no `AudioContext` and no audio
+  request. Audio loading begins only after a rhythm is chosen.
+- The modern player fetches every stem with `cache: "no-store"` and a fresh
+  per-load URL, checks the byte count and SHA-256 (CRC-32 on origins without
+  Web Crypto) against the manifest in `js/lessons.js`, and waits until all stems
+  can play through. The playing screen is shown only after the last stem is
+  ready; failures name the stem and fail closed.
+- Back navigation aborts pending transfers, pauses and clears every media
+  element, revokes the Blob URLs and closes the `AudioContext`. Reopening the
+  same rhythm downloads all stems again from scratch.
+- One GainNode per stem controls the level when Web Audio accepts the media
+  source; a per-element volume fallback is used elsewhere. Mute and the volume
+  slider never pause, seek, restart or reload a stem.
+- Every stem loops. The transport resets all stems to the beginning together at
+  the loop boundary, so a browser that recalculates one stem's duration after a
+  near-end seek cannot leave that stem behind.
+- Pause keeps every stem loaded and resumes all of them from one shared
+  position. Stop keeps them loaded and rewinds all of them to 0; the next Play
+  starts from the beginning. A pending `play()` from a quick tap cannot undo
+  Pause or Stop.
+- Seeking moves every stem to the same position before playback continues.
 
 **iPhone/iPad:** iOS/Safari 18.4+ is required for Ogg Vorbis playback. On older
 iOS versions the browser cannot decode the lesson audio.
