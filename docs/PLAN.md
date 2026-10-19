@@ -21,9 +21,11 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
 ## Next: finish the model
 
-- [ ] **Export sprites and textures**: `Image`/`RawImage` sprite references,
-      `Texture2D` payloads (PNG), 9-slice borders, and any background art, into
-      `assets/img/`. Verify each referenced sprite resolves.
+- [x] **Export sprites and textures**: 32 sprites + 73 textures (3.7 MB) into
+      `assets/img/`, with rect/pivot/9-slice borders in
+      `docs/verification/sprite-export.json`. All 29 assets referenced by scene
+      `Image`/`RawImage` components resolve; the one non-sprite reference is the
+      `Video Book` RenderTexture.
 - [ ] **Decode `SimpleSpectrum` fields** enough to reproduce the spectrum bars
       (bar count, origin, colours, source type) or document the approximation.
 - [ ] Tidy the scene dump: some nodes list placeholder `null` component entries
@@ -53,6 +55,11 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       stems, plus per-track mute without losing the slider value.
 - [ ] **Keyboard/pointer affordances** for Prev/Next/Home/Menu as in the
       original bindings.
+- [ ] **Video area**: the Volume Selector shows a `RawImage` fed by a
+      `Video Book` RenderTexture. No video payload ships in the build, so the
+      original must stream it (`INTERNET` permission, `VideoPlayer` objects with
+      no bundled `VideoClip`). Offline port: render the frame area as a
+      placeholder and keep the "Libri Video" link instead of streaming.
 - [ ] **Self-test page** (`selftest.html`): every lesson resolves its stems and
       sprites, durations match the manifest, no `fetch`/module syntax anywhere in
       the shipped scripts.

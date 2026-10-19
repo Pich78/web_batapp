@@ -1,0 +1,1676 @@
+{
+ "sprites": [
+  {
+   "name": "UISprite",
+   "type": "Sprite",
+   "file": "sharedassets3.assets",
+   "path_id": 30,
+   "path": "uisprite~1.png",
+   "width": 32,
+   "height": 32,
+   "bytes": 674,
+   "sha256": "27401592b2a13e32a4fac98db94097a0e949c15df5d26e2ba5440291c2e5f43f",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 200.0,
+   "border": [
+    10.0,
+    10.0,
+    10.0,
+    10.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "UI_Icon_Pause",
+   "type": "Sprite",
+   "file": "sharedassets3.assets",
+   "path_id": 31,
+   "path": "ui-icon-pause~1.png",
+   "width": 80,
+   "height": 88,
+   "bytes": 1047,
+   "sha256": "4a7ea19e59b00d6b322428f4adafebb3b972a1748d8c70728959e6b9c2bea165",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "volume-on",
+   "type": "Sprite",
+   "file": "sharedassets3.assets",
+   "path_id": 32,
+   "path": "volume-on~1.png",
+   "width": 187,
+   "height": 167,
+   "bytes": 4137,
+   "sha256": "585aec7e584824e788f93f70f50873a4a0f9a68ac37f9f7c5531562ffc0f0d11",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "UI_Icon_Play",
+   "type": "Sprite",
+   "file": "sharedassets3.assets",
+   "path_id": 33,
+   "path": "ui-icon-play~1.png",
+   "width": 66,
+   "height": 94,
+   "bytes": 1268,
+   "sha256": "65f5303052abf56a6bbe281c1632ea2c6c3d80683918ea8bfc5517d571d94f99",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "UI_Icon_BtnPsCircle",
+   "type": "Sprite",
+   "file": "sharedassets3.assets",
+   "path_id": 34,
+   "path": "ui-icon-btnpscircle~1.png",
+   "width": 96,
+   "height": 96,
+   "bytes": 2379,
+   "sha256": "e2f1aad14d090867b9cd928d274d17c79b67dc945cf6dd56632b4452aa2d8e53",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "circular-shape-silhouette",
+   "type": "Sprite",
+   "file": "sharedassets3.assets",
+   "path_id": 35,
+   "path": "circular-shape-silhouette~1.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 2046,
+   "sha256": "574fc27a659b943f7f8853a3bd621cf594a651d0c5875fa93c5845a222896663",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "Background",
+   "type": "Sprite",
+   "file": "sharedassets3.assets",
+   "path_id": 36,
+   "path": "background~1.png",
+   "width": 1920,
+   "height": 1080,
+   "bytes": 1072902,
+   "sha256": "43624270df3b833f12e3d6357edf1ffdec73ab27da1753f0103a2b9b54b83daa",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "swatchWhite",
+   "type": "Sprite",
+   "file": "sharedassets3.assets",
+   "path_id": 37,
+   "path": "swatchwhite~1.png",
+   "width": 1,
+   "height": 1,
+   "bytes": 70,
+   "sha256": "d5a51b6aed15684ec8c123e30fe5703155359d6543b6d7b47cb5766ef44939de",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 1.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "UI_Panel_Window",
+   "type": "Sprite",
+   "file": "sharedassets3.assets",
+   "path_id": 38,
+   "path": "ui-panel-window~1.png",
+   "width": 80,
+   "height": 84,
+   "bytes": 2964,
+   "sha256": "f88af8cf594ed32d97c256999cce72321eedc23b42a215e51ca31ba8558d321f",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    16.0,
+    20.0,
+    16.0,
+    16.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "Azure_round",
+   "type": "Sprite",
+   "file": "sharedassets3.assets",
+   "path_id": 39,
+   "path": "azure-round~1.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 2275,
+   "sha256": "aac89f22e513fbeea0ff154845bd320fa4f6ca2a32d842a9632ccaf867c18f85",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    64.0,
+    64.0,
+    64.0,
+    64.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "UI_Icon_Stop",
+   "type": "Sprite",
+   "file": "sharedassets3.assets",
+   "path_id": 40,
+   "path": "ui-icon-stop~1.png",
+   "width": 86,
+   "height": 91,
+   "bytes": 476,
+   "sha256": "7d290811036bf6ff5e7ed0cc834f68da2fd3bc7e51740cd6943490c953d26310",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "UI_Panel_Content",
+   "type": "Sprite",
+   "file": "sharedassets3.assets",
+   "path_id": 41,
+   "path": "ui-panel-content~1.png",
+   "width": 80,
+   "height": 80,
+   "bytes": 450,
+   "sha256": "34faa85a35217051766f21aa98ae25d50bd06b84e39f3fa82f746a6f2a29ae02",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    8.0,
+    8.0,
+    8.0,
+    8.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "volume-off",
+   "type": "Sprite",
+   "file": "sharedassets3.assets",
+   "path_id": 42,
+   "path": "volume-off~1.png",
+   "width": 192,
+   "height": 145,
+   "bytes": 2833,
+   "sha256": "dfed61e33e7d447545d3053f55f78ba96bea7e6d5a9c5987fb67d133832b28ae",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "Background",
+   "type": "Sprite",
+   "file": "sharedassets1.assets",
+   "path_id": 5,
+   "path": "background~3.png",
+   "width": 32,
+   "height": 32,
+   "bytes": 599,
+   "sha256": "60986117911e139dc15a00ffdd1fdc20c860b82fbb74dda01e12608d556a493e",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 200.0,
+   "border": [
+    10.0,
+    10.0,
+    10.0,
+    10.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "Yellow_round_button 64px",
+   "type": "Sprite",
+   "file": "sharedassets1.assets",
+   "path_id": 6,
+   "path": "yellow-round-button-64px~1.png",
+   "width": 64,
+   "height": 64,
+   "bytes": 711,
+   "sha256": "48f2e1521409cfaf101e131a506813c324f21c55f40a13165e3b862a747fe07f",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    20.0,
+    20.0,
+    20.0,
+    20.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "apple-music",
+   "type": "Sprite",
+   "file": "sharedassets2.assets",
+   "path_id": 10,
+   "path": "apple-music~1.png",
+   "width": 46,
+   "height": 47,
+   "bytes": 985,
+   "sha256": "a328875cff9a90827dc4d3c978e1b3af4ff74716d291c28b5376e87321991db8",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "blue-splatter-10",
+   "type": "Sprite",
+   "file": "sharedassets2.assets",
+   "path_id": 11,
+   "path": "blue-splatter-10~1.png",
+   "width": 2048,
+   "height": 1619,
+   "bytes": 16826,
+   "sha256": "e4d87c4e3d3a7833ec48782d4cc968eec6be3d3974363c6af23c1e69b5025634",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 55.5918,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "amazon",
+   "type": "Sprite",
+   "file": "sharedassets2.assets",
+   "path_id": 12,
+   "path": "amazon~1.png",
+   "width": 46,
+   "height": 47,
+   "bytes": 1302,
+   "sha256": "653934f0861dbd0fc367897afc1c4fa2910479b9b948f7f32be1d6348b0be397",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "fb-whitebg",
+   "type": "Sprite",
+   "file": "sharedassets2.assets",
+   "path_id": 13,
+   "path": "fb-whitebg~1.png",
+   "width": 45,
+   "height": 45,
+   "bytes": 724,
+   "sha256": "3f7492024782a820f5fd46740ff9da1cb31458ce08a92afca5cbeafa7bc2544f",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "Asset 1-9",
+   "type": "Sprite",
+   "file": "sharedassets2.assets",
+   "path_id": 14,
+   "path": "asset-1-9~1.png",
+   "width": 115,
+   "height": 144,
+   "bytes": 3328,
+   "sha256": "ea74465f1506a75ace2e62ad5615a0c9f6faeb8d240b2448dab6922cbd0fff04",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "youtube-biancobg",
+   "type": "Sprite",
+   "file": "sharedassets2.assets",
+   "path_id": 15,
+   "path": "youtube-biancobg~1.png",
+   "width": 44,
+   "height": 45,
+   "bytes": 1045,
+   "sha256": "5948d8328cc571babea0426fe364ad92507f0edb41e493d78f5adab652b8946e",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "Azure_round_button128px",
+   "type": "Sprite",
+   "file": "sharedassets2.assets",
+   "path_id": 16,
+   "path": "azure-round-button128px~1.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 1702,
+   "sha256": "ab0a5877fafd49279a94bab73e382c7eb05a128574e54851720854b3c3d3fb33",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    20.0,
+    20.0,
+    20.0,
+    20.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "instagram-biancobg",
+   "type": "Sprite",
+   "file": "sharedassets2.assets",
+   "path_id": 17,
+   "path": "instagram-biancobg~1.png",
+   "width": 44,
+   "height": 45,
+   "bytes": 1161,
+   "sha256": "870794b358a4455d9274339294e8c61a06f9ae59b3ddd08cb3132951ae125859",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "White_round_button128px",
+   "type": "Sprite",
+   "file": "sharedassets0.assets",
+   "path_id": 39,
+   "path": "white-round-button128px~1.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 892,
+   "sha256": "ca7c3407f998b62343191b0b64b27d323f4a1489e6327a3832d548901be4ab86",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    20.0,
+    20.0,
+    20.0,
+    20.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "bata",
+   "type": "Sprite",
+   "file": "sharedassets0.assets",
+   "path_id": 40,
+   "path": "bata~1.png",
+   "width": 145,
+   "height": 92,
+   "bytes": 6732,
+   "sha256": "ae65e8228799a94b9a2f7e1b1cc211543a23c87908a0af90c706d7ab5af2856c",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "Asset 1-8",
+   "type": "Sprite",
+   "file": "sharedassets0.assets",
+   "path_id": 41,
+   "path": "asset-1-8~1.png",
+   "width": 119,
+   "height": 144,
+   "bytes": 435,
+   "sha256": "013a09c43176e180d9a7fb3f46c7658f2065b8cbd2c4387c41b1ec68d8e83a76",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "UI_Icon_MusicOn",
+   "type": "Sprite",
+   "file": "sharedassets0.assets",
+   "path_id": 42,
+   "path": "ui-icon-musicon~1.png",
+   "width": 90,
+   "height": 94,
+   "bytes": 1674,
+   "sha256": "bdae2cace1e5f0928809c9d3935f7bb21d61b26a7f6aa278d47f304d4ecc8280",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "Bat\u00e0 App Gradient",
+   "type": "Sprite",
+   "file": "sharedassets0.assets",
+   "path_id": 43,
+   "path": "bat-app-gradient~1.png",
+   "width": 2048,
+   "height": 1080,
+   "bytes": 11302,
+   "sha256": "0f9760d0910a3487dc156087eee4cac33bfaf3d679dabb8ad42d8acd9763fb69",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 50.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "UI_Icon_ShoppingCart",
+   "type": "Sprite",
+   "file": "sharedassets0.assets",
+   "path_id": 44,
+   "path": "ui-icon-shoppingcart~1.png",
+   "width": 111,
+   "height": 95,
+   "bytes": 1882,
+   "sha256": "8e3286efce804fce437dd714e19886f0a0cb0c3ae222bb75032b0a50f169d263",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "white panel",
+   "type": "Sprite",
+   "file": "sharedassets0.assets",
+   "path_id": 45,
+   "path": "white-panel~1.png",
+   "width": 1080,
+   "height": 1080,
+   "bytes": 7107,
+   "sha256": "6b254b8fa77726af5b64b56033d2e5084b265862e2169ab5a4e210f3d1e6630b",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "Splash-IMage",
+   "type": "Sprite",
+   "file": "globalgamemanagers.assets",
+   "path_id": 526,
+   "path": "splash-image~1.png",
+   "width": 511,
+   "height": 884,
+   "bytes": 372449,
+   "sha256": "ba5769b228ef1994d1f985bad737cb398587a4af1d1d952199b6d6a98f9dfd7c",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  },
+  {
+   "name": "UnitySplash-cube",
+   "type": "Sprite",
+   "file": "unity default resources",
+   "path_id": 10404,
+   "path": "unitysplash-cube~1.png",
+   "width": 2048,
+   "height": 1024,
+   "bytes": 45235,
+   "sha256": "ec2ba1954d9f3ee5fd0bea3d92b92a2ddb1e525605870f6316e17417e70912dc",
+   "rect": [
+    0.0,
+    0.0
+   ],
+   "pivot": [
+    0.5,
+    0.5
+   ],
+   "pixels_to_units": 100.0,
+   "border": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "texture": null
+  }
+ ],
+ "textures": [
+  {
+   "name": "LiberationSans SDF Atlas",
+   "type": "Texture2D",
+   "file": "8f586378b4e144a9851e7b34d9b748ee",
+   "path_id": 2,
+   "path": "liberationsans-sdf-atlas.png",
+   "width": 1024,
+   "height": 1024,
+   "bytes": 352715,
+   "sha256": "a362f574002da4dc495cf768ebf475109bbc0687885d30f379ff876531a0a618"
+  },
+  {
+   "name": "UISprite",
+   "type": "Texture2D",
+   "file": "sharedassets3.assets",
+   "path_id": 4,
+   "path": "uisprite.png",
+   "width": 32,
+   "height": 32,
+   "bytes": 669,
+   "sha256": "2e315b8176e279cb3d3ee05e06bdbcf286be18230cdab4857543a909608dc02f"
+  },
+  {
+   "name": "UI_Icon_Pause",
+   "type": "Texture2D",
+   "file": "sharedassets3.assets",
+   "path_id": 5,
+   "path": "ui-icon-pause.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 1224,
+   "sha256": "b7a4b3e751594ee5298f9297a9410d398c7cc57700c6325d4908601935ead736"
+  },
+  {
+   "name": "volume-on",
+   "type": "Texture2D",
+   "file": "sharedassets3.assets",
+   "path_id": 6,
+   "path": "volume-on.png",
+   "width": 256,
+   "height": 256,
+   "bytes": 4335,
+   "sha256": "7522ca1437f5fd7fe188e6c39e0a1579c3a61bb1a94bc085188b0ae6d8673c3a"
+  },
+  {
+   "name": "UI_Icon_Play",
+   "type": "Texture2D",
+   "file": "sharedassets3.assets",
+   "path_id": 7,
+   "path": "ui-icon-play.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 1333,
+   "sha256": "85bb4d509d4a62636a487a96a4efa65b6d7139965182a7a17403b33927afcf59"
+  },
+  {
+   "name": "UI_Icon_BtnPsCircle",
+   "type": "Texture2D",
+   "file": "sharedassets3.assets",
+   "path_id": 9,
+   "path": "ui-icon-btnpscircle.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 2420,
+   "sha256": "39a1419a360766472959601a6603555dd91d7c99504f4836445ea1bea9e12d9a"
+  },
+  {
+   "name": "circular-shape-silhouette",
+   "type": "Texture2D",
+   "file": "sharedassets3.assets",
+   "path_id": 10,
+   "path": "circular-shape-silhouette.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 1920,
+   "sha256": "61e998a2fb3e82e3ebd6a174792ad3509bc6820be2356a8d04e0aaf216be0793"
+  },
+  {
+   "name": "Background",
+   "type": "Texture2D",
+   "file": "sharedassets3.assets",
+   "path_id": 11,
+   "path": "background.png",
+   "width": 1920,
+   "height": 1080,
+   "bytes": 960476,
+   "sha256": "417c74992be1ac3c2810eec299d2b9277ca9a94d6c1e1c2897be7cdaa73fac53"
+  },
+  {
+   "name": "swatchWhite",
+   "type": "Texture2D",
+   "file": "sharedassets3.assets",
+   "path_id": 12,
+   "path": "swatchwhite.png",
+   "width": 1,
+   "height": 1,
+   "bytes": 69,
+   "sha256": "e878950f8091ec010cf5cc723bdea027a8539cf7147cfea199c2f666232dcd4e"
+  },
+  {
+   "name": "UI_Panel_Window",
+   "type": "Texture2D",
+   "file": "sharedassets3.assets",
+   "path_id": 13,
+   "path": "ui-panel-window.png",
+   "width": 80,
+   "height": 84,
+   "bytes": 2956,
+   "sha256": "f91f0cc44ef4f5d06239b8a8613ed31813f91f5f127c467612d9b21f87dcea4b"
+  },
+  {
+   "name": "Azure_round",
+   "type": "Texture2D",
+   "file": "sharedassets3.assets",
+   "path_id": 14,
+   "path": "azure-round.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 2198,
+   "sha256": "09fc3bbdfd0a85c60579a07757841f2ab9409180620b318c2b7653abc4a41eba"
+  },
+  {
+   "name": "UI_Icon_Stop",
+   "type": "Texture2D",
+   "file": "sharedassets3.assets",
+   "path_id": 15,
+   "path": "ui-icon-stop.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 625,
+   "sha256": "ff9b89d54c65f337b88a470c0b5ae0c31c2ac0c6a3c5d94f8845157448a14b55"
+  },
+  {
+   "name": "UI_Panel_Content",
+   "type": "Texture2D",
+   "file": "sharedassets3.assets",
+   "path_id": 16,
+   "path": "ui-panel-content.png",
+   "width": 80,
+   "height": 80,
+   "bytes": 450,
+   "sha256": "34faa85a35217051766f21aa98ae25d50bd06b84e39f3fa82f746a6f2a29ae02"
+  },
+  {
+   "name": "volume-off",
+   "type": "Texture2D",
+   "file": "sharedassets3.assets",
+   "path_id": 17,
+   "path": "volume-off.png",
+   "width": 256,
+   "height": 256,
+   "bytes": 3117,
+   "sha256": "42dd749473c7476ec20b053a878332c21bb277627dd32d566acd2b123b22d400"
+  },
+  {
+   "name": "EmojiOne",
+   "type": "Texture2D",
+   "file": "dffef66376be4fa480fb02b19edbe903",
+   "path_id": 1,
+   "path": "emojione.png",
+   "width": 512,
+   "height": 512,
+   "bytes": 106421,
+   "sha256": "9853f88c8d8e24700d958d227ef585da803466db7c7d34b7a72bce42968f0734"
+  },
+  {
+   "name": "Background",
+   "type": "Texture2D",
+   "file": "sharedassets1.assets",
+   "path_id": 2,
+   "path": "background~2.png",
+   "width": 32,
+   "height": 32,
+   "bytes": 594,
+   "sha256": "a0176c4c74065b8eaa421f403a7460d81a05298f2f30d7d1a9a8295afb775708"
+  },
+  {
+   "name": "Yellow_round_button 64px",
+   "type": "Texture2D",
+   "file": "sharedassets1.assets",
+   "path_id": 3,
+   "path": "yellow-round-button-64px.png",
+   "width": 64,
+   "height": 64,
+   "bytes": 715,
+   "sha256": "85ed6a30a9122c0304cd0b76cb8f60f52cd6b91082ff645c3269d741a1e3d786"
+  },
+  {
+   "name": "apple-music",
+   "type": "Texture2D",
+   "file": "sharedassets2.assets",
+   "path_id": 2,
+   "path": "apple-music.png",
+   "width": 50,
+   "height": 50,
+   "bytes": 977,
+   "sha256": "cbc08ce5899e2cbee716fc55ee9cdec756146e7fc28ba5dcb742695ffd64ec85"
+  },
+  {
+   "name": "blue-splatter-10",
+   "type": "Texture2D",
+   "file": "sharedassets2.assets",
+   "path_id": 3,
+   "path": "blue-splatter-10.png",
+   "width": 2048,
+   "height": 1619,
+   "bytes": 16826,
+   "sha256": "e4d87c4e3d3a7833ec48782d4cc968eec6be3d3974363c6af23c1e69b5025634"
+  },
+  {
+   "name": "amazon",
+   "type": "Texture2D",
+   "file": "sharedassets2.assets",
+   "path_id": 4,
+   "path": "amazon.png",
+   "width": 50,
+   "height": 50,
+   "bytes": 1269,
+   "sha256": "853668d496f36a66f810a9b0f32e91bb2626ef104fd18729304274e60ab54978"
+  },
+  {
+   "name": "fb-whitebg",
+   "type": "Texture2D",
+   "file": "sharedassets2.assets",
+   "path_id": 5,
+   "path": "fb-whitebg.png",
+   "width": 50,
+   "height": 50,
+   "bytes": 724,
+   "sha256": "15762839365ed046ddd582fbdde26d3af814be297be8b44396a3bce05e25748c"
+  },
+  {
+   "name": "Asset 1-9",
+   "type": "Texture2D",
+   "file": "sharedassets2.assets",
+   "path_id": 6,
+   "path": "asset-1-9.png",
+   "width": 119,
+   "height": 144,
+   "bytes": 3362,
+   "sha256": "d8452b82690581d8535f7ef15977e3be20125479690be1ddc8faddbf7ced7fd8"
+  },
+  {
+   "name": "youtube-biancobg",
+   "type": "Texture2D",
+   "file": "sharedassets2.assets",
+   "path_id": 7,
+   "path": "youtube-biancobg.png",
+   "width": 50,
+   "height": 50,
+   "bytes": 1021,
+   "sha256": "52647375b18d925973dfb32532c184e8baf53b6c7fa41c21b11adeb5bf763ea0"
+  },
+  {
+   "name": "Azure_round_button128px",
+   "type": "Texture2D",
+   "file": "sharedassets2.assets",
+   "path_id": 8,
+   "path": "azure-round-button128px.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 1700,
+   "sha256": "fd3b54639940c5fca8228a0ed678f505c66074bd9e329675b63c9a2dcf32bd01"
+  },
+  {
+   "name": "instagram-biancobg",
+   "type": "Texture2D",
+   "file": "sharedassets2.assets",
+   "path_id": 9,
+   "path": "instagram-biancobg.png",
+   "width": 50,
+   "height": 50,
+   "bytes": 1150,
+   "sha256": "41fa82a3940a648fd6be766addc1f7640a9db77ca913b24b405ae85319cf6c89"
+  },
+  {
+   "name": "White_round_button128px",
+   "type": "Texture2D",
+   "file": "sharedassets0.assets",
+   "path_id": 14,
+   "path": "white-round-button128px.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 890,
+   "sha256": "a6ac6df2e067f4388560a87867eb55a5fcc3b436bf101f700463d25d10303d20"
+  },
+  {
+   "name": "bata",
+   "type": "Texture2D",
+   "file": "sharedassets0.assets",
+   "path_id": 15,
+   "path": "bata.png",
+   "width": 661,
+   "height": 600,
+   "bytes": 10446,
+   "sha256": "077ff405048dc4b8099eff4be403f596b13a9f173bcf9f2b9ccbcd6ea02d51d7"
+  },
+  {
+   "name": "Asset 1-8",
+   "type": "Texture2D",
+   "file": "sharedassets0.assets",
+   "path_id": 16,
+   "path": "asset-1-8.png",
+   "width": 119,
+   "height": 144,
+   "bytes": 435,
+   "sha256": "013a09c43176e180d9a7fb3f46c7658f2065b8cbd2c4387c41b1ec68d8e83a76"
+  },
+  {
+   "name": "UI_Icon_MusicOn",
+   "type": "Texture2D",
+   "file": "sharedassets0.assets",
+   "path_id": 20,
+   "path": "ui-icon-musicon.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 1715,
+   "sha256": "acfc9efec7318d0abd815a3ae683fe6fd3e9708a6cef7b5a6be93d0d7d80e9ae"
+  },
+  {
+   "name": "Bat\u00e0 App Gradient",
+   "type": "Texture2D",
+   "file": "sharedassets0.assets",
+   "path_id": 21,
+   "path": "bat-app-gradient.png",
+   "width": 2048,
+   "height": 1080,
+   "bytes": 8997,
+   "sha256": "0f361646e2738ddfd94486d32965ae659c9b722256bf402da6de08e356342cc1"
+  },
+  {
+   "name": "UI_Icon_ShoppingCart",
+   "type": "Texture2D",
+   "file": "sharedassets0.assets",
+   "path_id": 23,
+   "path": "ui-icon-shoppingcart.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 1856,
+   "sha256": "24913038ab829815f383a4b2ba1cb8ee73329a4f6bf38b90cb3cd7b79c274328"
+  },
+  {
+   "name": "white panel",
+   "type": "Texture2D",
+   "file": "sharedassets0.assets",
+   "path_id": 24,
+   "path": "white-panel.png",
+   "width": 1080,
+   "height": 1080,
+   "bytes": 5891,
+   "sha256": "165ec054d6607d6cb8f4e9163e5c319dc96ceafaded2bc6435f4843a96f89711"
+  },
+  {
+   "name": "Splash-IMage",
+   "type": "Texture2D",
+   "file": "globalgamemanagers.assets",
+   "path_id": 3,
+   "path": "splash-image.png",
+   "width": 511,
+   "height": 884,
+   "bytes": 329084,
+   "sha256": "bb6d7795dad2478c96d608d56ab1406e25008f40f1b468ee13cb560f6dad408a"
+  },
+  {
+   "name": "Soft",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 10001,
+   "path": "soft.png",
+   "width": 128,
+   "height": 128,
+   "bytes": 5117,
+   "sha256": "eb173c0155b7f8f779b4196762671c19bab60c790bce7d20abd1afadb791fb3b"
+  },
+  {
+   "name": "UnityWatermark-small",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 10400,
+   "path": "unitywatermark-small.png",
+   "width": 128,
+   "height": 58,
+   "bytes": 7047,
+   "sha256": "cbb3a52763a1445c1c8351d89deaea25231d022c3c6bb612e3f68729898bad3e"
+  },
+  {
+   "name": "EscToExit_back",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 10401,
+   "path": "esctoexit-back.png",
+   "width": 74,
+   "height": 71,
+   "bytes": 5002,
+   "sha256": "886a2d376274fb1cc0037caf640d63b5aa4d19c98d31f22fb1920b9f211395c0"
+  },
+  {
+   "name": "EscToExit_Text",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 10402,
+   "path": "esctoexit-text.png",
+   "width": 267,
+   "height": 20,
+   "bytes": 2981,
+   "sha256": "e7e7a617aa0f9427f2a2b998040b72043032cbc1b5c53353a3642bd1179c3b13"
+  },
+  {
+   "name": "UnitySplash-cube",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 10403,
+   "path": "unitysplash-cube.png",
+   "width": 2048,
+   "height": 1024,
+   "bytes": 45235,
+   "sha256": "ec2ba1954d9f3ee5fd0bea3d92b92a2ddb1e525605870f6316e17417e70912dc"
+  },
+  {
+   "name": "UnityWatermark-trial-big",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 10406,
+   "path": "unitywatermark-trial-big.png",
+   "width": 512,
+   "height": 94,
+   "bytes": 6758,
+   "sha256": "6d38ca4b0c9a9a54c004d79a6785077c31d0a8ee94f77efd88a779145b52deec"
+  },
+  {
+   "name": "UnityWatermark-trial",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 10407,
+   "path": "unitywatermark-trial.png",
+   "width": 76,
+   "height": 14,
+   "bytes": 895,
+   "sha256": "2e0913b9f6c442cf43367ac37ca23924896d475d0c517f37810e211bb6448116"
+  },
+  {
+   "name": "UnityWatermark-beta",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 10408,
+   "path": "unitywatermark-beta.png",
+   "width": 127,
+   "height": 17,
+   "bytes": 1549,
+   "sha256": "61e591b1471e39d04207842e840c5d508a9fd6d8802c29b3e65b933c02c9d187"
+  },
+  {
+   "name": "UnityWatermark-edu",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 10409,
+   "path": "unitywatermark-edu.png",
+   "width": 148,
+   "height": 17,
+   "bytes": 1532,
+   "sha256": "0745e09d0a94a712ad4cb7b487b983c0cb96853377ce8bf1e1d1baf1ad94103b"
+  },
+  {
+   "name": "UnityWatermark-dev",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 10410,
+   "path": "unitywatermark-dev.png",
+   "width": 115,
+   "height": 17,
+   "bytes": 1312,
+   "sha256": "904bda49c477af82fe7cf16417cd4646487d1794be989d238622a4b0568d1361"
+  },
+  {
+   "name": "WarningSign",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 10411,
+   "path": "warningsign.png",
+   "width": 64,
+   "height": 64,
+   "bytes": 1404,
+   "sha256": "38bfdc6704dd7a4c048f2d873739809b84b2cfd421e722faa9bb159e77e01625"
+  },
+  {
+   "name": "UnityWatermark-proto",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 10413,
+   "path": "unitywatermark-proto.png",
+   "width": 87,
+   "height": 13,
+   "bytes": 1000,
+   "sha256": "8c4f0a697b1130dca8bad7f6f7c21fd14e7b292ed0508d4767111af4ca40ba1f"
+  },
+  {
+   "name": "UnityWatermarkPlugin-beta",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 10414,
+   "path": "unitywatermarkplugin-beta.png",
+   "width": 66,
+   "height": 17,
+   "bytes": 943,
+   "sha256": "7744aad289693e8da3da9b2d06fea36bb3098f5b9f3ca79068b0247560b9b134"
+  },
+  {
+   "name": "box",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11001,
+   "path": "box.png",
+   "width": 12,
+   "height": 12,
+   "bytes": 183,
+   "sha256": "35d9eb31669e9920b78fadc689a2b3b3f5130be870bc719e7e6a91139c2c4485"
+  },
+  {
+   "name": "button active",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11002,
+   "path": "button-active.png",
+   "width": 12,
+   "height": 12,
+   "bytes": 380,
+   "sha256": "0ddbf69ea43cf1a1dd9359e5baeccafb69349315e2dab7da2fae9f1f620cd81c"
+  },
+  {
+   "name": "button hover",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11003,
+   "path": "button-hover.png",
+   "width": 12,
+   "height": 12,
+   "bytes": 219,
+   "sha256": "07f5ca1e41ced3eee96e6687ceb9e4e2b68431146d712c3ff23b39319e1c4683"
+  },
+  {
+   "name": "button on hover",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11004,
+   "path": "button-on-hover.png",
+   "width": 12,
+   "height": 12,
+   "bytes": 220,
+   "sha256": "bc954fea721dcfc443048ed3be5d897ede9356811d3e4834dc2c72f62bdb97fa"
+  },
+  {
+   "name": "button on",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11005,
+   "path": "button-on.png",
+   "width": 12,
+   "height": 12,
+   "bytes": 228,
+   "sha256": "37feea0a1c2b3bfdbee8721e4a602d82a06274f00f4cb19b312b4c873ea0bd3a"
+  },
+  {
+   "name": "button",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11006,
+   "path": "button.png",
+   "width": 12,
+   "height": 12,
+   "bytes": 221,
+   "sha256": "5f52e613b3c20fbfd5560979ec3d24d79b60aecb0115f19dcd7b07de56d59ea0"
+  },
+  {
+   "name": "horizontal scrollbar thumb",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11007,
+   "path": "horizontal-scrollbar-thumb.png",
+   "width": 12,
+   "height": 12,
+   "bytes": 231,
+   "sha256": "bac50aff4fc0d6fc2920ba30a0b37b18d7ff57bd1182adcea2b6d29cc4c57989"
+  },
+  {
+   "name": "horizontal scrollbar",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11008,
+   "path": "horizontal-scrollbar.png",
+   "width": 18,
+   "height": 15,
+   "bytes": 273,
+   "sha256": "3f88554d18be6506311ea66af2ef974a25193a4e1191650d4169b7def6e26498"
+  },
+  {
+   "name": "horizontalslider",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11009,
+   "path": "horizontalslider.png",
+   "width": 8,
+   "height": 7,
+   "bytes": 159,
+   "sha256": "8329c6d89ba16ff9f2f0de2e6d91d06e9a254c3178bf7d106b770c2ab922b3df"
+  },
+  {
+   "name": "slider thumb active",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11010,
+   "path": "slider-thumb-active.png",
+   "width": 8,
+   "height": 12,
+   "bytes": 203,
+   "sha256": "e42a78de30e2693d3937ff048366651eb04b4aaff8f4428bb7760a88e6e4083e"
+  },
+  {
+   "name": "slider thumb",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11011,
+   "path": "slider-thumb.png",
+   "width": 8,
+   "height": 12,
+   "bytes": 199,
+   "sha256": "8d1327b30129ac1d58b7f4e6342990a05cf2fd1497f097a8e6a90e7ac5b6acc2"
+  },
+  {
+   "name": "slidert humb hover",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11012,
+   "path": "slidert-humb-hover.png",
+   "width": 8,
+   "height": 12,
+   "bytes": 205,
+   "sha256": "f48b09fe02190fac2df2669318d68e44c52031a76c97b354fc2e28608c42d974"
+  },
+  {
+   "name": "toggle active",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11013,
+   "path": "toggle-active.png",
+   "width": 14,
+   "height": 14,
+   "bytes": 236,
+   "sha256": "e9024257aba851fbf1da549efdeeef973fdd667968319ce0778ca50e685108fb"
+  },
+  {
+   "name": "toggle hover",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11014,
+   "path": "toggle-hover.png",
+   "width": 14,
+   "height": 14,
+   "bytes": 241,
+   "sha256": "69554fa6e54f150ce0eaed61b5b1dfdd3ca514cf86e4434006d72e64ed64084d"
+  },
+  {
+   "name": "toggle on hover",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11015,
+   "path": "toggle-on-hover.png",
+   "width": 14,
+   "height": 14,
+   "bytes": 323,
+   "sha256": "c8bda07ce92937818726c90d5659ce1e37dfcc66a04e6edca43790aab63f2fcd"
+  },
+  {
+   "name": "toggle on",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11016,
+   "path": "toggle-on.png",
+   "width": 14,
+   "height": 14,
+   "bytes": 333,
+   "sha256": "f1fca52207b2341f6f4d52b416d1857ff429e5f8cddd236fe664fa3ede376049"
+  },
+  {
+   "name": "toggle on active",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11017,
+   "path": "toggle-on-active.png",
+   "width": 14,
+   "height": 14,
+   "bytes": 313,
+   "sha256": "85220759f965809b73cecefeb49501d41b0bbc3c5ad5e7ed45e9b868cfddb06e"
+  },
+  {
+   "name": "toggle",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11018,
+   "path": "toggle.png",
+   "width": 14,
+   "height": 14,
+   "bytes": 247,
+   "sha256": "3b5aa29b66a53a99e13af316fa3628e7b8580cc4f02383a46b6ac29517c31417"
+  },
+  {
+   "name": "vertical scrollbar thumb",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11019,
+   "path": "vertical-scrollbar-thumb.png",
+   "width": 12,
+   "height": 12,
+   "bytes": 229,
+   "sha256": "be0d3dea28822dd0e47daafc970f134dd3c23c9f9f78dcc700a4a1217843e484"
+  },
+  {
+   "name": "vertical scrollbar",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11020,
+   "path": "vertical-scrollbar.png",
+   "width": 15,
+   "height": 18,
+   "bytes": 238,
+   "sha256": "be8fcf479cc849f75d6bbf939a2554216543e5aa14a1514cfac58130c10b605b"
+  },
+  {
+   "name": "verticalslider",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11021,
+   "path": "verticalslider.png",
+   "width": 7,
+   "height": 8,
+   "bytes": 149,
+   "sha256": "839d505a18e5b67267bd1d6fb88948cb0c201500ca444d5d2d7b493df0facf77"
+  },
+  {
+   "name": "window on",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11022,
+   "path": "window-on.png",
+   "width": 17,
+   "height": 27,
+   "bytes": 355,
+   "sha256": "acc1b65236672865dbd50df8f92bb97485cb35461feb6fda45a0390ae0f5b4c9"
+  },
+  {
+   "name": "window",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11023,
+   "path": "window.png",
+   "width": 17,
+   "height": 27,
+   "bytes": 306,
+   "sha256": "bd672b69120b2707eb48c1ccf565dd242c798c3ccc328db71198b602ab9ee8c8"
+  },
+  {
+   "name": "textfield",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11024,
+   "path": "textfield.png",
+   "width": 12,
+   "height": 12,
+   "bytes": 204,
+   "sha256": "3015025641f6ea8281528e8ac0959403379ed287c100de740a25650e24878c48"
+  },
+  {
+   "name": "textfield on",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11025,
+   "path": "textfield-on.png",
+   "width": 12,
+   "height": 12,
+   "bytes": 228,
+   "sha256": "c8605bfb35a923c5d39cbdcc7dd6d385d0b0f3247a7bb32e29e64c08f51cf688"
+  },
+  {
+   "name": "textfield hover",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 11026,
+   "path": "textfield-hover.png",
+   "width": 12,
+   "height": 12,
+   "bytes": 227,
+   "sha256": "17ec31f895e10302600c384521a016cd44cc56b2e93613d7c7414bccd38a20a2"
+  },
+  {
+   "name": "UnitySplash-HolographicTrackingLoss",
+   "type": "Texture2D",
+   "file": "unity default resources",
+   "path_id": 15000,
+   "path": "unitysplash-holographictrackingloss.png",
+   "width": 32,
+   "height": 32,
+   "bytes": 1082,
+   "sha256": "086666cc5cdc90bfee50af507d45f229b43c4dd2b9eb10b2a23d7df7c3f8344a"
+  }
+ ],
+ "sprite_count": 32,
+ "texture_count": 73,
+ "total_bytes": 3486399
+}
