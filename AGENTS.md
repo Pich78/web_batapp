@@ -109,7 +109,9 @@ rea decompile .work/native/arm64-v8a/libil2cpp.so 0x4E86D0 \
 Addresses for the app's own methods are cached in
 `.work/il2cpp/interesting-methods.json` (names as `Type$$Method`). The first
 decompilation pays for Ghidra's analysis of the 14 MB binary; `--snapshot`
-keeps it for later queries.
+keeps it for later queries. REA's default startup deadline is 330,000 ms
+(`REA_GHIDRA_STARTUP_TIMEOUT_MS`); raise it for the first analysis, e.g.
+`REA_GHIDRA_STARTUP_TIMEOUT_MS=1800000`.
 
 ## Layout model
 

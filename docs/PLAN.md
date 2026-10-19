@@ -130,13 +130,11 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       (`rea mcp doctor` green; issue draft in `.work/rea-mcp-catalog-issue.md`).
       REA is driven through its CLI instead (documented in AGENTS.md).
 - [~] Decompile the app's own methods with Ghidra by their VA from `script.json`.
-      All five attempts (`VolumeValueChange.SetVolume`,
-      `VolumeValueChangefromzero.SetVolume`, `SceneSurf.LoadNextLevel/LoadPrevLevel`,
-      `MoveOnClick.ChangeScene`) returned `provider_timeout` after ~5.5 minutes: the
-      first analysis of the 14 MB `libil2cpp.so` exceeds REA's budget, and
-      `docs/ghidra-provider.md` documents no timeout knob. Options: find the
-      underlying timeout (env or provider setting), or pre-build the Ghidra
-      database with `analyzeHeadless` and query the addresses from it directly.
+      The timeout knob is **`REA_GHIDRA_STARTUP_TIMEOUT_MS`** (REA default
+      `330000` ms = 5.5 min, which is exactly where the previous attempts
+      stopped). `REA_GHIDRA_DISABLED_ANALYZERS` can skip expensive analyzers.
+      The first analysis of the 14 MB `libil2cpp.so` is now running with a
+      1,800,000 ms deadline; the snapshot is `.work/ghidra/libil2cpp.snapshot`.
 - [ ] Install Ghidra 12.1.4 + JDK 21 (byo) and register the REA MCP server
       (`rea setup --client opencode --dry-run` first, review paths and backups,
       then apply, then restart).
@@ -149,8 +147,12 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
 - [ ] Confirm the rights position with the maintainer before publishing audio
       and scores to a public Pages site (the content belongs to the original
-      author; the port keeps the credit/links screen).
-- [ ] Repository size check: `assets/audio` is ~88 MB; Pages serves the branch
-      verbatim (no LFS).
-- [ ] GitHub Pages from the branch root; verify a subpath deployment
-      (`/batapp-web/`) has no absolute paths.
+      author; the port keeps the credit/links screen). **This is a human
+      decision; do not publish the audio until it is recorded.**
+- [x] Repository size check: the committed tree is ~91 MiB; `assets/audio` is
+      ~86 MiB and `assets/img` ~3.7 MiB. Pages serves the branch verbatim (no
+      LFS), so this stays well under the 1 GiB limit.
+- [x] GitHub Pages subpath smoke test: served the repo at `/batapp-web/` over
+      HTTP; the lesson loads, all five stems play, the 40-bar spectrum runs and
+      there are no console/network errors. Shipped paths are relative (no
+      absolute `src`/`href`/`url` roots).
