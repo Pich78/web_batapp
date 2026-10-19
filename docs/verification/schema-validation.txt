@@ -1,0 +1,15 @@
+class                     len ok  semantic ok   fail  first failure
+Image                       3776         3776      0  
+Shadow                      1129         1129      0  
+Text                        1117         1117      0  
+Button                       717          717      0  
+Slider                       305          305      0  
+ContentSizeFitter            258          258      0  
+GraphicRaycaster             249          249      0  
+CanvasScaler                 249          249      0  
+EventSystem                   65           65      0  
+StandaloneInputModule         65           65      0  
+Mask                          16           16      0  
+ScrollRect                     4            4      0  
+GridLayoutGroup                2            2      0  
+RawImage                       1            1      0  

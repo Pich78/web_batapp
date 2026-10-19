@@ -1,0 +1,13 @@
+# scratch: extracted APK/XAPK, Unity dumps, analysis reports (regenerable)
+.work/
+
+# development environment
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
