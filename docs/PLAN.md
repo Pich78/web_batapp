@@ -26,8 +26,13 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       `docs/verification/sprite-export.json`. All 29 assets referenced by scene
       `Image`/`RawImage` components resolve; the one non-sprite reference is the
       `Video Book` RenderTexture.
-- [ ] **Decode `SimpleSpectrum` fields** enough to reproduce the spectrum bars
-      (bar count, origin, colours, source type) or document the approximation.
+- [x] **Decode `SimpleSpectrum` fields** (61/61 instances validate): 40 bars,
+      `barXScale=2.2`, spacing `6`, `barYScale=40`, `barMinYScale=0.1`, the
+      `SpectrumOrigin` node, white→cream value-gradient curve, attack/decay
+      `0.25`. `tests/verify.mjs` asserts the 40 bars and their animation. On
+      `https://` the bars read a real `AnalyserNode`; on `file://` they use a
+      documented batá-shaped reconstruction because Web Audio cannot read local
+      media.
 - [ ] Tidy the scene dump: some nodes list placeholder `null` component entries
       alongside their real ones (cosmetic; the typed components are complete).
 
@@ -109,8 +114,9 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - [ ] Compare the port's rendered screens against the shipped scene data
       (rect-by-rect diff of the layout model vs the dumps) and against the
       store screenshots for a visual sanity check.
-- [ ] Document remaining visual differences (font substitution, spectrum
-      animation, transitions).
+- [ ] Document remaining visual differences (font substitution, transitions;
+      the spectrum bars are now decoded and animated, with a synthetic fallback
+      only where `file://` blocks Web Audio input).
 
 ## Next: the original app's own logic (optional depth)
 

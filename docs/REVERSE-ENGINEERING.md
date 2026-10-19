@@ -114,6 +114,11 @@ Validated coverage (100% of instances, length *and* semantics):
 | Slider | 305 | ScrollRect | 4 |
 | ContentSizeFitter | 258 | GridLayoutGroup | 2 |
 
+`SimpleSpectrum` (61 instances, one per lesson) is decoded as well: 40 bars,
+`barXScale=2.2`, `barXSpacing=6`, `barYScale=40`, `barMinYScale=0.1`, the
+`SpectrumOrigin` transform, a white→cream `AnimationCurve`, attack/decay 0.25.
+The schema includes the `AnimationCurve`/`Keyframe` wire format.
+
 Findings that only came out of byte-level derivation:
 
 - **UnityEvent has no type name in this build** — a call list only. Proven by
@@ -234,9 +239,12 @@ Batà Ngoma, and an Amazon link for the album “Don't Stress”.
 - **Fonts**: the app ships TextMeshPro SDF assets and `LiberationSans SDF`;
   only the atlas (not a TTF) is present, so the port uses a metric-compatible
   system/Bundled font and may differ by a pixel or two.
-- **`SimpleSpectrum`** (a bundled third-party asset, 256 B of serialized fields
-  per instance) drives the animated spectrum bars; those fields are not yet
-  decoded, so the bars are a reconstruction.
+- **`SimpleSpectrum` animation** is now driven by the decoded 40-bar geometry
+  and colour curve. On `https://` the port feeds the bars from a real
+  `AnalyserNode`; on `file://` Web Audio cannot read local media, so the bar
+  values are a batá-shaped reconstruction of the mix, not an FFT of the shipped
+  stems. The bar geometry/colour mapping is from the build; the per-frame values
+  are reconstructed.
 - **In-app purchase**: `UnityEngine.Purchasing.dll` is referenced by the player
   settings, but no product identifiers or unlock strings were found. Whether
   Volume II was ever gated is unresolved; the shipped build contains all

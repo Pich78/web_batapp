@@ -46,6 +46,13 @@ html, body {
 .layer { position: absolute; overflow: visible; }
 .layer.clip { overflow: hidden; }
 
+.spectrum-bar {
+  position: absolute;
+  bottom: 0;
+  border-radius: 1px;
+  background: #fff;
+}
+
 .el {
   position: absolute;
   pointer-events: none;

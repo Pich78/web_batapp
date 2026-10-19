@@ -289,6 +289,7 @@
       if (rect) applyClip(clipLayers[key], rect);
     });
     if (overlayLayer) place(overlayLayer, [0, 0, STAGE_W, STAGE_H]);
+    layoutSpectrum();
     applySliderVisuals();
   }
 
@@ -382,6 +383,7 @@
     this.tracks = [];
     this.context = null;
     this.gains = {};
+    this.analyser = null;
     this.mode = location.protocol === "http:" || location.protocol === "https:" ? "webaudio" : "elements";
     this.build();
   }
@@ -421,14 +423,18 @@
       try {
         var Ctx = window.AudioContext || window.webkitAudioContext;
         this.context = new Ctx();
+        this.analyser = this.context.createAnalyser();
+        this.analyser.fftSize = 512;
+        this.analyser.smoothingTimeConstant = 0.5;
         this.tracks.forEach(function (record) {
           var node = self.context.createMediaElementSource(record.element);
           var gain = self.context.createGain();
           gain.gain.value = record.volume;
           node.connect(gain);
-          gain.connect(self.context.destination);
+          gain.connect(self.analyser);
           record.gain = gain;
         });
+        this.analyser.connect(this.context.destination);
       } catch (error) {
         this.mode = "elements";
         this.context = null;
@@ -525,6 +531,7 @@
   }
 
   function clearStage() {
+    stopSpectrum();
     stage.innerHTML = "";
     state.screen = null;
   }
@@ -697,7 +704,141 @@
           target.inner.style.zIndex = String(Number(rank) * 1000 + 900 - index);
         });
     });
+    if (screen.spectrum) startSpectrum(screen.spectrum);
     return stage;
+  }
+
+  /* --------------------------------------------------------------- spectrum */
+
+  var spectrumLayer = null;
+  var spectrumBars = [];
+  var spectrumValues = [];
+  var spectrumInfo = null;
+  var spectrumFrame = 0;
+
+  function curveAt(curve, value) {
+    var keys = curve && curve.m_Curve;
+    if (!keys || !keys.length) return value;
+    if (value <= keys[0].time) return keys[0].value;
+    for (var i = 1; i < keys.length; i += 1) {
+      if (value <= keys[i].time) {
+        var span = keys[i].time - keys[i - 1].time;
+        var t = span > 0 ? (value - keys[i - 1].time) / span : 0;
+        return keys[i - 1].value + (keys[i].value - keys[i - 1].value) * t;
+      }
+    }
+    return keys[keys.length - 1].value;
+  }
+
+  function layoutSpectrum() {
+    if (!spectrumInfo || !spectrumLayer) return;
+    var entry = state.layout && state.layout[spectrumInfo.node];
+    if (!entry) return;
+    var meta = spectrumInfo;
+    var count = meta.bar_amount || 0;
+    var scale = entry.scale || 1;
+    var spacing = (meta.bar_x_spacing || 0) * scale;
+    var width = Math.max(1, (meta.bar_x_scale || 1) * scale);
+    var total = Math.max(width, (count - 1) * spacing + width);
+    var maxHeight = Math.max(1, (meta.bar_y_scale || 1) * scale);
+    spectrumLayer.style.left = (entry.center[0] - total / 2) + "px";
+    spectrumLayer.style.top = (STAGE_H - entry.center[1] - maxHeight) + "px";
+    spectrumLayer.style.width = total + "px";
+    spectrumLayer.style.height = maxHeight + "px";
+    spectrumBars.forEach(function (bar, index) {
+      bar.style.left = (index * spacing) + "px";
+      bar.style.width = width + "px";
+    });
+  }
+
+  function startSpectrum(meta) {
+    stopSpectrum();
+    if (!meta || !meta.bar_amount) return;
+    spectrumInfo = meta;
+    spectrumValues = new Array(meta.bar_amount).fill(0);
+    spectrumLayer = el("layer spectrum");
+    spectrumLayer.style.zIndex = "45";
+    spectrumLayer.style.pointerEvents = "none";
+    for (var i = 0; i < meta.bar_amount; i += 1) {
+      var bar = document.createElement("div");
+      bar.className = "spectrum-bar";
+      spectrumLayer.appendChild(bar);
+      spectrumBars.push(bar);
+    }
+    stage.appendChild(spectrumLayer);
+    layoutSpectrum();
+    spectrumFrame = requestAnimationFrame(tickSpectrum);
+  }
+
+  function stopSpectrum() {
+    if (spectrumFrame) cancelAnimationFrame(spectrumFrame);
+    spectrumFrame = 0;
+    if (spectrumLayer && spectrumLayer.parentNode) spectrumLayer.remove();
+    spectrumLayer = null;
+    spectrumBars = [];
+    spectrumValues = [];
+    spectrumInfo = null;
+  }
+
+  function tickSpectrum(now) {
+    if (!spectrumInfo || !spectrumLayer) return;
+    var meta = spectrumInfo;
+    var mixer = state.mixer;
+    var playing = !!(mixer && mixer.tracks.some(function (record) {
+      return record.started && !record.element.paused;
+    }));
+    var audible = !!(mixer && mixer.tracks.some(function (record) {
+      return record.started && !record.element.paused && record.volume > 0.001;
+    }));
+    var fft = null;
+    if (mixer && mixer.analyser) {
+      fft = new Uint8Array(mixer.analyser.frequencyBinCount);
+      mixer.analyser.getByteFrequencyData(fft);
+    }
+    var time = now / 1000;
+    var count = meta.bar_amount;
+    var minScale = meta.bar_min_y_scale || 0;
+    var maxHeight = (meta.bar_y_scale || 1) * ((state.layout[meta.node] || {}).scale || 1);
+    for (var i = 0; i < count; i += 1) {
+      var target = 0;
+      if (fft && playing && audible) {
+        var position = count > 1 ? i / (count - 1) : 0;
+        var bin = meta.use_logarithmic_frequency
+          ? Math.round(Math.pow(2, position * Math.log2(fft.length)) - 1)
+          : Math.round(position * (fft.length - 1));
+        bin = Math.max(0, Math.min(fft.length - 1, bin));
+        target = fft[bin] / 255;
+        if (meta.multiply_by_frequency) target *= 0.35 + 0.65 * (1 - position);
+      } else if (playing && audible) {
+        // file:// cannot feed local media into Web Audio; this is a
+        // reconstruction shaped like a batá spectrum, not an FFT of the stems.
+        var x = count > 1 ? i / (count - 1) : 0;
+        target = 0.12 +
+          0.46 * Math.abs(Math.sin(time * 2.3 + i * 0.68)) * (1 - 0.35 * x) +
+          0.28 * Math.abs(Math.sin(time * 5.1 + i * 1.73)) * (0.4 + 0.6 * Math.sin(Math.PI * x));
+        target = Math.min(1, target);
+      }
+      var old = spectrumValues[i] || 0;
+      var damp = target > old ? (meta.attack_damp || 0.25) : (meta.decay_damp || 0.25);
+      var mix = Math.min(0.95, Math.max(0.02, 1 - damp));
+      var value = old + (target - old) * mix;
+      spectrumValues[i] = value;
+      var bar = spectrumBars[i];
+      var fraction = Math.min(1, Math.max(0, value));
+      bar.style.height = Math.max(1, (minScale + (1 - minScale) * fraction) * maxHeight) + "px";
+      bar.style.bottom = "0px";
+      if (meta.use_color_gradient) {
+        var t = Math.min(1, Math.max(0, curveAt(meta.color_curve, fraction * 1.5)));
+        var a = meta.color_min || [1, 1, 1, 1];
+        var b = meta.color_max || a;
+        bar.style.backgroundColor = "rgba(" +
+          Math.round((a[0] + (b[0] - a[0]) * t) * 255) + "," +
+          Math.round((a[1] + (b[1] - a[1]) * t) * 255) + "," +
+          Math.round((a[2] + (b[2] - a[2]) * t) * 255) + "," +
+          Math.round((a[3] + (b[3] - a[3]) * t) * 255) + ")";
+      }
+    }
+    spectrumFrame = requestAnimationFrame(tickSpectrum);
   }
 
   function attachSlider(drawable, rect, container, options) {
@@ -1064,6 +1205,14 @@
       return { method: hook.method, scene: hook.string_argument, lesson: hook.target_lesson, path: target.drawable.path, rect: target.rect.map(Math.round) };
     },
     targets: function () { return pointerTargets.length; },
+    spectrum: function () {
+      return {
+        bars: spectrumBars.length,
+        values: spectrumValues.slice(),
+        node: spectrumInfo ? spectrumInfo.node : null,
+        heights: spectrumBars.map(function (bar) { return parseFloat(bar.style.height) || 0; })
+      };
+    },
     tracks: function () {
       if (!state.mixer) return [];
       return state.mixer.tracks.map(function (record) {

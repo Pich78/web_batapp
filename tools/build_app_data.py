@@ -71,6 +71,7 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
 
     drawables: list[dict] = []
     unresolved: list[str] = []
+    spectrum: dict | None = None
 
 
     layout: list[dict] = []
@@ -103,6 +104,7 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
 
     def walk(node: dict, parent_id: int, order: list[int], canvas_order: int = 0,
              clip_id: int | None = None, parent_active: bool = True) -> None:
+        nonlocal spectrum
         transform = node.get("transform")
         if transform is None:
             return
@@ -236,6 +238,32 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
                     } if kind == "Slider" else {"calls": fields.get("m_OnClick", [])}),
                 })
                 order.append(1)
+            elif kind == "SimpleSpectrum" and fields:
+                spectrum = {
+                    "node": node_id,
+                    "sample_channel": fields.get("sampleChannel"),
+                    "num_samples": fields.get("numSamples"),
+                    "window_used": fields.get("windowUsed"),
+                    "use_logarithmic_frequency": fields.get("useLogarithmicFrequency"),
+                    "multiply_by_frequency": fields.get("multiplyByFrequency"),
+                    "high_frequency_trim": fields.get("highFrequencyTrim"),
+                    "linear_sample_stretch": fields.get("linearSampleStretch"),
+                    "bar_amount": fields.get("barAmount"),
+                    "bar_y_scale": fields.get("barYScale"),
+                    "bar_min_y_scale": fields.get("barMinYScale"),
+                    "bar_x_scale": fields.get("barXScale"),
+                    "bar_x_spacing": fields.get("barXSpacing"),
+                    "bar_curve_angle": fields.get("barCurveAngle"),
+                    "bar_x_rotation": fields.get("barXRotation"),
+                    "attack_damp": fields.get("attackDamp"),
+                    "decay_damp": fields.get("decayDamp"),
+                    "use_color_gradient": fields.get("useColorGradient"),
+                    "color_min": fields.get("colorMin"),
+                    "color_max": fields.get("colorMax"),
+                    "color_curve": fields.get("colorValueCurve"),
+                    "color_attack_damp": fields.get("colorAttackDamp"),
+                    "color_decay_damp": fields.get("colorDecayDamp"),
+                }
 
         for child_transform in transform.get("children", []):
             child = by_transform.get(child_transform)
@@ -352,6 +380,7 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
         "match_width_or_height": match,
         "canvas_size": canvas_size,
         "background": background,
+        "spectrum": spectrum,
         "canvases": canvas,
         "drawables": drawables,
         "unresolved_sprites": unresolved,

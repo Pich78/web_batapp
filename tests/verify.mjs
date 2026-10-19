@@ -160,6 +160,13 @@ const times = playing.map((t) => t.currentTime);
 const spread = Math.max(...times) - Math.min(...times);
 check("Play advances every stem", times.every((t) => t > 0.4), JSON.stringify(times.map((t) => +t.toFixed(2))));
 check("stems stay in sync (<120 ms spread)", spread < 0.12, "spread=" + spread.toFixed(3) + "s");
+const spectrum = await page.evaluate(() => window.__batapp.spectrum());
+check("SimpleSpectrum builds its authored 40 bars", spectrum.bars === 40, spectrum.bars + " bars");
+check(
+  "SimpleSpectrum bars animate while playing",
+  spectrum.values.some((value) => value > 0.1),
+  "max=" + Math.max(...spectrum.values).toFixed(3)
+);
 await shot("06-lesson-playing");
 
 // Slider drives the stem volume

@@ -147,6 +147,10 @@ Canvas rules (derived from the scenes, not chosen):
   background images (yellow band above the white panel) while foreground
   text/buttons draw above the band; per-screen camera background is recorded in
   `screen.background`;
+- `SimpleSpectrum` is decoded from its serialized fields (`screen.spectrum`):
+  40 bars at `SpectrumOrigin`, spacing/scale/colour curve and attack/decay. The
+  browser animates them from a Web Audio `AnalyserNode` when served over HTTP;
+  on `file://` it uses a batá-shaped reconstruction, labelled as such;
 - nodes with a plain `Transform` (e.g. an `Actions` holder) are non-drawing
   pass-throughs and deliberately do **not** contribute their localScale: the
   shipped child positions only form a sane row without it (applying the 1.8

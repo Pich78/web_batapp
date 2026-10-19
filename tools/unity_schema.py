@@ -161,6 +161,23 @@ PERSISTENT_CALL = [
     ("m_CallState", "enum"),
 ]
 
+KEYFRAME = [
+    ("time", "f32"),
+    ("value", "f32"),
+    ("inSlope", "f32"),
+    ("outSlope", "f32"),
+    ("weightedMode", "enum"),
+    ("inWeight", "f32"),
+    ("outWeight", "f32"),
+]
+
+ANIMATION_CURVE = [
+    ("m_Curve", "array:struct:KEYFRAME"),
+    ("m_PreInfinity", "enum"),
+    ("m_PostInfinity", "enum"),
+    ("m_RotationOrder", "enum"),
+]
+
 ARGUMENTS = [
     ("m_ObjectArgument", "pptr"),
     ("m_ObjectArgumentAssemblyTypeName", "string"),
@@ -222,6 +239,36 @@ SCHEMAS: dict[str, list[tuple[str, str]]] = {
     ],
     "RawImage": MASKABLE_GRAPHIC + [("m_Texture", "pptr"), ("m_UVRect", "rect")],
     "Text": MASKABLE_GRAPHIC + [("m_FontData", "struct:FONT_DATA"), ("m_Text", "string")],
+    "SimpleSpectrum": PREAMBLE
+    + [
+        ("muteGroup", "pptr"),
+        ("isEnabled", "bool"),
+        ("sourceType", "enum"),
+        ("audioSource", "pptr"),
+        ("sampleChannel", "i32"),
+        ("numSamples", "i32"),
+        ("windowUsed", "enum"),
+        ("useLogarithmicFrequency", "bool"),
+        ("multiplyByFrequency", "bool"),
+        ("highFrequencyTrim", "f32"),
+        ("linearSampleStretch", "f32"),
+        ("barAmount", "i32"),
+        ("barYScale", "f32"),
+        ("barMinYScale", "f32"),
+        ("barPrefab", "pptr"),
+        ("barXScale", "f32"),
+        ("barXSpacing", "f32"),
+        ("barCurveAngle", "f32"),
+        ("barXRotation", "f32"),
+        ("attackDamp", "f32"),
+        ("decayDamp", "f32"),
+        ("useColorGradient", "bool"),
+        ("colorMin", "color"),
+        ("colorMax", "color"),
+        ("colorValueCurve", "struct:ANIMATION_CURVE"),
+        ("colorAttackDamp", "f32"),
+        ("colorDecayDamp", "f32"),
+    ],
     "Shadow": PREAMBLE
     + [("m_EffectColor", "color"), ("m_EffectDistance", "vector2"), ("m_UseGraphicAlpha", "bool")],
     "Mask": PREAMBLE + [("m_ShowMaskGraphic", "bool")],
@@ -307,6 +354,8 @@ STRUCTS: dict[str, list[tuple[str, str]]] = {
     "FONT_DATA": FONT_DATA,
     "ARGUMENTS": ARGUMENTS,
     "PERSISTENT_CALL": PERSISTENT_CALL,
+    "KEYFRAME": KEYFRAME,
+    "ANIMATION_CURVE": ANIMATION_CURVE,
 }
 
 
@@ -324,6 +373,7 @@ SLOT_CLASSES = {
     "GraphicRaycaster",
     "GridLayoutGroup",
     "Mask",
+    "SimpleSpectrum",
     "Shadow",
     "Outline",
     "StandaloneInputModule",
@@ -470,7 +520,7 @@ def semantic_ok(parsed: dict) -> bool:
         elif isinstance(value, dict) and "file_id" in value:
             if not (0 <= value["file_id"] <= 8) or abs(value["path_id"]) > 1 << 40:
                 return False
-        elif name in ("m_Color", "m_EffectColor") and isinstance(value, list):
+        elif name in ("m_Color", "m_EffectColor", "colorMin", "colorMax") and isinstance(value, list):
             if any(not (-0.01 <= c <= 1.01) for c in value):
                 return False
         elif isinstance(value, list) and len(value) == 4 and all(isinstance(v, float) for v in value):
