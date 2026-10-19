@@ -35,9 +35,11 @@ behind the reconstruction.
   works from a subpath.
 - **Double-click `index.html`** — the modern layout. No server, no build:
   library with the two volumes, lesson player with Play/Pause/Stop, Prev/Next,
-  loop progress and a five-stem mixer (volume + mute per stem). It adapts from
-  a one-pane portrait phone view to a two-column landscape phone view and a
-  full desktop layout with a persistent library sidebar.
+  a draggable seek bar, loop progress, per-lesson browser titles and a five-stem
+  mixer (volume + mute per stem). Every stem starts at 100%, including Vox. The
+  player loads all stems first and only enables Play when they are local. It
+  adapts from a one-pane portrait phone view to a two-column landscape phone
+  view and a full desktop layout with a persistent library sidebar.
 - **Double-click `index_old.html`** — the shipped-layout reconstruction: opening
   → volume selector → toque/oru-seco index → lesson player, rendered from the
   app's own scene geometry.
@@ -53,6 +55,24 @@ GitHub Pages deploys the branch with GitHub's managed builder. If its Actions
 log shows a Node 20 deprecation notice for `actions/upload-artifact`, that
 comes from GitHub's deployment runner, not from this project's code or tests.
 
+## Development checks
+
+Node/Playwright are used only by the development suite in `tests/`:
+
+```bash
+cd tests
+npm ci
+node verify.mjs                 # shipped-layout page
+node verify-new.mjs             # modern page, Chromium full sweep
+BROWSER=firefox node verify-new.mjs
+BROWSER=webkit node verify-new.mjs   # needs: sudo npx playwright install-deps webkit
+node lesson-sweep.mjs           # all 61 lessons on the shipped-layout page
+```
+
+The real-device pass is manual; use
+[docs/verification/device-pass.md](docs/verification/device-pass.md) for the
+iPhone Safari (iOS 18.4+), Android Chrome and Windows Chrome/Edge checklist.
+
 ## Playback
 
 Both pages share `js/mixer.js` (`window.BatappMixer`): one `<audio>` element per
@@ -63,7 +83,14 @@ pass that re-seeks any stem more than 80 ms off the reference.
   local media).
 - On `http(s)` (e.g. GitHub Pages) a GainNode per stem controls the level, which
   also works on iOS, where `HTMLMediaElement.volume` ignores writes. Every stem
-  is advanced even at volume 0, so Vox can be unmuted mid-playback.
+  is advanced even at volume 0, so a muted stem stays in sync.
+- The modern page preloads the stems: on HTTP it fetches them into Blobs with a
+  visible loading gate, then enables Play; on `file://` it waits for the local
+  media to be ready. A failed stem is named and can be retried.
+- Seeking moves all five stems to the same position before playback continues.
+
+**iPhone/iPad:** iOS/Safari 18.4+ is required for Ogg Vorbis playback. On older
+iOS versions the browser cannot decode the lesson audio.
 
 Stems within a lesson all have the exact same duration; the audible parts enter
 at different points (some start with several seconds of rest), which is part of

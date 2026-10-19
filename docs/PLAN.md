@@ -59,8 +59,9 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - [x] **Screens**: opening → volume selector → toque index (Volume I) / oru seco
       index (Volume II) → lesson player, with hash routing. No credit/link view.
 - [x] **Mixer**: five `Slider_Volume` controls (0…1, not whole numbers), track
-      labels `Iya/Itotele/Okonkolo/Beat/Vox`, Play/Pause/Stop; the Vox stem starts
-      at volume 0 as in the original.
+      labels `Iya/Itotele/Okonkolo/Beat/Vox`, Play/Pause/Stop; the scene page
+      keeps the shipped Vox-at-0 default, while the modern page starts every
+      stem (including Vox) at 100%.
 - [x] **Playback strategy** → shared `js/mixer.js` (`window.BatappMixer`):
       - `https://` (GitHub Pages): one `GainNode` per stem; the element volume
         stays 1 so a stem that started at 0 (Vox) can be unmuted mid-playback,
@@ -77,11 +78,20 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       pause layer on the shipped-layout page.
 - [x] **Modern layout** (`index.html` + `app-new.css` + `js/newapp.js`):
       responsive player with portrait-phone, landscape-phone and desktop modes
-      (persistent sidebar on desktop), progress ring, per-stem volume and mute,
-      natural lesson order (1, 2, … 20A, 20B, 21, 22), system light/dark theme,
-      no external resources. Verified by `tests/verify-new.mjs` (file:// and
-      HTTP, all 61 lessons); summary in
-      `docs/verification/new-ui-sweep-summary.json`.
+      (persistent sidebar on desktop), progress ring, draggable seek bar,
+      per-lesson titles, per-stem volume and mute, natural lesson order
+      (1, 2, … 20A, 20B, 21, 22), system light/dark theme, generated icon set,
+      no external resources. The generated `js/lessons.js` is a compact
+      lessons-only payload for this page; the scene page keeps `js/data.js`.
+      Vox starts at 100% in the modern model. All stems are loaded (fetch-to-Blob
+      on HTTP, local elements on file://) before Play is enabled, with named
+      errors and Retry. Verified by `tests/verify-new.mjs` (file:// and HTTP,
+      Chromium/representative Firefox+WebKit); summary in
+      `docs/verification/new-ui-sweep-summary.json` and
+      `docs/verification/cross-browser-summary.json`.
+- [ ] **Real-device pass**: follow `docs/verification/device-pass.md` on
+      iPhone Safari (iOS 18.4+), Android Chrome and Windows Chrome/Edge. The
+      automated suite cannot establish real-device audio behaviour.
 - [x] **Video area**: removed with the rest of the credit/book content; the port
       ships the practice player only.
 - [ ] **Self-test page** (`selftest.html`): every lesson resolves its stems and
@@ -123,10 +133,13 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       canvas, and report no console/network errors. Summary in
       `docs/verification/lesson-sweep-summary.json` (61/61 passed).
 - [x] Modern-layout sweep (`tests/verify-new.mjs`): portrait, landscape-phone
-      and desktop modes, library order, mixer, mute semantics, prev/next,
-      keyboard, light/dark themes, all 61 lessons and an HTTP pass exercising
-      the Web Audio gains. Summary in
-      `docs/verification/new-ui-sweep-summary.json`.
+      and desktop modes, load gate, seek, titles, library order, mixer, mute
+      semantics, prev/next, keyboard, light/dark themes, all 61 lessons and an
+      HTTP pass exercising fetch-to-Blob, the gate, named errors/Retry and the
+      Web Audio gains. Chromium runs the full sweep; Firefox/WebKit run
+      representative lessons. Summary in
+      `docs/verification/new-ui-sweep-summary.json`; cross-browser record in
+      `docs/verification/cross-browser-summary.json`.
 - [ ] Re-run `tools/unity_schema.py` and `tools/export_audio.py --verify` in CI
       fashion and store the summaries under `docs/verification/`.
 - [ ] Compare the port's rendered screens against the shipped scene data
@@ -183,5 +196,6 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       there are no console/network errors. Shipped paths are relative (no
       absolute `src`/`href`/`url` roots).
 - [x] Modern layout over HTTP: `tests/verify-new.mjs` serves the repo and checks
-      the Web Audio gain path (including raising Vox from its 0 default) with no
-      console errors; `index.html` works from the repository subpath.
+      the fetch-to-Blob load gate, named errors/Retry, the Web Audio gain path
+      (Vox from 100% down/up) and no console errors; `index.html` works from the
+      repository subpath. Live at <https://pich78.github.io/web_batapp/>.

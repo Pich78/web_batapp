@@ -14,7 +14,8 @@ source.
    libraries in the shipped app.** Classic `<script>` files only.
 3. Consequences of `file://` that the code must respect:
    - no `fetch()`/`XMLHttpRequest` of local files → content data is emitted as
-     JavaScript, not JSON;
+     JavaScript, not JSON; the modern page may `fetch` its own same-origin audio
+     over HTTP(S) for the load gate, never on `file://`;
    - no ES modules (`type="module"`) → plain scripts and globals;
    - no Web Workers, no Service Worker, no `history.pushState` → hash routing;
    - Web Audio cannot read local media (tainted) → element-based playback with
@@ -34,6 +35,8 @@ source.
 index_old.html, app.css, js/     the shipped-layout page (classic scripts, no build)
 index.html, app-new.css, js/newapp.js   the modern layout page
 js/mixer.js                  shared transport (window.BatappMixer) for both pages
+js/lessons.js                slim generated data for the modern page
+assets/icon*.png, icon.svg, site.webmanifest   app icon set (tools/make_icons.py)
 assets/audio/<slug>/<stem>.ogg   281 lesson stems (iya, ito, oko, vox, beat)
 assets/img/...               sprites and background art exported from the APK
 tools/                       extraction and export tools (development only)
@@ -81,14 +84,19 @@ $P tools/dump_scenes.py    --data .work/unity/Data \
 $P tools/unity_schema.py   --data .work/unity/Data        # schema validation
 $P tools/build_app_data.py --scenes .work/scenes \
       --sprites .work/analysis/sprites.json \
-      --audio-report .work/analysis/audio_export.json --out js/data.js
+      --audio-report .work/analysis/audio_export.json --out js/data.js \
+      --lessons-out js/lessons.js
+.venv/bin/python tools/make_icons.py
 ```
 
 `tools/build_app_data.py` owns the content model: it drops the credit/shop/
 promo subtrees (see `OMITTED_PATH_PARTS`), renames the volume switcher away
 from the book-era wording, prunes the sprite map to the art the surviving
-drawables reference and emits `js/data.js`. Run it after `dump_scenes.py`; it
-reads only `.work/` inputs, no XAPK.
+drawables reference and emits `js/data.js` (full scene model) plus the compact
+`js/lessons.js` used by `index.html`. In the slim model Vox starts at 100% for
+the modern player; the scene reconstruction keeps the shipped 0. Run it after
+`dump_scenes.py`; it reads only `.work/` inputs, no XAPK. `tools/make_icons.py`
+regenerates the SVG/PNG icon set and the web manifest from one geometry source.
 
 `tools/extract_fsb_setups.py` regenerates `tools/data/fsb_setups.json` from
 vgmstream's codebook table (needs network); the committed copy keeps the audio
@@ -185,15 +193,22 @@ the menu design space. Do not use it as the menu reference.
 
 `index.html` + `app-new.css` + `js/newapp.js` are a fresh player, not a
 re-skin of the shipped scenes: no scene geometry and no sprites are used, only
-`js/data.js` (lessons, audio paths, durations) and the shared transport in
-`js/mixer.js`.
+the generated `js/lessons.js` (lessons, audio paths, durations) and the shared
+transport in `js/mixer.js`.
 
 - Two-tab library (Toques / Oru Seco) → lesson player with Play/Pause/Stop,
-  prev/next (clamped per volume), a progress ring and a mixer row per available
-  stem (Beat, Itotele, Iya, Okonkolo, Vox; Vox is absent in Volume II and in
-  `Egbi pami`). Each row has a volume slider and a mute that preserves the
-  slider value.
+  prev/next (clamped per volume), a draggable seek bar, a progress ring and a
+  mixer row per available stem (Beat, Itotele, Iya, Okonkolo, Vox; Vox is absent
+  in Volume II and in `Egbi pami`). Each row has a volume slider and a mute that
+  preserves the slider value. Every stem, including Vox, starts at 100%.
 - The mixer order and stem labels follow the shipped player's draw order.
+- Opening a lesson runs a load gate: on HTTP(S) all stems are fetched into Blobs
+  (with `fetch`, same origin) so iOS Safari's preload restriction cannot stall
+  the gate; on `file://` the local elements are awaited. Play is disabled until
+  every stem is local, with a spinner/ring progress, named errors and Retry.
+- The seek bar under the title seeks all stems together; the title format is
+  `Title · Toque/Oru Seco NN · Batá`, with `Toques · Batá`, `Oru Seco · Batá`
+  and the root title for library routes.
 - Three responsive modes built from one DOM:
   - portrait phones: one pane at a time (library or player);
   - landscape phones (`orientation: landscape` and `max-height: 559px`):
@@ -202,7 +217,9 @@ re-skin of the shipped scenes: no scene geometry and no sprites are used, only
     library sidebar + player/empty main pane, with a narrower stacked player
     below 1200 px.
 - `prefers-color-scheme` selects the theme; there is no toggle and no external
-  resource (inline SVG icons, data-URI favicon, system font stack).
+  resource (inline SVG icons, generated icon set, system font stack).
+- iOS/Safari 18.4+ is required for Ogg Vorbis playback; older iOS cannot decode
+  the lesson audio.
 - Playback never autoplays on navigation; the user's first Play tap starts all
   stems together. `window.__batapp_new` is a read-only test hook.
 
@@ -222,10 +239,18 @@ re-skin of the shipped scenes: no scene geometry and no sprites are used, only
   checks stems/durations, the five sliders, the title, canvas bounds and
   console/network errors; record its summary under `docs/verification/`.
 - `tests/verify-new.mjs` covers the modern layout (`index.html`) over
-  `file://` and over HTTP: portrait, landscape-phone and desktop modes, library
-  order, shared-transport sync, mute semantics, prev/next, both colour schemes,
-  no external requests/links and a sweep of all 61 lessons; its summary is
-  written to `docs/verification/new-ui-sweep-summary.json`.
+  `file://` and over HTTP: portrait, landscape-phone and desktop modes, load
+  gate, seek, titles, mute semantics, prev/next, both colour schemes, lesson
+  order, slim-data equivalence, icon links, no external requests/links and a
+  lesson sweep. Chromium runs all 61 lessons; `BROWSER=firefox|webkit` runs
+  representative lessons (and the HTTP gate/error paths). Its Chromium summary
+  is written to `docs/verification/new-ui-sweep-summary.json`;
+  `tests/verify-browsers.mjs` records all engines in
+  `docs/verification/cross-browser-summary.json`.
+- WebKit needs host libraries for local runs:
+  `sudo npx playwright install-deps webkit`. WebKit unavailability is recorded
+  as such; the real iPhone Safari pass in
+  `docs/verification/device-pass.md` is authoritative.
 - Record unresolved questions in `docs/REVERSE-ENGINEERING.md` under
   “Unknowns” instead of guessing.
 
