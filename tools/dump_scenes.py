@@ -78,6 +78,7 @@ class SceneDumper:
         self.files_by_base: dict[str, object] = {}
         for key, value in env.files.items():
             self.files_by_base[ntpath.basename(key)] = value
+        self.transform_indices: dict[str, dict] = {}
         self.scripts: dict[str, str] = {}
         for name, file in self.files_by_base.items():
             for path_id, reader in getattr(file, "objects", {}).items():
@@ -146,6 +147,86 @@ class SceneDumper:
         return reader.type.name
 
     # -- per-scene dump ----------------------------------------------------- #
+    def game_object_path(self, file_name: str, go_id: int) -> str:
+        index = self.transform_indices.setdefault(file_name, self.build_go_parents(file_name))
+        names, seen = [], set()
+        current = go_id
+        while current and current not in seen:
+            seen.add(current)
+            entry = index.get(current)
+            if entry is None:
+                break
+            names.append(entry["name"])
+            current = entry["parent_go"]
+        return "/".join(reversed(names)) if names else f"<go:{go_id}>"
+
+    def build_go_parents(self, file_name: str) -> dict[int, dict]:
+        """game object id -> {name, parent_go}, resolving transform parents."""
+        file = self.files_by_base[file_name]
+        objects = getattr(file, "objects", {})
+        go_name: dict[int, str] = {}
+        transform_parent: dict[int, int] = {}   # transform path id -> parent transform path id
+        go_of_transform: dict[int, int] = {}
+        for path_id, reader in objects.items():
+            kind = reader.type.name
+            if kind == "GameObject":
+                try:
+                    go_name[path_id] = reader.read().m_Name
+                except Exception:
+                    go_name[path_id] = f"<go:{path_id}>"
+            elif kind in ("Transform", "RectTransform"):
+                try:
+                    transform = reader.read()
+                except Exception:
+                    continue
+                transform_parent[path_id] = int(transform.m_Father.m_PathID) if transform.m_Father else 0
+                go_of_transform[path_id] = int(transform.m_GameObject.m_PathID)
+        parent_go_of_transform = {
+            transform_id: go_of_transform.get(parent_id, 0)
+            for transform_id, parent_id in transform_parent.items()
+        }
+        go_parent: dict[int, int] = {}
+        for transform_id, go_id in go_of_transform.items():
+            go_parent[go_id] = parent_go_of_transform.get(transform_id, 0)
+        return {go_id: {"name": go_name.get(go_id, f"<go:{go_id}>"), "parent_go": go_parent.get(go_id, 0)} for go_id in go_of_transform.values()}
+
+    def describe_pptr(self, file_name: str, pptr) -> dict:
+        """Resolve a pointer to class + owning game-object path."""
+        file_id, path_id = self.ptr_ids(pptr)
+        if not path_id:
+            return {}
+        target_file = file_name
+        if file_id:
+            externals = getattr(self.files_by_base[file_name], "externals", [])
+            if file_id - 1 >= len(externals):
+                return {"path_id": path_id}
+            target_file = ntpath.basename(externals[file_id - 1].path)
+        resolved = self.resolve(file_name, pptr)
+        out = {"path_id": path_id, "file": target_file}
+        if resolved is None:
+            return out
+        _name, reader = resolved
+        if reader.type.name == "MonoScript":
+            out["class"] = self.scripts.get(f"{target_file}:{reader.path_id}")
+            return out
+        out["class"] = reader.type.name
+        if reader.type.name == "MonoBehaviour":
+            raw = reader.get_raw_data()
+            try:
+                script_file_id, script_id = struct.unpack_from("<iq", raw, 16)
+            except Exception:
+                script_file_id, script_id = 0, 0
+            script_file = target_file
+            if script_file_id:
+                externals = getattr(self.files_by_base[target_file], "externals", [])
+                if script_file_id - 1 < len(externals):
+                    script_file = ntpath.basename(externals[script_file_id - 1].path)
+            out["script_class"] = self.scripts.get(f"{script_file}:{script_id}")
+            owner = self.owner_of(reader)
+            if owner:
+                out["game_object"] = self.game_object_path(target_file, owner)
+        return out
+
     def dump(self, file_name: str) -> dict:
         file = self.files_by_base[file_name]
         objects = getattr(file, "objects", {})
@@ -298,6 +379,7 @@ class SceneDumper:
                 {
                     "game_object": go_id,
                     "name": go_names.get(go_id, f"<go:{go_id}>"),
+                    "path": self.game_object_path(file_name, go_id),
                     "transform": transform,
                     "components": [],
                 },
@@ -312,8 +394,42 @@ class SceneDumper:
                     continue
                 node["components"].append({k: v for k, v in entry.items() if k != "owner"})
 
+        wiring = []
+        for node in by_go.values():
+            for component in node["components"]:
+                if component.get("type") not in ("Button", "Slider"):
+                    continue
+                fields = component.get("fields") or {}
+                for field_name, calls in fields.items():
+                    if not isinstance(calls, list) or not calls:
+                        continue
+                    if not isinstance(calls[0], dict) or "method" not in calls[0]:
+                        continue
+                    wiring.append(
+                        {
+                            "element": node["name"],
+                            "element_kind": component["type"],
+                            "field": field_name,
+                            "calls": [
+                                {
+                                    "method": call["method"],
+                                    **self.describe_pptr(
+                                        file_name,
+                                        {"file_id": call.get("target_file_id", 0), "path_id": call.get("target_path_id", 0)},
+                                    ),
+                                    "resolved_class": call["target_class"],
+                                    "resolved_script": call.get("script_class"),
+                                    "target_name": call["target"],
+                                    "string_argument": call["string_argument"],
+                                    "float_argument": call["float_argument"],
+                                }
+                                for call in calls
+                            ],
+                        }
+                    )
         return {
             "file": file_name,
+            "wiring": wiring,
             "nodes": list(by_go.values()),
             "audio_clips": sorted(
                 {
@@ -340,6 +456,8 @@ class SceneDumper:
                     {
                         "target_class": self.class_of(file_name, call["m_Target"]),
                         "target": self.name_of(file_name, call["m_Target"]),
+                        "target_file_id": int(call["m_Target"]["file_id"]),
+                        "target_path_id": int(call["m_Target"]["path_id"]),
                         "method": call["m_MethodName"],
                         "mode": call["m_Mode"],
                         "call_state": call["m_CallState"],
@@ -356,6 +474,8 @@ class SceneDumper:
                     {
                         "target_class": self.class_of(file_name, call["m_Target"]),
                         "target": self.name_of(file_name, call["m_Target"]),
+                        "target_file_id": int(call["m_Target"]["file_id"]),
+                        "target_path_id": int(call["m_Target"]["path_id"]),
                         "method": call["m_MethodName"],
                         "mode": call["m_Mode"],
                         "call_state": call["m_CallState"],

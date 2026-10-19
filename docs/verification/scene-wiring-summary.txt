@@ -1,0 +1,112 @@
+== per scene ==
+ level0 app/opening-scene                  tracks=0 empty=0 sliders=0 unique_targets=0
+ level1 app/volume-selector                tracks=0 empty=0 sliders=0 unique_targets=0
+level10 volume-1/08-oricha-mpawa           tracks=5 empty=0 sliders=5 unique_targets=5
+level11 volume-1/09-odduaremuo             tracks=5 empty=0 sliders=5 unique_targets=5
+level12 volume-1/10-ochicambo              tracks=5 empty=0 sliders=5 unique_targets=5
+level13 volume-1/11-baba-lo-di-de          tracks=5 empty=0 sliders=5 unique_targets=5
+level14 volume-1/12-bonko-y-bonko          tracks=5 empty=0 sliders=5 unique_targets=5
+level15 volume-1/13-agayu-chola            tracks=5 empty=0 sliders=5 unique_targets=5
+level16 volume-1/14-oya-otagua             tracks=5 empty=0 sliders=5 unique_targets=5
+level17 volume-1/15-elekoto                tracks=5 empty=0 sliders=5 unique_targets=5
+level18 volume-1/16-ifa                    tracks=5 empty=0 sliders=5 unique_targets=5
+level19 volume-1/17-elekete-melli          tracks=5 empty=0 sliders=5 unique_targets=5
+ level2 app/00-main-scene-specific-toque   tracks=0 empty=0 sliders=0 unique_targets=0
+level20 volume-1/18-kele-kele-ya           tracks=5 empty=0 sliders=5 unique_targets=5
+level21 volume-1/19-egbi-pami              tracks=5 empty=1 sliders=5 unique_targets=5
+level22 volume-1/20-oferere                tracks=5 empty=0 sliders=5 unique_targets=5
+level23 volume-1/21-alado-okuo             tracks=5 empty=0 sliders=5 unique_targets=5
+level24 volume-1/22-oba-ere                tracks=5 empty=0 sliders=5 unique_targets=5
+level25 volume-1/23-eni-alado              tracks=5 empty=0 sliders=5 unique_targets=5
+level26 volume-1/24-fomaloguede            tracks=5 empty=0 sliders=5 unique_targets=5
+level27 volume-1/25-kowo-kowo              tracks=5 empty=0 sliders=5 unique_targets=5
+level28 volume-1/26-wemilere               tracks=5 empty=0 sliders=5 unique_targets=5
+level29 volume-1/27-emi-so                 tracks=5 empty=0 sliders=5 unique_targets=5
+ level3 volume-1/01-alubanche              tracks=5 empty=0 sliders=5 unique_targets=5
+level30 volume-1/28-obatilemi              tracks=5 empty=0 sliders=5 unique_targets=5
+level31 volume-1/29-yewa-kunfe             tracks=5 empty=0 sliders=5 unique_targets=5
+level32 volume-1/30-bayuba-kante           tracks=5 empty=0 sliders=5 unique_targets=5
+level33 volume-1/31-tui-tui                tracks=5 empty=0 sliders=5 unique_targets=5
+level34 volume-1/32-cheke-cheke            tracks=5 empty=0 sliders=5 unique_targets=5
+level35 volume-1/33-tosun-tosun            tracks=5 empty=0 sliders=5 unique_targets=5
+level36 volume-1/34-bamila-ochun           tracks=5 empty=0 sliders=5 unique_targets=5
+level37 volume-1/35-ochinche-iwama         tracks=5 empty=0 sliders=5 unique_targets=5
+level38 volume-1/36-eni-o-bobo             tracks=5 empty=0 sliders=5 unique_targets=5
+level39 volume-1/37-sogun-tamiwo           tracks=5 empty=0 sliders=5 unique_targets=5
+ level4 volume-1/02-tani-tani-cho-bi       tracks=5 empty=0 sliders=5 unique_targets=5
+level40 volume-1/38-taniboya               tracks=5 empty=0 sliders=5 unique_targets=5
+level41 app/00-main-scene-oru-seco         tracks=0 empty=0 sliders=0 unique_targets=0
+level42 volume-2/1-elegba                  tracks=5 empty=1 sliders=5 unique_targets=5
+level43 volume-2/2-oggun                   tracks=5 empty=1 sliders=5 unique_targets=5
+level44 volume-2/3-ochosi                  tracks=5 empty=1 sliders=5 unique_targets=5
+level45 volume-2/4-imbaloke                tracks=5 empty=1 sliders=5 unique_targets=5
+level46 volume-2/5-inle                    tracks=5 empty=1 sliders=5 unique_targets=5
+level47 volume-2/6-babalu-aye              tracks=5 empty=1 sliders=5 unique_targets=5
+level48 volume-2/7-osain                   tracks=5 empty=1 sliders=5 unique_targets=5
+level49 volume-2/8-osun                    tracks=5 empty=1 sliders=5 unique_targets=5
+ level5 volume-1/03-oyankota               tracks=5 empty=0 sliders=5 unique_targets=5
+level50 volume-2/9-obatala                 tracks=5 empty=1 sliders=5 unique_targets=5
+level51 volume-2/10-dada                   tracks=5 empty=1 sliders=5 unique_targets=5
+level52 volume-2/11-ogue                   tracks=5 empty=1 sliders=5 unique_targets=5
+level53 volume-2/12-agayu                  tracks=5 empty=1 sliders=5 unique_targets=5
+level54 volume-2/13-orula                  tracks=5 empty=1 sliders=5 unique_targets=5
+level55 volume-2/14-orichaoko              tracks=5 empty=1 sliders=5 unique_targets=5
+level56 volume-2/15-ibedy                  tracks=5 empty=1 sliders=5 unique_targets=5
+level57 volume-2/16-chango                 tracks=5 empty=1 sliders=5 unique_targets=5
+level58 volume-2/17-yewa                   tracks=5 empty=1 sliders=5 unique_targets=5
+level59 volume-2/18-oya                    tracks=5 empty=1 sliders=5 unique_targets=5
+ level6 volume-1/04-bariba-oguedema        tracks=5 empty=0 sliders=5 unique_targets=5
+level60 volume-2/19-ochun                  tracks=5 empty=1 sliders=5 unique_targets=5
+level61 volume-2/20A-yemaya                tracks=5 empty=1 sliders=5 unique_targets=5
+level62 volume-2/20B-yemaya                tracks=5 empty=1 sliders=5 unique_targets=5
+level63 volume-2/21-obba                   tracks=5 empty=1 sliders=5 unique_targets=5
+level64 volume-2/22-oddudua                tracks=5 empty=1 sliders=5 unique_targets=5
+ level7 volume-1/05-kuru-kuru-bete         tracks=5 empty=0 sliders=5 unique_targets=5
+ level8 volume-1/06-tiwi-tiwi              tracks=5 empty=0 sliders=5 unique_targets=5
+ level9 volume-1/07-ekua-e                 tracks=5 empty=0 sliders=5 unique_targets=5
+
+== aggregates ==
+  app: {'scenes': 4, 'tracks': 0, 'with_clip': 0, 'sliders': 0, 'buttons': 170}
+  volume-1: {'scenes': 38, 'tracks': 190, 'with_clip': 189, 'sliders': 190, 'buttons': 340}
+  volume-2: {'scenes': 23, 'tracks': 115, 'with_clip': 92, 'sliders': 115, 'buttons': 207}
+
+== track naming across lessons ==
+  {'Iya': 61, 'Oko': 61, 'Vox': 61, 'Bit': 61, 'Ito': 61}
+
+== example: volume-2 last lesson tracks/sliders ==
+{
+ "scene": "Assets/Lezioni VOLUME 1/Lezione 07 - Ekua e.unity",
+ "tracks": {
+  "Audios/Iya": "iya ekua e",
+  "Audios/Oko": "oko ekua e",
+  "Audios/Vox": "vox ekua e",
+  "Audios/Bit": "beat ekua e",
+  "Audios/Ito": "ito ekua e"
+ },
+ "sliders": {
+  "Slider_Volume@Audios/Vox": null,
+  "Slider_Volume@Audios/Oko": null,
+  "Slider_Volume@Audios/Bit": null,
+  "Slider_Volume@Audios/Ito": null,
+  "Slider_Volume@Audios/Iya": null
+ }
+}
+
+== volume-1 first lesson ==
+{
+ "scene": "Assets/Lezioni VOLUME 1/Lezione 09 - Odduaremuo.unity",
+ "tracks": {
+  "Audios/Iya": "iya odduaremuo",
+  "Audios/Oko": "oko odduaremuo",
+  "Audios/Vox": "vox odduaremuo",
+  "Audios/Bit": "beat odduaremuo",
+  "Audios/Ito": "ito odduaremuo"
+ },
+ "sliders": {
+  "Slider_Volume@Audios/Vox": null,
+  "Slider_Volume@Audios/Oko": null,
+  "Slider_Volume@Audios/Bit": null,
+  "Slider_Volume@Audios/Ito": null,
+  "Slider_Volume@Audios/Iya": null
+ }
+}

@@ -150,9 +150,34 @@ Lesson player (`Lezione NN`, 5 sliders):
 | `Home` | `ChangeScene("00 - Main Scene_Specific Toque")` | toque index |
 | `Torna alla lezione` | `Hide()` | close overlay |
 
-Track objects are `Iya`, `Ito`, `Oko`, `Bit`, `Vox`; `VolumeValueChange` sits
-on four of them and `VolumeValueChangefromzero` on `Vox`. Slider values ship as
-1,1,0,1,1 — the `0` is on the track that uses `…fromzero`. Labels visible in
+### Mixer chain (resolved)
+
+Every lesson scene holds five track objects under one parent, each carrying a
+`Transform`, an `AudioSource` and a volume component:
+
+| parent path | components | volume script |
+|---|---|---|
+| `Audios/Iya` | Transform, AudioSource, MonoBehaviour | `VolumeValueChange` |
+| `Audios/Ito` | Transform, AudioSource, MonoBehaviour | `VolumeValueChange` |
+| `Audios/Oko` | Transform, AudioSource, MonoBehaviour | `VolumeValueChange` |
+| `Audios/Bit` | Transform, AudioSource, MonoBehaviour | `VolumeValueChange` |
+| `Audios/Vox` | Transform, AudioSource, MonoBehaviour | `VolumeValueChangefromzero` |
+
+Each of the five `Slider_Volume` sliders fires `SetVolume` on exactly one of
+those objects (five sliders, five distinct targets, verified in all 61 lessons),
+so the original wiring is *slider → volume component → that track's
+AudioSource*. Slider values ship as 1,1,0,1,1 — the `0` sits on the track whose
+component is `VolumeValueChangefromzero`, i.e. `Audios/Vox`.
+
+### Empty tracks (a property of the original, not a port defect)
+
+- Volume I: 190 tracks of which 189 carry audio — `Lezione 19 - Egbi pami` has
+  **no voice stem** (`Audios/Vox` clip is null).
+- Volume II: 115 tracks of which 92 carry audio — every oru seco lesson leaves
+  `Audios/Vox` empty (four stems, no canto).
+
+The player still shows five sliders in those lessons; the fifth simply has
+nothing to play. Labels visible in
 the player: `Iya`, `Itotele`, `Okonkolo`, `Beat`, `Vox`, `Home`, `Prev`, `Next`,
 `Menu`, `CAMBIA LEZIONE`, `TORNA ALLA LEZIONE`.
 

@@ -14,21 +14,20 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - [x] Read the lesson-player wiring out of the scenes (play/pause/stop,
       sliders, navigation).
 - [x] Recover app metadata: script class inventory, UI copy, credit links.
+- [x] Resolve the `SetVolume` targets: five sliders → `Audios/{Iya,Ito,Oko,Bit,Vox}`
+      volume components, in all 61 lessons.
+- [x] Dump all 65 scenes to `.work/scenes/level*.json` (nodes, geometry,
+      components, texts, sliders, audio sources, resolved wiring).
 
 ## Next: finish the model
 
-- [ ] **Resolve `SetVolume` targets.** For each of the five sliders in a lesson
-      scene, resolve the event target pointer to its GameObject path and
-      component class, and record the track→slider→component→AudioSource chain
-      in the scene dump. This is the last behavioural gap in the mixer.
-- [ ] **Dump all 65 scenes** with `tools/dump_scenes.py` once the target
-      resolution is in place, and check the dump for every scene (node counts,
-      text lists, sliders, audio sources, clip names).
 - [ ] **Export sprites and textures**: `Image`/`RawImage` sprite references,
       `Texture2D` payloads (PNG), 9-slice borders, and any background art, into
       `assets/img/`. Verify each referenced sprite resolves.
 - [ ] **Decode `SimpleSpectrum` fields** enough to reproduce the spectrum bars
       (bar count, origin, colours, source type) or document the approximation.
+- [ ] Tidy the scene dump: some nodes list placeholder `null` component entries
+      alongside their real ones (cosmetic; the typed components are complete).
 
 ## Next: build the app
 
