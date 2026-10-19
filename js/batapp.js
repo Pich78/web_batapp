@@ -132,19 +132,18 @@
   }
 
   function reflowForNarrowCanvas(nodes, reference) {
+    // Unity's anchor math already adapts centred and stretched widgets to the
+    // canvas width. What it cannot know is that a group authored for 1920 units
+    // would sit outside a phone-width canvas, so each canvas-level group is
+    // measured and, if necessary, shifted as a unit to stay inside.
     var canvasW = Math.max(STAGE_W, 1);
-    var dx = canvasW / 2 - 960;
     var byId = {};
     nodes.forEach(function (node) { byId[node.id] = node; });
-    var isCanvasChild = function (node) {
-      var parent = node.parent >= 0 ? byId[node.parent] : null;
-      return !parent || parent.canvas;
-    };
+    var groups = {};
+    var fixed = function (node) { return node.anchors && Math.abs(node.anchors[2] - node.anchors[0]) < 0.001; };
     nodes.forEach(function (node) {
       if (node.canvas || node.plain || !node.anchors) return;
-      // Only canvas-level groups move; descendants follow their parents, so a
-      // translation here shifts a whole subtree exactly once.
-      if (!isCanvasChild(node)) return;
+      var parent = node.parent >= 0 ? byId[node.parent] : null;
       var rect = (reference[node.id] || {}).rect;
       if (!rect) return;
       var spanX = node.anchors[2] - node.anchors[0];
@@ -155,7 +154,14 @@
         node.delta = [0, 0];
         return;
       }
-      if (rect[2] > 900 && rect[2] < 1915 && Math.abs(spanX) < 0.001) {
+      // Track rows in the lesson player are the interactive core: give them a
+      // stable fraction of their container so a phone-width canvas stays usable.
+      if (/Panel_Content\/[^/]+\/Image_VolumeBar\/Slider_Volume$/.test(node.path || "")) {
+        node.anchors = [0.06, node.anchors[1], 0.94, node.anchors[3]];
+        return;
+      }
+      var isContainer = parent && parent.canvas && rect[2] >= 100 && rect[2] < 1915 && Math.abs(spanX) < 0.001;
+      if (isContainer) {
         var yFrac = rect[1] / 1080;
         var hFrac = rect[3] / 1080;
         node.anchors = [0.03, yFrac, 0.97, yFrac + hFrac];
@@ -164,7 +170,23 @@
         node.delta = [0, 0];
         return;
       }
-      if (spanX < 0.001) node.anchored = [node.anchored[0] + dx, node.anchored[1]];
+      if (!parent || !parent.canvas || !fixed(node)) return;
+      var groupKey = parent.id;
+      var group = groups[groupKey] || (groups[groupKey] = { nodes: [], min: Infinity, max: -Infinity });
+      group.nodes.push(node);
+      group.min = Math.min(group.min, rect[0]);
+      group.max = Math.max(group.max, rect[0] + rect[2]);
+    });
+    Object.keys(groups).forEach(function (key) {
+      var group = groups[key];
+      var margin = 8;
+      var shift = 0;
+      if (group.max > canvasW - margin) shift = (canvasW - margin) - group.max;
+      if (group.min + shift < margin) shift = margin - group.min;
+      if (Math.abs(shift) < 0.5) return;
+      group.nodes.forEach(function (node) {
+        node.anchored = [node.anchored[0] + shift, node.anchored[1]];
+      });
     });
     return nodes;
   }
@@ -184,6 +206,10 @@
       return entry ? entry.rect : null;
     };
     placed.forEach(function (item) {
+      if (item.menu) {
+        place(item.el, [STAGE_W * 0.60, STAGE_H * 0.90, STAGE_W * 0.38, STAGE_H * 0.08]);
+        return;
+      }
       var rect = rectFor(item.node);
       if (rect) place(item.el, rect);
     });
@@ -866,9 +892,10 @@
         else showOverlay();
       }
     });
-    var menuHit = el("el hit", [520, 860, 300, 60]);
+    var menuHit = el("el hit", [0, 0, 10, 10]);
     menuHit.addEventListener("click", showOverlay);
     stage.appendChild(menuHit);
+    placed.push({ node: null, el: menuHit, menu: true });
   }
 
   function showCredits() {

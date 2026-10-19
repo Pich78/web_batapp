@@ -74,6 +74,21 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       `ScrollRect` carousel and should be replaced by the full card list once
       inactive cards are rendered inside the clipped viewport.
 
+## Next: finish the reactive layout
+
+- [x] Anchor-relative layout with live CanvasScaler semantics; full-bleed art
+      follows the canvas, canvas-level containers stretch to it, and the player's
+      five track rows are pinned to a stable fraction of their container.
+- [ ] **Clamp pass in `rectsAt`** — the remaining gap. Nested chains
+      (`Content/Panel/Panel_Content/<Track>/Image_VolumeBar/Slider_Volume`) keep
+      their authored offsets, so on a phone-width canvas (540 units) the sliders
+      land at x≈-15 and 15 widgets sit outside. Fix: after computing a node's rect,
+      clamp it into its parent (shift when it overflows, shrink `sizeLocal` when it
+      is wider than the parent) and let children follow, exactly like CSS overflow
+      handling. Measured today: 1600×900 and 2560×1080 → 0 widgets outside;
+      1080×1920 → 4; 720×1440 → 15.
+- [ ] Wire the original's portrait menu canvas (`298.5×456`, `Expand`).
+
 ## Next: verification
 
 - [ ] Re-run `tools/unity_schema.py` and `tools/export_audio.py --verify` in CI
@@ -95,10 +110,14 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       3.4 MB catalog (largest schema 196 KB) that OpenCode drops silently
       (`rea mcp doctor` green; issue draft in `.work/rea-mcp-catalog-issue.md`).
       REA is driven through its CLI instead (documented in AGENTS.md).
-- [~] Decompile the app's own methods with Ghidra by their VA from `script.json`:
-      `VolumeValueChange.SetVolume`, `VolumeValueChangefromzero.SetVolume`,
-      `SceneSurf.LoadNextLevel/LoadPrevLevel`, `MoveOnClick.ChangeScene`
-      (running via `rea decompile … --provider ghidra --snapshot …`).
+- [~] Decompile the app's own methods with Ghidra by their VA from `script.json`.
+      All five attempts (`VolumeValueChange.SetVolume`,
+      `VolumeValueChangefromzero.SetVolume`, `SceneSurf.LoadNextLevel/LoadPrevLevel`,
+      `MoveOnClick.ChangeScene`) returned `provider_timeout` after ~5.5 minutes: the
+      first analysis of the 14 MB `libil2cpp.so` exceeds REA's budget, and
+      `docs/ghidra-provider.md` documents no timeout knob. Options: find the
+      underlying timeout (env or provider setting), or pre-build the Ghidra
+      database with `analyzeHeadless` and query the addresses from it directly.
 - [ ] Install Ghidra 12.1.4 + JDK 21 (byo) and register the REA MCP server
       (`rea setup --client opencode --dry-run` first, review paths and backups,
       then apply, then restart).

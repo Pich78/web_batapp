@@ -74,8 +74,9 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
     node_id_by_transform: dict[int, int] = {}
 
     def add_node(transform: dict | None, parent: int, *, canvas: bool = False,
-                 order: int = 0, plain: bool = False) -> int:
-        entry = {"id": len(layout), "parent": parent, "plain": plain}
+                 order: int = 0, plain: bool = False, owner: dict | None = None) -> int:
+        entry = {"id": len(layout), "parent": parent, "plain": plain,
+                 "name": (owner or {}).get("name"), "path": (owner or {}).get("path")}
         if canvas:
             entry["canvas"] = True
             entry["canvas_order"] = order
@@ -102,13 +103,13 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
         current_clip = clip_id
         if canvas_component is not None:
             node_id = add_node(transform, parent_id, canvas=True,
-                               order=int(canvas_component.get("sorting_order", 0)))
+                               order=int(canvas_component.get("sorting_order", 0)), owner=node)
         elif "anchor_min" not in transform:
             # a plain Transform (e.g. an "Actions" holder) has no rect of its own; its
             # UI children still resolve against the nearest UI ancestor
-            node_id = add_node(transform, parent_id, plain=True)
+            node_id = add_node(transform, parent_id, plain=True, owner=node)
         else:
-            node_id = add_node(transform, parent_id)
+            node_id = add_node(transform, parent_id, owner=node)
 
         active = bool(node.get("active", True)) and parent_active
         if any(component.get("type") == "Mask" for component in node["components"]):
