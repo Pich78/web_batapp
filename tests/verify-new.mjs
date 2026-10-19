@@ -427,6 +427,66 @@ check("pause + mute + backward seek after the loop keeps Beat playing",
   afterTimes.every((time) => time >= 2.9) &&
   Math.max(...afterTimes) - Math.min(...afterTimes) < 0.12,
   JSON.stringify({ media: afterWrap.media, times: afterTimes.map((time) => +time.toFixed(2)) }));
+
+// Stop resets every stem; the next Play starts from the beginning.
+await transport.locator(".stop").click();
+await transport.waitForTimeout(400);
+const stopped = await transport.evaluate(() => ({
+  media: window.__mediaProbeSummary(),
+  tracks: window.__batapp_new.tracks(),
+  state: window.__batapp_new.state(),
+  ui: window.__batapp_new.ui()
+}));
+check("Stop pauses and rewinds every stem to 0",
+  stopped.media.created === 5 && stopped.media.active === 0 &&
+  stopped.tracks.every((track) => track.paused === true && track.currentTime < 0.1) &&
+  stopped.state.playing === false && stopped.state.mixerPlaying === false &&
+  stopped.ui.seekValue === "0",
+  JSON.stringify({ media: stopped.media, tracks: stopped.tracks.map((track) => ({ stem: track.stem, ct: +track.currentTime.toFixed(2), paused: track.paused })), ui: stopped.ui.seekValue }));
+await transport.locator("button.play").click();
+await transport.waitForTimeout(900);
+const restarted = await transport.evaluate(() => ({
+  media: window.__mediaProbeSummary(),
+  tracks: window.__batapp_new.tracks()
+}));
+const restartTimes = restarted.tracks.map((track) => track.currentTime);
+check("Play after Stop starts every stem from the beginning",
+  restarted.media.active === 5 &&
+  restartTimes.every((time) => time >= 0.4 && time < 2) &&
+  Math.max(...restartTimes) - Math.min(...restartTimes) < 0.12,
+  JSON.stringify({ media: restarted.media, times: restartTimes.map((time) => +time.toFixed(2)) }));
+
+// A play() promise that resolves after Stop must not start the stems again.
+await transport.locator(".stop").click();
+await transport.waitForTimeout(50);
+await transport.locator("button.play").click();
+await transport.waitForTimeout(100);
+await transport.locator(".stop").click();
+await transport.waitForTimeout(500);
+const race = await transport.evaluate(() => ({
+  media: window.__mediaProbeSummary(),
+  tracks: window.__batapp_new.tracks(),
+  state: window.__batapp_new.state(),
+  ui: window.__batapp_new.ui()
+}));
+check("Stop wins against a pending Play",
+  race.media.active === 0 &&
+  race.tracks.every((track) => track.paused === true && track.currentTime < 0.1) &&
+  race.state.playing === false && race.state.mixerPlaying === false &&
+  race.ui.seekValue === "0",
+  JSON.stringify({ media: race.media, tracks: race.tracks.map((track) => ({ stem: track.stem, ct: +track.currentTime.toFixed(2), paused: track.paused })), ui: race.ui.seekValue }));
+await transport.locator("button.play").click();
+await transport.waitForTimeout(800);
+const afterRace = await transport.evaluate(() => ({
+  media: window.__mediaProbeSummary(),
+  tracks: window.__batapp_new.tracks()
+}));
+const afterRaceTimes = afterRace.tracks.map((track) => track.currentTime);
+check("Play after the quick Stop starts at the beginning",
+  afterRace.media.active === 5 &&
+  afterRaceTimes.every((time) => time >= 0.4 && time < 1.5) &&
+  Math.max(...afterRaceTimes) - Math.min(...afterRaceTimes) < 0.12,
+  JSON.stringify({ media: afterRace.media, times: afterRaceTimes.map((time) => +time.toFixed(2)) }));
 await transport.close();
 
 // Volume II: four stems, no Vox row

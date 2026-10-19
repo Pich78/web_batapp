@@ -75,6 +75,8 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
         pulled to the same restart position;
       - the reference is re-selected from live stems if it pauses/ends; seek
         suspends the drift loop until `seeked`, then restarts it;
+      - Stop pauses/rewinds every stem to 0 and cannot be undone by a pending
+        `play()`; the next Play starts from the beginning;
       - all stems start in the same tick and every stem stays within 80 ms of
         the reference.
 - [x] **Pause/resume semantics** matching `AudioSource.Pause`/`Stop` for all five

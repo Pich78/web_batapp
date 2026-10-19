@@ -210,7 +210,8 @@ transport in `js/mixer.js`.
   `beat` stem); the drift loop runs every 250 ms and detects a loop wrap on any
   stem, aligning all five to the restarted position. Seek keeps playback running
   and applies on release, suspending the drift loop until the elements report
-  `seeked`; mute is a pure gain change.
+  `seeked`; mute is a pure gain change. Stop pauses and rewinds all stems to 0,
+  wins against a pending `play()`, and the next Play starts from the beginning.
 - The seek bar under the title seeks all stems together; the title format is
   `Title · Toque/Oru Seco NN · Batá`, with `Toques · Batá`, `Oru Seco · Batá`
   and the root title for library routes.

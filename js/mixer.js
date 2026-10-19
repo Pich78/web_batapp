@@ -37,6 +37,9 @@
     this.syncTimer = 0;
     this.reference = null;
     this.seekToken = 0;
+    this.transportState = "idle";
+    this.stopped = false;
+    this.stopCheckTimer = 0;
     var protocol = (global.location && global.location.protocol) || "file:";
     var served = protocol === "http:" || protocol === "https:";
     this.mode = options.webAudio === undefined ? (served ? "webaudio" : "elements")
@@ -145,8 +148,15 @@
   };
 
   BatappMixer.prototype.play = function () {
-    this.resume();
     var self = this;
+    this.resume();
+    this.stopped = false;
+    this.transportState = "playing";
+    var token = ++this.seekToken;
+    if (this.stopCheckTimer) {
+      clearTimeout(this.stopCheckTimer);
+      this.stopCheckTimer = 0;
+    }
     // A second play() while every stem is already running must not reset the
     // transport to the reference position again.
     if (this.tracks.length && this.liveTracks().length === this.tracks.length) {
@@ -155,7 +165,6 @@
     }
     if (this.syncTimer) clearInterval(this.syncTimer);
     this.syncTimer = 0;
-    this.seekToken += 1;
 
     var live = this.liveTracks();
     var reference = live[0] || (this.reference && this.reference.started ? this.reference : this.tracks[0] || null);
@@ -166,7 +175,17 @@
       try {
         record.element.currentTime = target;
         var promise = record.element.play();
-        if (promise && promise.catch) promise.catch(function () {});
+        if (promise && promise.then) {
+          promise.then(function () {
+            // A pending play() may resolve after Pause/Stop; the later action
+            // must win, or the stem would start again behind the user's back.
+            if (self.seekToken === token || self.transportState === "playing") return;
+            record.element.pause();
+            if (self.transportState === "stopped") {
+              try { record.element.currentTime = 0; } catch (error) { /* not seekable yet */ }
+            }
+          }).catch(function () {});
+        }
         record.started = true;
         record.lastTime = target;
       } catch (error) { /* ignored: the browser reports it on the element */ }
@@ -225,18 +244,27 @@
   };
 
   BatappMixer.prototype.pause = function () {
+    if (this.stopped) return;
+    this.transportState = "paused";
+    this.seekToken += 1;
+    if (this.stopCheckTimer) {
+      clearTimeout(this.stopCheckTimer);
+      this.stopCheckTimer = 0;
+    }
     if (this.syncTimer) clearInterval(this.syncTimer);
     this.syncTimer = 0;
-    this.seekToken += 1;
     this.tracks.forEach(function (record) {
       if (!record.element.paused) record.element.pause();
     });
   };
 
   BatappMixer.prototype.stop = function () {
+    var self = this;
+    this.transportState = "stopped";
+    this.stopped = true;
+    this.seekToken += 1;
     if (this.syncTimer) clearInterval(this.syncTimer);
     this.syncTimer = 0;
-    this.seekToken += 1;
     this.tracks.forEach(function (record) {
       record.element.pause();
       try { record.element.currentTime = 0; } catch (error) { /* not seekable yet */ }
@@ -244,6 +272,23 @@
       record.lastTime = 0;
     });
     this.reference = this.tracks[0] || null;
+
+    // A play() promise issued just before Stop can resolve after it. Verify
+    // once more after the event loop settles that the transport is still
+    // stopped and every stem is at the beginning.
+    if (this.stopCheckTimer) clearTimeout(this.stopCheckTimer);
+    this.stopCheckTimer = setTimeout(function () {
+      self.stopCheckTimer = 0;
+      if (self.transportState !== "stopped") return;
+      self.tracks.forEach(function (record) {
+        if (!record.element.paused) record.element.pause();
+        if (Math.abs(record.element.currentTime) > 0.05) {
+          try { record.element.currentTime = 0; } catch (error) { /* not seekable yet */ }
+        }
+        record.started = false;
+        record.lastTime = 0;
+      });
+    }, 120);
   };
 
   BatappMixer.prototype.setVolume = function (stem, value) {
@@ -281,6 +326,7 @@
   };
 
   BatappMixer.prototype.playing = function () {
+    if (this.stopped) return false;
     return this.tracks.some(function (record) {
       return record.started && !record.element.paused && !record.element.ended;
     });
@@ -291,12 +337,13 @@
     if (!reference) return { current: 0, duration: 0 };
     var duration = reference.element.duration;
     return {
-      current: reference.element.currentTime || 0,
+      current: this.stopped ? 0 : (reference.element.currentTime || 0),
       duration: duration && isFinite(duration) ? duration : 0
     };
   };
 
   BatappMixer.prototype.seek = function (seconds) {
+    if (this.stopped) return 0;
     // Keep playing (the UI applies the value on release) but suspend the drift
     // loop while the elements seek, so it cannot drag a backward jump forward
     // again before the browser has applied it.
@@ -344,6 +391,10 @@
   BatappMixer.prototype.dispose = function () {
     this.seekToken += 1;
     this.stop();
+    if (this.stopCheckTimer) {
+      clearTimeout(this.stopCheckTimer);
+      this.stopCheckTimer = 0;
+    }
     if (this.syncTimer) clearInterval(this.syncTimer);
     this.syncTimer = 0;
     if (this.context) {

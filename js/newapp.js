@@ -431,6 +431,7 @@
     stop.addEventListener("click", function () {
       mixer.stop();
       state.playing = false;
+      transportBusy = false;
       paintPlaying();
       hideStatus();
       seeking = false;

@@ -94,6 +94,9 @@ pass that re-seeks any stem more than 80 ms off the reference.
 - Seeking moves all five stems to the same position before playback continues;
   the drift timer is suspended during the seek so it cannot undo a backward
   jump.
+- Stop pauses and rewinds every stem to 0. A pending `play()` from a quick tap
+  cannot restart them: Stop wins the race, and the next Play starts from the
+  beginning.
 
 **iPhone/iPad:** iOS/Safari 18.4+ is required for Ogg Vorbis playback. On older
 iOS versions the browser cannot decode the lesson audio.
