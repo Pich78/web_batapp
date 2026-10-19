@@ -1,44 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <title>Batá — three drums</title>
   <rect width="1024" height="1024" rx="224" fill="#0d0f13"/>
-  <g transform="translate(292 566) rotate(-27)">
-    <polygon points="-75.0,-205.0 75.0,-205.0 54.0,-24.6 68.0,205.0 -68.0,205.0 -54.0,-24.6" fill="#e6a44f" stroke="#0d0f13" stroke-width="22" stroke-linejoin="round"/>
-    <ellipse cx="0" cy="-205.0" rx="75.0" ry="15.8" fill="#e6a44f" stroke="#0d0f13" stroke-width="13"/>
-    <g stroke="#0d0f13" stroke-width="8" stroke-linecap="round">
-      <line x1="-51.0" y1="-147.6" x2="-36.7" y2="8.2"/>
-      <line x1="-16.5" y1="-155.8" x2="-11.9" y2="24.6"/>
-      <line x1="16.5" y1="-155.8" x2="11.9" y2="24.6"/>
-      <line x1="51.0" y1="-147.6" x2="36.7" y2="8.2"/>
-      <line x1="-51.0" y1="-147.6" x2="36.7" y2="8.2"/>
-    </g>
+  <g id="okonkolo" transform="translate(292 522) rotate(29)" fill="#e6a44f" stroke="#0d0f13" stroke-linejoin="round">
+    <path d="M -56 -205 C -58.24 -147.6 -39 -94.3 -39 -49.2 C -39 20.5 -91.52 106.6 -88 205 C -44 227.88 44 227.88 88 205 C 91.52 106.6 39 20.5 39 -49.2 C 39 -94.3 58.24 -147.6 56 -205 Z " stroke-width="24"/>
+    <ellipse cy="-205" rx="56" ry="17.92" stroke-width="16"/>
+    <ellipse cy="205" rx="88" ry="33.44" stroke-width="16"/>
   </g>
-  <g transform="translate(732 566) rotate(27)">
-    <polygon points="-90.0,-232.5 90.0,-232.5 64.0,-27.9 80.0,232.5 -80.0,232.5 -64.0,-27.9" fill="#e6a44f" stroke="#0d0f13" stroke-width="22" stroke-linejoin="round"/>
-    <ellipse cx="0" cy="-232.5" rx="90.0" ry="18.9" fill="#e6a44f" stroke="#0d0f13" stroke-width="13"/>
-    <g stroke="#0d0f13" stroke-width="8" stroke-linecap="round">
-      <line x1="-61.2" y1="-167.4" x2="-43.5" y2="9.3"/>
-      <line x1="-19.8" y1="-176.7" x2="-14.1" y2="27.9"/>
-      <line x1="19.8" y1="-176.7" x2="14.1" y2="27.9"/>
-      <line x1="61.2" y1="-167.4" x2="43.5" y2="9.3"/>
-      <line x1="-61.2" y1="-167.4" x2="43.5" y2="9.3"/>
-    </g>
+  <g id="itotele" transform="translate(726 506) rotate(-30)" fill="#e6a44f" stroke="#0d0f13" stroke-linejoin="round">
+    <path d="M -66 -240 C -68.64 -172.8 -44 -110.4 -44 -57.6 C -44 24 -106.08 124.8 -102 240 C -51 266.52 51 266.52 102 240 C 106.08 124.8 44 24 44 -57.6 C 44 -110.4 68.64 -172.8 66 -240 Z " stroke-width="24"/>
+    <ellipse cy="-240" rx="66" ry="21.12" stroke-width="16"/>
+    <ellipse cy="240" rx="102" ry="38.76" stroke-width="16"/>
   </g>
-  <g transform="translate(512 522) rotate(0)">
-    <polygon points="-110.0,-270.0 110.0,-270.0 79.0,-32.4 96.0,270.0 -96.0,270.0 -79.0,-32.4" fill="#e6a44f" stroke="#0d0f13" stroke-width="22" stroke-linejoin="round"/>
-    <ellipse cx="0" cy="-270.0" rx="110.0" ry="23.1" fill="#e6a44f" stroke="#0d0f13" stroke-width="13"/>
-    <g stroke="#0d0f13" stroke-width="8" stroke-linecap="round">
-      <line x1="-74.8" y1="-194.4" x2="-53.7" y2="10.8"/>
-      <line x1="-24.2" y1="-205.2" x2="-17.4" y2="32.4"/>
-      <line x1="24.2" y1="-205.2" x2="17.4" y2="32.4"/>
-      <line x1="74.8" y1="-194.4" x2="53.7" y2="10.8"/>
-      <line x1="-74.8" y1="-194.4" x2="53.7" y2="10.8"/>
-    </g>
-    <ellipse cx="0" cy="-86.4" rx="114.4" ry="33.0" fill="none" stroke="#0d0f13" stroke-width="18"/>
-      <circle cx="106.4" cy="-74.3" r="7.7" fill="#e6a44f"/>
-      <circle cx="81.7" cy="-63.3" r="7.7" fill="#e6a44f"/>
-      <circle cx="44.3" cy="-56.0" r="7.7" fill="#e6a44f"/>
-      <circle cx="0.0" cy="-53.4" r="7.7" fill="#e6a44f"/>
-      <circle cx="-44.3" cy="-56.0" r="7.7" fill="#e6a44f"/>
-      <circle cx="-81.7" cy="-63.3" r="7.7" fill="#e6a44f"/>
-      <circle cx="-106.4" cy="-74.3" r="7.7" fill="#e6a44f"/>
+  <g id="iya" transform="translate(512 510) rotate(0)" fill="#e6a44f" stroke="#0d0f13" stroke-linejoin="round">
+    <path d="M -73 -295 C -75.92 -212.4 -53 -135.7 -53 -70.8 C -53 29.5 -137.28 153.4 -132 295 C -66 329.32 66 329.32 132 295 C 137.28 153.4 53 29.5 53 -70.8 C 53 -135.7 75.92 -212.4 73 -295 Z " stroke-width="24"/>
+    <ellipse cy="-295" rx="73" ry="23.36" stroke-width="16"/>
+    <ellipse cy="295" rx="132" ry="50.16" stroke-width="16"/>
   </g>
 </svg>

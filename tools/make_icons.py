@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""Render the Batá app icon (SVG master + PNG favicon/home-screen set).
+"""Generate the SVG and PNG app icons from shared vector geometry.
 
-Three tapered, laced batá drums fanned like the reference photograph: small
-Okónkolo left, large Iya (with its bell ring) centre, medium Itótele right.
-Flat two-colour artwork: black background/outlines/lacing and amber drums,
-with black separator outlines like the reference silhouette.
+Three double-headed batá drums follow the arrangement of the maintainer's
+photo reference, simplified to solid amber silhouettes on black. Curved
+waists and unequal heads distinguish batá from the congas in the style
+reference. No photograph or external resource is needed to regenerate.
 
-Usage:
-    .venv/bin/python tools/make_icons.py
+Usage: .venv/bin/python tools/make_icons.py
 """
-
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 
@@ -19,191 +18,132 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets"
+BLACK = "#0d0f13"
+AMBER = "#e6a44f"
+VERSION = "1.1.2"
 
-BLACK = (13, 15, 19, 255)
-AMBER = (230, 164, 79, 255)
-SVG_RADIUS = 224
-FAVICON_CORNER = 0.22
-
-# name, centre x, centre y, angle, height, top width, waist width,
-# bottom width, bell ring
+# Back drums first; the largest drum sits in front, as in the photo.
+# name, centre x/y, rotation, length, small head width, waist width, large head width
 DRUMS = (
-    ("okonkolo", 292, 566, -27, 410, 150, 108, 136, False),
-    ("itotele", 732, 566, 27, 465, 180, 128, 160, False),
-    ("iya", 512, 522, 0, 540, 220, 158, 192, True),
+    ("okonkolo", 292, 522, 29, 410, 112, 78, 176),
+    ("itotele", 726, 506, -30, 480, 132, 88, 204),
+    ("iya", 512, 510, 0, 590, 146, 106, 264),
 )
 
 
-def rotate(x: float, y: float, angle: float) -> tuple[float, float]:
+def body_commands(height, small, waist, large):
+    """Smooth, asymmetrical hourglass: short neck above a broad lower shell."""
+    top, bottom = -height / 2, height / 2
+    return [
+        ("M", -small / 2, top),
+        ("C", -small * .52, top + height * .14,
+         -waist / 2, -height * .23, -waist / 2, -height * .12),
+        ("C", -waist / 2, height * .05,
+         -large * .52, height * .26, -large / 2, bottom),
+        ("C", -large * .25, bottom + large * .13,
+         large * .25, bottom + large * .13, large / 2, bottom),
+        ("C", large * .52, height * .26,
+         waist / 2, height * .05, waist / 2, -height * .12),
+        ("C", waist / 2, -height * .23,
+         small * .52, top + height * .14, small / 2, top),
+        ("Z",),
+    ]
+
+
+def sample_path(commands):
+    points = []
+    for command, *v in commands:
+        if command == "M":
+            points.append(tuple(v))
+        elif command == "C":
+            x0, y0 = points[-1]
+            x1, y1, x2, y2, x3, y3 = v
+            for step in range(1, 33):
+                t = step / 32
+                u = 1 - t
+                points.append((u**3*x0 + 3*u*u*t*x1 + 3*u*t*t*x2 + t**3*x3,
+                               u**3*y0 + 3*u*u*t*y1 + 3*u*t*t*y2 + t**3*y3))
+    return points
+
+
+def ellipse(cx, cy, rx, ry):
+    return [(cx + rx * math.cos(i * math.tau / 96),
+             cy + ry * math.sin(i * math.tau / 96)) for i in range(96)]
+
+
+def shapes(drum):
+    _, _, _, _, height, small, waist, large = drum
+    # Dark separators remain readable without ropes or ornamental detail.
+    return [
+        (sample_path(body_commands(height, small, waist, large)), BLACK, 24),
+        (ellipse(0, -height / 2, small / 2, small * .16), BLACK, 16),
+        (ellipse(0, height / 2, large / 2, large * .19), BLACK, 16),
+    ]
+
+
+def transform(points, drum, factor):
+    _, cx, cy, angle, *_ = drum
     rad = math.radians(angle)
-    return (x * math.cos(rad) - y * math.sin(rad),
-            x * math.sin(rad) + y * math.cos(rad))
+    c, s = math.cos(rad), math.sin(rad)
+    return [(round((cx + x*c - y*s) * factor),
+             round((cy + x*s + y*c) * factor)) for x, y in points]
 
 
-def to_world(points: list[tuple[float, float]], cx: float, cy: float,
-             angle: float, factor: float) -> list[tuple[int, int]]:
-    result = []
-    for x, y in points:
-        rx, ry = rotate(x, y, angle)
-        result.append((round((cx + rx) * factor), round((cy + ry) * factor)))
-    return result
-
-
-def body_points(height: float, top_w: float, waist_w: float, bottom_w: float) -> list[tuple[float, float]]:
-    top = -height / 2
-    waist = -height * 0.06
-    bottom = height / 2
-    return [
-        (-top_w / 2, top), (top_w / 2, top),
-        (waist_w / 2, waist), (bottom_w / 2, bottom),
-        (-bottom_w / 2, bottom), (-waist_w / 2, waist),
-    ]
-
-
-def ellipse_points(cx: float, cy: float, rx: float, ry: float, count: int = 48) -> list[tuple[float, float]]:
-    return [
-        (cx + rx * math.cos(2 * math.pi * i / count),
-         cy + ry * math.sin(2 * math.pi * i / count))
-        for i in range(count)
-    ]
-
-
-def lacing(height: float, top_w: float, waist_w: float) -> list[tuple[tuple[float, float], tuple[float, float]]]:
-    top = -height / 2
-    waist = -height * 0.06
-    return [
-        ((-top_w * 0.34, top + height * 0.14), (-waist_w * 0.34, waist + height * 0.08)),
-        ((-top_w * 0.11, top + height * 0.12), (-waist_w * 0.11, waist + height * 0.12)),
-        ((top_w * 0.11, top + height * 0.12), (waist_w * 0.11, waist + height * 0.12)),
-        ((top_w * 0.34, top + height * 0.14), (waist_w * 0.34, waist + height * 0.08)),
-        ((-top_w * 0.34, top + height * 0.14), (waist_w * 0.34, waist + height * 0.08)),
-    ]
-
-
-def draw_outline(draw: ImageDraw.ImageDraw, points: list[tuple[int, int]], width: int) -> None:
-    draw.line(points + [points[0]], fill=BLACK, width=width, joint="curve")
-
-
-def draw_drum(image: Image.Image, size: int, drum, detail: bool) -> None:
-    name, cx, cy, angle, height, top_w, waist_w, bottom_w, bells = drum
-    factor = size / 1024
-    body = to_world(body_points(height, top_w, waist_w, bottom_w), cx, cy, angle, factor)
-    head = to_world(ellipse_points(0, -height / 2, top_w / 2, top_w * 0.105), cx, cy, angle, factor)
-    outline = max(2, round(22 * factor))
-
-    ImageDraw.Draw(image).polygon(body, fill=AMBER)
-    draw = ImageDraw.Draw(image)
-    draw_outline(draw, body, outline)
-    ImageDraw.Draw(image).polygon(head, fill=AMBER)
-    draw_outline(draw, head, max(2, round(13 * factor)))
-
-    if detail:
-        for start, end in lacing(height, top_w, waist_w):
-            a = to_world([start], cx, cy, angle, factor)[0]
-            b = to_world([end], cx, cy, angle, factor)[0]
-            draw.line([a, b], fill=BLACK, width=max(2, round(8 * factor)))
-        if bells:
-            band = to_world(ellipse_points(0, -height * 0.16, top_w * 0.52, top_w * 0.15), cx, cy, angle, factor)
-            draw_outline(draw, band, max(3, round(18 * factor)))
-            for i in range(7):
-                t = math.pi * (0.12 + 0.76 * i / 6)
-                local = (top_w * 0.52 * math.cos(t), -height * 0.16 + top_w * 0.15 * math.sin(t))
-                dot = to_world([local], cx, cy, angle, factor)[0]
-                radius = max(2, round(top_w * 0.035 * factor))
-                draw.ellipse([dot[0] - radius, dot[1] - radius, dot[0] + radius, dot[1] + radius], fill=AMBER)
-
-
-def render(size: int, rounded: bool) -> Image.Image:
+def render(size, rounded):
     work = size * 4
     image = Image.new("RGBA", (work, work), BLACK)
-    detail = size >= 64
+    draw = ImageDraw.Draw(image)
     for drum in DRUMS:
-        draw_drum(image, work, drum, detail)
-    image = image.resize((size, size), Image.LANCZOS)
+        for points, stroke, width in shapes(drum):
+            points = transform(points, drum, work / 1024)
+            draw.polygon(points, fill=AMBER)
+            draw.line(points + [points[0]], fill=stroke,
+                      width=round(width * work / 1024), joint="curve")
     if rounded:
-        radius = round(size * FAVICON_CORNER)
-        mask = Image.new("L", (size, size), 0)
+        mask = Image.new("L", (work, work), 0)
         ImageDraw.Draw(mask).rounded_rectangle(
-            [0, 0, size - 1, size - 1], radius=radius, fill=255
-        )
+            [0, 0, work - 1, work - 1], radius=round(work * .22), fill=255)
         image.putalpha(mask)
-    return image
+    return image.resize((size, size), Image.Resampling.LANCZOS)
 
 
-def svg_drum(drum) -> str:
-    name, cx, cy, angle, height, top_w, waist_w, bottom_w, bells = drum
-    body = " ".join(f"{x:.1f},{y:.1f}" for x, y in body_points(height, top_w, waist_w, bottom_w))
-    lines = []
-    for start, end in lacing(height, top_w, waist_w):
-        lines.append(
-            f'      <line x1="{start[0]:.1f}" y1="{start[1]:.1f}" x2="{end[0]:.1f}" y2="{end[1]:.1f}"/>'
-        )
-    lacing_svg = ""
-    if lines:
-        lacing_svg = (
-            '    <g stroke="#0d0f13" stroke-width="8" stroke-linecap="round">\n' +
-            "\n".join(lines) + "\n    </g>\n"
-        )
-    bells_svg = ""
-    if bells:
-        dots = []
-        for i in range(7):
-            t = math.pi * (0.12 + 0.76 * i / 6)
-            x = top_w * 0.52 * math.cos(t)
-            y = -height * 0.16 + top_w * 0.15 * math.sin(t)
-            dots.append(f'      <circle cx="{x:.1f}" cy="{y:.1f}" r="{top_w * 0.035:.1f}" fill="#e6a44f"/>')
-        bells_svg = (
-            f'    <ellipse cx="0" cy="{-height * 0.16:.1f}" rx="{top_w * 0.52:.1f}" ry="{top_w * 0.15:.1f}" '
-            'fill="none" stroke="#0d0f13" stroke-width="18"/>\n' +
-            "\n".join(dots) + "\n"
-        )
-    return f'''  <g transform="translate({cx} {cy}) rotate({angle})">
-    <polygon points="{body}" fill="#e6a44f" stroke="#0d0f13" stroke-width="22" stroke-linejoin="round"/>
-    <ellipse cx="0" cy="{-height / 2:.1f}" rx="{top_w / 2:.1f}" ry="{top_w * 0.105:.1f}" fill="#e6a44f" stroke="#0d0f13" stroke-width="13"/>
-{lacing_svg}{bells_svg}  </g>'''
-
-
-def write_svg(path: Path) -> None:
-    groups = "\n".join(svg_drum(drum) for drum in DRUMS)
-    path.write_text(
-        f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" rx="{SVG_RADIUS}" fill="#0d0f13"/>
-{groups}
+def write_svg(path):
+    groups = []
+    for drum in DRUMS:
+        name, cx, cy, angle, height, small, waist, large = drum
+        commands = " ".join(command + " " + " ".join(f"{v:g}" for v in values)
+                            for command, *values in body_commands(height, small, waist, large))
+        groups.append(f'''  <g id="{name}" transform="translate({cx} {cy}) rotate({angle})" fill="{AMBER}" stroke="{BLACK}" stroke-linejoin="round">
+    <path d="{commands}" stroke-width="24"/>
+    <ellipse cy="{-height / 2:g}" rx="{small / 2:g}" ry="{small * .16:g}" stroke-width="16"/>
+    <ellipse cy="{height / 2:g}" rx="{large / 2:g}" ry="{large * .19:g}" stroke-width="16"/>
+  </g>''')
+    path.write_text(f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <title>Batá — three drums</title>
+  <rect width="1024" height="1024" rx="224" fill="{BLACK}"/>
+{chr(10).join(groups)}
 </svg>
-''',
-        encoding="utf-8",
-    )
+''', encoding="utf-8")
 
 
-def main() -> int:
+def main():
     ASSETS.mkdir(exist_ok=True)
     write_svg(ASSETS / "icon.svg")
-    for size in (16, 32):
-        render(size, rounded=True).save(ASSETS / f"icon-{size}.png", optimize=True)
-    for size in (180, 192, 512):
-        render(size, rounded=False).save(ASSETS / f"icon-{size}.png", optimize=True)
-    (ROOT / "site.webmanifest").write_text(
-        '''{
-  "name": "Batá · Toques & Oru Seco",
-  "short_name": "Batá",
-  "start_url": "./",
-  "scope": "./",
-  "display": "browser",
-  "background_color": "#0d0f13",
-  "theme_color": "#0d0f13",
-  "icons": [
-    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png" }
-  ]
-}
-''',
-        encoding="utf-8",
-    )
-    generated = ["icon.svg", "icon-16.png", "icon-32.png", "icon-180.png", "icon-192.png", "icon-512.png"]
-    for name in generated:
-        path = ASSETS / name
+    for size in (16, 32, 180, 192, 512):
+        path = ASSETS / f"icon-{size}.png"
+        render(size, rounded=size <= 32).save(path, optimize=True)
         print(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size} B)")
-    print("wrote site.webmanifest")
+    manifest = {
+        "name": "Batá · Toques & Oru Seco", "short_name": "Batá",
+        "start_url": "./", "scope": "./", "display": "browser",
+        "background_color": BLACK, "theme_color": BLACK,
+        "icons": [{"src": f"assets/icon-{size}.png?v={VERSION}",
+                   "sizes": f"{size}x{size}", "type": "image/png"}
+                  for size in (192, 512)],
+    }
+    (ROOT / "site.webmanifest").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print("wrote assets/icon.svg and site.webmanifest")
     return 0
 
 

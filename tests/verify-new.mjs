@@ -194,7 +194,7 @@ const fills = await page.evaluate(() => document.getElementById("app").getBoundi
 check("app column fills the phone viewport", fills);
 const iconLinks = await page.evaluate(() =>
   Array.from(document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"], link[rel="manifest"]'))
-    .map((link) => link.getAttribute("href")));
+    .map((link) => link.getAttribute("href").split("?")[0]));
 check("modern page links the icon set",
   iconLinks.includes("assets/icon.svg") && iconLinks.includes("assets/icon-32.png") &&
   iconLinks.includes("assets/icon-180.png") && iconLinks.includes("site.webmanifest"),

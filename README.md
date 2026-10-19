@@ -22,7 +22,7 @@ losslessly — and rebuilds the interface as plain HTML/CSS/JavaScript.
 | Layout + content model emitted as `js/data.js` | **done** |
 | Shipped-layout page (`index_old.html`) | working; reconstructs the original screens |
 | Modern layout page (`index.html`) | working; responsive player (portrait phone, landscape phone, desktop sidebar), same data and transport |
-| App icon + manifest | working; three fanned batá drums, flat black/amber, full favicon/home-screen set |
+| App icon + manifest | working; three fanned batá drums, smooth black/amber silhouettes, full favicon/home-screen set |
 
 See [docs/PLAN.md](docs/PLAN.md) for the next steps and
 [docs/REVERSE-ENGINEERING.md](docs/REVERSE-ENGINEERING.md) for the evidence
