@@ -202,8 +202,10 @@
   Mixer.prototype.play = function () {
     this.resume();
     var self = this;
-    var active = this.tracks.filter(function (record) { return record.volume > 0.001; });
-    if (!active.length) active = this.tracks.slice(0, 1);
+    // The original calls AudioSource.Play() on all five stems, so a stem at
+    // volume 0 (Vox uses VolumeValueChangefromzero) still advances and can be
+    // unmuted mid-playback.
+    var active = this.tracks;
     var reference = null;
     active.forEach(function (record) {
       if (reference === null) reference = record;
@@ -282,7 +284,8 @@
   }
 
   function screenFor(name) {
-    return D.screens[name];
+    if (name === "player") return D.player || D.screens.player;
+    return (D.screens && D.screens[name]) || (name && name.indexOf("level") === 0 ? D.player : null);
   }
 
   var overlayLayer = null;
@@ -325,6 +328,11 @@
     }
     if (drawable.kind === "button") {
       var button = el("el hit", drawable.rect);
+      var primary = (drawable.hooks || [])[0] || {};
+      button.dataset.method = primary.method || "";
+      if (primary.target_lesson) button.dataset.lesson = primary.target_lesson;
+      if (primary.string_argument) button.dataset.scene = primary.string_argument;
+      if (primary.target) button.dataset.target = primary.target;
       button.addEventListener("click", function (event) {
         event.stopPropagation();
         fireHooks(drawable.hooks, options);
@@ -340,6 +348,21 @@
     clearStage();
     resetFrames();
     options = options || {};
+    // Unity draws canvases by sorting order: reproduce it so a widget in a higher
+    // canvas wins pointer hits over one in a lower canvas.
+    var orders = [];
+    (screen.drawables || []).forEach(function (drawable) {
+      var order = drawable.canvas_order || 0;
+      if (orders.indexOf(order) < 0) orders.push(order);
+    });
+    orders.sort(function (a, b) { return a - b; });
+    var canvasZ = function (order) {
+      var rank = orders.indexOf(order || 0);
+      return rank < 0 ? 0 : rank;
+    };
+    // Unity hit-tests the topmost widget in hierarchy order, so later siblings
+    // (within a canvas) must sit above earlier ones.
+    var drawn = 0;
     (screen.drawables || []).forEach(function (drawable) {
       if (drawable.enabled === false && drawable.kind !== "button" && drawable.kind !== "slider") return;
       if (drawable.overlay && !options.includeOverlay) {
@@ -347,7 +370,28 @@
         return;
       }
       var container = drawable.clip ? clipLayer(drawable.clip) : stage;
-      renderDrawable(drawable, options, container);
+      var node = renderDrawable(drawable, options, container);
+      drawn += 1;
+      if (node) {
+        node.dataset.z = String(canvasZ(drawable.canvas_order) * 1000 + drawn);
+        node.dataset.area = String(drawable.rect[2] * drawable.rect[3]);
+      }
+    });
+    // The shipped scenes contain overlapping hit areas (e.g. a wide Home button
+    // spanning the smaller Prev/Next buttons). Unity resolves those through
+    // hierarchy order; a flat DOM cannot, so within one canvas the smaller
+    // widget wins the pointer hit.
+    var hits = Array.prototype.slice.call(stage.querySelectorAll(".el.hit[data-z]"));
+    var byCanvas = {};
+    hits.forEach(function (node) {
+      var rank = Math.floor(Number(node.dataset.z) / 1000);
+      (byCanvas[rank] = byCanvas[rank] || []).push(node);
+    });
+    Object.keys(byCanvas).forEach(function (rank) {
+      var group = byCanvas[rank].sort(function (a, b) { return Number(a.dataset.area) - Number(b.dataset.area); });
+      group.forEach(function (node, index) {
+        node.style.zIndex = String(Number(rank) * 1000 + 900 - index);
+      });
     });
     state.screen = screen;
     return stage;
@@ -366,6 +410,8 @@
     input.value = drawable.value === undefined ? 1 : drawable.value;
     var target = (drawable.hooks[0] || {});
     var stem = (target.target || "").split("/").pop().toLowerCase();
+    input.dataset.stem = stem;
+    input.dataset.initial = String(input.value);
     if (options && options.onSlider) options.onSlider(stem, parseFloat(input.value), drawable);
     input.addEventListener("input", function () {
       var value = parseFloat(input.value);
@@ -567,13 +613,21 @@
     var lesson = D.lessons.filter(function (item) { return item.slug === slug; })[0];
     if (!lesson) return showIndex("volume-1");
     state.lesson = lesson;
-    var screen = screenFor(lesson.level) || screenFor("player");
+    var screen = screenFor(lesson.level) || screenFor("player") || D.player;
     var mixer = new Mixer(lesson);
     state.mixer = mixer;
     renderScreen(screen, {
       fallbackRoute: lesson.volume,
       onSlider: function (stem, value) {
         if (mixer) mixer.setVolume(stem, value);
+      }
+    });
+    // the lesson scenes differ from the blueprint mainly in this title string
+    var titlePattern = /^(Toque|Lezione|Oru)/i;
+    Array.prototype.forEach.call(document.querySelectorAll("#stage .el.txt"), function (node) {
+      if (titlePattern.test((node.textContent || "").trim())) {
+        node.textContent = (lesson.volume === "volume-2" ? "Oru Seco " : "Toque ") +
+          (lesson.number || "") + " - " + (lesson.title || "");
       }
     });
     // lesson-specific label over the blueprint title
@@ -662,4 +716,34 @@
   window.addEventListener("hashchange", route);
   if (!location.hash) location.hash = "#/opening";
   route();
+
+  /* Debug/testing hook: used by tests/verify.mjs to inspect the mixer state
+     without reaching into closures. Read-only; the app never needs it. */
+  window.__batapp = {
+    data: D,
+    state: function () {
+      return {
+        screen: state.screen ? state.screen.slug : null,
+        lesson: state.lesson ? state.lesson.slug : null,
+        overlayVisible: !!(overlayLayer && overlayLayer.style.display === "block"),
+        wayfinding: document.querySelectorAll(".el.hit").length
+      };
+    },
+    tracks: function () {
+      if (!state.mixer) return [];
+      return state.mixer.tracks.map(function (record) {
+        return {
+          stem: record.stem,
+          path: record.path,
+          volume: record.element.volume,
+          gain: record.gain ? record.gain.gain.value : null,
+          currentTime: record.element.currentTime,
+          paused: record.element.paused,
+          duration: record.element.duration || null,
+          readyState: record.element.readyState,
+          error: record.element.error ? record.element.error.code : null
+        };
+      });
+    }
+  };
 })();

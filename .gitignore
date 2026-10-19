@@ -11,3 +11,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 *.swp
+
+# development-only browser verification
+tests/node_modules/
