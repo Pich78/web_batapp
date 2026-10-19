@@ -206,6 +206,11 @@ transport in `js/mixer.js`.
   (with `fetch`, same origin) so iOS Safari's preload restriction cannot stall
   the gate; on `file://` the local elements are awaited. Play is disabled until
   every stem is local, with a spinner/ring progress, named errors and Retry.
+- Transport: every stem loops (the scene object `Bit` maps to the exported
+  `beat` stem); the drift loop runs every 250 ms and detects a loop wrap on any
+  stem, aligning all five to the restarted position. Seek keeps playback running
+  and applies on release, suspending the drift loop until the elements report
+  `seeked`; mute is a pure gain change.
 - The seek bar under the title seeks all stems together; the title format is
   `Title · Toque/Oru Seco NN · Batá`, with `Toques · Batá`, `Oru Seco · Batá`
   and the root title for library routes.
@@ -217,7 +222,8 @@ transport in `js/mixer.js`.
     library sidebar + player/empty main pane, with a narrower stacked player
     below 1200 px.
 - `prefers-color-scheme` selects the theme; there is no toggle and no external
-  resource (inline SVG icons, generated icon set, system font stack).
+  resource (inline SVG icons, generated two-colour three-drum icon set, system
+  font stack).
 - iOS/Safari 18.4+ is required for Ogg Vorbis playback; older iOS cannot decode
   the lesson audio.
 - Playback never autoplays on navigation; the user's first Play tap starts all
@@ -242,9 +248,11 @@ transport in `js/mixer.js`.
   `file://` and over HTTP: portrait, landscape-phone and desktop modes, load
   gate, seek, titles, mute semantics, prev/next, both colour schemes, lesson
   order, slim-data equivalence, icon links, no external requests/links and a
-  lesson sweep. Chromium runs all 61 lessons; `BROWSER=firefox|webkit` runs
-  representative lessons (and the HTTP gate/error paths). Its Chromium summary
-  is written to `docs/verification/new-ui-sweep-summary.json`;
+  lesson sweep. It also runs an instrumented transport regression (exactly one
+  media element per stem, loop flags, pause → mute → play → backward seek, and
+  a loop-boundary wrap). Chromium runs all 61 lessons; `BROWSER=firefox|webkit`
+  runs representative lessons (and the HTTP gate/error paths). Its Chromium
+  summary is written to `docs/verification/new-ui-sweep-summary.json`;
   `tests/verify-browsers.mjs` records all engines in
   `docs/verification/cross-browser-summary.json`.
 - WebKit needs host libraries for local runs:
@@ -258,6 +266,9 @@ transport in `js/mixer.js`.
 
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`), breaking changes
   marked with `!`.
+- Bump the `?v=` query on `app.css`/`app-new.css` and every shipped JS file in
+  both HTML pages for each release, so a cached old script cannot be mixed with
+  new HTML on GitHub Pages.
 - Keep the binary payload intentional: `assets/audio/**` is ~88 MB and is
   regenerable; if it grows past GitHub's comfort zone, revisit rather than add
   LFS (Pages does not serve LFS objects).

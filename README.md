@@ -22,6 +22,7 @@ losslessly — and rebuilds the interface as plain HTML/CSS/JavaScript.
 | Layout + content model emitted as `js/data.js` | **done** |
 | Shipped-layout page (`index_old.html`) | working; reconstructs the original screens |
 | Modern layout page (`index.html`) | working; responsive player (portrait phone, landscape phone, desktop sidebar), same data and transport |
+| App icon + manifest | working; three fanned batá drums, flat black/amber, full favicon/home-screen set |
 
 See [docs/PLAN.md](docs/PLAN.md) for the next steps and
 [docs/REVERSE-ENGINEERING.md](docs/REVERSE-ENGINEERING.md) for the evidence
@@ -87,7 +88,12 @@ pass that re-seeks any stem more than 80 ms off the reference.
 - The modern page preloads the stems: on HTTP it fetches them into Blobs with a
   visible loading gate, then enables Play; on `file://` it waits for the local
   media to be ready. A failed stem is named and can be retried.
-- Seeking moves all five stems to the same position before playback continues.
+- Every stem loops — including Beat, whose scene object is `Bit` while its
+  exported stem is `beat`. The drift loop detects a loop wrap and pulls all
+  stems to the same restart position.
+- Seeking moves all five stems to the same position before playback continues;
+  the drift timer is suspended during the seek so it cannot undo a backward
+  jump.
 
 **iPhone/iPad:** iOS/Safari 18.4+ is required for Ogg Vorbis playback. On older
 iOS versions the browser cannot decode the lesson audio.

@@ -24,17 +24,23 @@ Android Chrome and Windows browsers must be checked by a person.
    enabled when all five stems are local. No Play before that point.
 4. Tap Play. All five stems start together; Vox is audible at 100%. Pause,
    resume, Stop, then Play again.
-5. Drag the seek bar to roughly the middle. All stems jump together and stay in
-   sync (listen for flams between the drums).
-6. Move the Iya/Itotele/Okonkolo/Beat/Vox sliders; mute one, confirm its slider
+5. While playing, mute a stem, unmute it, then pause → mute a track → play.
+6. Drag the seek bar to roughly the middle while still playing. All stems jump
+   together and stay in sync (listen for flams between the drums). Then drag it
+   **backwards** to an earlier point; the stems must stay synchronized and no
+   second/overlapping stream may start.
+7. Seek near the end (last second) and let the lesson cross the loop boundary.
+   All five stems must restart together, with Beat still present; no rapid
+   repeated loop or doubled voice.
+8. Move the Iya/Itotele/Okonkolo/Beat/Vox sliders; mute one, confirm its slider
    value is preserved, then unmute.
-7. Prev/Next moves through the volume; at the ends the button is disabled.
-8. Open an instrumental lesson (Volume II or Volume I 19 Egbi pami); there is no
-   Vox row, and the other four stems work.
-9. Rotate the phone (portrait and landscape). The landscape layout is
-   two-column; nothing is clipped and the page does not scroll unexpectedly.
-10. Check the browser tab title: e.g. `Alubanche · Toque 01 · Batá`.
-11. Reload the page directly on a lesson URL; the lesson loads and the title is
+9. Prev/Next moves through the volume; at the ends the button is disabled.
+10. Open an instrumental lesson (Volume II or Volume I 19 Egbi pami); there is
+    no Vox row, and the other four stems work.
+11. Rotate the phone (portrait and landscape). The landscape layout is
+    two-column; nothing is clipped and the page does not scroll unexpectedly.
+12. Check the browser tab title: e.g. `Alubanche · Toque 01 · Batá`.
+13. Reload the page directly on a lesson URL; the lesson loads and the title is
     correct.
 
 ## Results

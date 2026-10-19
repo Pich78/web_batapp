@@ -69,6 +69,12 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
         ignored;
       - `file://`: `<audio>` elements with per-element volume and a drift
         correction loop (Web Audio cannot read local media);
+      - scene `Audios/Bit` maps to the exported `beat` stem, so Beat loops like
+        every other stem; a missing loop flag defaults to true;
+      - the 250 ms drift loop is wrap-aware: when any stem loops, all stems are
+        pulled to the same restart position;
+      - the reference is re-selected from live stems if it pauses/ends; seek
+        suspends the drift loop until `seeked`, then restarts it;
       - all stems start in the same tick and every stem stays within 80 ms of
         the reference.
 - [x] **Pause/resume semantics** matching `AudioSource.Pause`/`Stop` for all five
@@ -80,8 +86,8 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       responsive player with portrait-phone, landscape-phone and desktop modes
       (persistent sidebar on desktop), progress ring, draggable seek bar,
       per-lesson titles, per-stem volume and mute, natural lesson order
-      (1, 2, … 20A, 20B, 21, 22), system light/dark theme, generated icon set,
-      no external resources. The generated `js/lessons.js` is a compact
+      (1, 2, … 20A, 20B, 21, 22), system light/dark theme, generated
+      two-colour three-drum icon set, no external resources. The generated `js/lessons.js` is a compact
       lessons-only payload for this page; the scene page keeps `js/data.js`.
       Vox starts at 100% in the modern model. All stems are loaded (fetch-to-Blob
       on HTTP, local elements on file://) before Play is enabled, with named
@@ -137,7 +143,9 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       semantics, prev/next, keyboard, light/dark themes, all 61 lessons and an
       HTTP pass exercising fetch-to-Blob, the gate, named errors/Retry and the
       Web Audio gains. Chromium runs the full sweep; Firefox/WebKit run
-      representative lessons. Summary in
+      representative lessons. The instrumented transport regression covers
+      pause → mute → play → backward seek and the loop-boundary wrap with one
+      media element per stem. Summary in
       `docs/verification/new-ui-sweep-summary.json`; cross-browser record in
       `docs/verification/cross-browser-summary.json`.
 - [ ] Re-run `tools/unity_schema.py` and `tools/export_audio.py --verify` in CI
