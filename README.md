@@ -9,6 +9,9 @@ The original is a Unity 2019.3.7f1 IL2CPP Android app. This port reuses the
 app's own assets — the lesson audio is the original Vorbis stream, remuxed
 losslessly — and rebuilds the interface as plain HTML/CSS/JavaScript.
 
+**Live app:** <https://pich78.github.io/web_batapp/>  
+**Scene reconstruction:** <https://pich78.github.io/web_batapp/index_old.html>
+
 ## Status
 
 | part | state |
@@ -26,6 +29,10 @@ behind the reconstruction.
 
 ## Running the app
 
+- **Live site** — <https://pich78.github.io/web_batapp/> (modern layout at the
+  root, scene reconstruction at `/index_old.html`). The repository publishes
+  itself from `master` with GitHub Pages; all paths are relative, so it also
+  works from a subpath.
 - **Double-click `index.html`** — the modern layout. No server, no build:
   library with the two volumes, lesson player with Play/Pause/Stop, Prev/Next,
   loop progress and a five-stem mixer (volume + mute per stem). It adapts from
@@ -34,10 +41,17 @@ behind the reconstruction.
 - **Double-click `index_old.html`** — the shipped-layout reconstruction: opening
   → volume selector → toque/oru-seco index → lesson player, rendered from the
   app's own scene geometry.
-- Or publish the repository with GitHub Pages (Settings → Pages → deploy from
-  the branch root). All paths are relative, so it works from a subpath too; the
-  site root serves the modern `index.html`, and the scene reconstruction stays
-  reachable at `index_old.html`.
+
+## Static by design
+
+The shipped app is plain HTML, CSS and classic `<script>` files: **no Node.js,
+npm, bundler, framework, module loader or build step is used or required at
+runtime**. Node and Playwright are only used by the optional development test
+suite in `tests/`; Python/ffmpeg are only used by the extraction tools.
+
+GitHub Pages deploys the branch with GitHub's managed builder. If its Actions
+log shows a Node 20 deprecation notice for `actions/upload-artifact`, that
+comes from GitHub's deployment runner, not from this project's code or tests.
 
 ## Playback
 
