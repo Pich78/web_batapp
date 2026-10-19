@@ -182,8 +182,16 @@ the player: `Iya`, `Itotele`, `Okonkolo`, `Beat`, `Vox`, `Home`, `Prev`, `Next`,
 `Menu`, `CAMBIA LEZIONE`, `TORNA ALLA LEZIONE`.
 
 Canvases use `ScaleWithScreenSize` with reference `1920×1080`,
-`matchWidthOrHeight = 1` (match height); the `Volume Selector` additionally has
-a second canvas at reference `298.5×456` (match width) for the small layout.
+`matchWidthOrHeight = 1` (match height), so the canvas keeps 1080 units of height
+and *widens* with the screen. The `Volume Selector` additionally ships a second
+canvas at `298.5×456` with `Expand` — the original's portrait menu layout.
+
+That match-height behaviour also explains the store screenshots' framing: on a
+720×1440 phone the canvas is only **540 units wide**, while the lesson player is
+authored around x≈675–1170 — i.e. the player cannot fit a portrait canvas and
+the app rotates to landscape (its 2.1 changelog calls out landscape
+optimisation). The port reproduces this as: match height on wide windows,
+letterbox at the authored 1920 width on narrow ones.
 Sprite/UI sorting orders observed: 0, 1, 2.
 
 Text in the shipped scenes confirms the intended UI copy, e.g.

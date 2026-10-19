@@ -111,6 +111,31 @@ Addresses for the app's own methods are cached in
 decompilation pays for Ghidra's analysis of the 14 MB binary; `--snapshot`
 keeps it for later queries.
 
+## Layout model
+
+Screens are emitted as **anchor-relative layout graphs**, not baked rectangles:
+`tools/build_app_data.py` writes `layout` (one node per RectTransform, with
+`anchors/pivot/anchored/delta/scale` and a parent index) and every drawable
+references a `node`. `js/batapp.js#computeLayout` runs Unity's RectTransform math
+in the browser, so geometry follows the live canvas.
+
+Canvas rules (derived from the scenes, not chosen):
+
+- authored reference is 1920x1080 with `CanvasScaler` **match-height**;
+- wide screens: canvas height = 1080 units, width = `1080 x aspect`, scale =
+  `height / 1080` (this is what the original does, so edge-anchored widgets stay
+  put and extra width is simply revealed);
+- narrower than 16:9 the canvas would shrink under the authored width and push
+  the player off-screen — the original rotates instead, so the port keeps 1920
+  units and letterboxes;
+- nodes with a plain `Transform` (e.g. an `Actions` holder) are non-drawing
+  pass-throughs and deliberately do **not** contribute their localScale: the
+  shipped child positions only form a sane row without it (applying the 1.8
+  multiplier put "Next Lesson" at x=2039 in a 1920 canvas).
+
+A `CanvasScaler` of 298.5x456 (`Expand`) also exists in `Volume Selector`; that
+is the original's portrait menu canvas and is not yet wired into the port.
+
 ## Verification rules
 
 - **Never claim observed runtime behaviour.** There is no device or emulator in

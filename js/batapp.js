@@ -13,7 +13,8 @@
   "use strict";
 
   var D = window.BATAPP;
-  var STAGE_W = 1920, STAGE_H = 1080;
+  var STAGE_H = 1080;          // canvas height in reference units (match-height)
+  var STAGE_W = 1920;          // updated from the viewport aspect on every layout pass
   var stage = document.getElementById("stage");
   var viewport = document.getElementById("viewport");
   var STEM_ORDER = ["iya", "ito", "oko", "vox", "beat"];
@@ -32,8 +33,8 @@
     return {
       left: rect[0] + "px",
       top: (STAGE_H - rect[1] - rect[3]) + "px",
-      width: rect[2] + "px",
-      height: rect[3] + "px"
+      width: Math.max(0, rect[2]) + "px",
+      height: Math.max(0, rect[3]) + "px"
     };
   }
 
@@ -58,16 +59,97 @@
   }
 
   function fitStage() {
-    var scale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+    // The shipped scenes are authored on a 1920x1080 canvas with CanvasScaler
+    // match-height. On wider screens the canvas simply gets wider (the original
+    // behaviour). Narrower than 16:9 the canvas would shrink below the authored
+    // width and clip the player, which the app avoids by rotating; the browser
+    // equivalent is to keep 1920 units and letterbox.
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var authoredW = 1920;
+    STAGE_H = 1080;
+    var wideW = STAGE_H * (vw / vh);
+    var scale, widthUnits;
+    if (wideW >= authoredW) {
+      widthUnits = wideW;
+      scale = vh / STAGE_H;
+    } else {
+      widthUnits = authoredW;
+      scale = Math.min(vw / authoredW, vh / STAGE_H);
+    }
+    STAGE_W = widthUnits;
+    stage.style.width = STAGE_W + "px";
+    stage.style.height = STAGE_H + "px";
     stage.style.transform = "scale(" + scale + ")";
+    stage.style.transformOrigin = "0 0";
+    stage.style.left = Math.max(0, (vw - STAGE_W * scale) / 2) + "px";
+    stage.style.top = Math.max(0, (vh - STAGE_H * scale) / 2) + "px";
   }
-  window.addEventListener("resize", fitStage);
+
+  function computeLayout(screen) {
+    var nodes = (screen && screen.layout) || [];
+    var out = {};
+    var canvasRect = [0, 0, STAGE_W, STAGE_H];
+    nodes.forEach(function (node) {
+      var parent = node.parent >= 0 && out[node.parent]
+        ? out[node.parent]
+        : { rect: canvasRect, size: [STAGE_W, STAGE_H], scale: 1 };
+      if (node.canvas) {
+        out[node.id] = { rect: canvasRect.slice(), size: [STAGE_W, STAGE_H], scale: 1 };
+        return;
+      }
+      if (node.plain) {
+        out[node.id] = { rect: parent.rect, size: parent.size, scale: parent.scale * (node.scale || 1) };
+        return;
+      }
+      var a = node.anchors, pivot = node.pivot, pos = node.anchored, delta = node.delta;
+      var pw = parent.size[0], ph = parent.size[1];
+      var minX = a[0] * pw, minY = a[1] * ph, maxX = a[2] * pw, maxY = a[3] * ph;
+      var width = (maxX - minX) + delta[0], height = (maxY - minY) + delta[1];
+      var pivotX = minX + (maxX - minX) * pivot[0] + pos[0];
+      var pivotY = minY + (maxY - minY) * pivot[1] + pos[1];
+      var localX = pivotX - width * pivot[0], localY = pivotY - height * pivot[1];
+      var scale = parent.scale * (node.scale || 1);
+      out[node.id] = {
+        rect: [
+          parent.rect[0] + localX * parent.scale,
+          parent.rect[1] + localY * parent.scale,
+          width * scale,
+          height * scale
+        ],
+        size: [width, height],
+        scale: scale
+      };
+    });
+    return out;
+  }
+
+  function relayout() {
+    fitStage();
+    if (!state.screen) return;
+    state.layout = computeLayout(state.screen);
+    var rectFor = function (nodeId) {
+      var entry = state.layout[nodeId];
+      return entry ? entry.rect : null;
+    };
+    placed.forEach(function (item) {
+      var rect = rectFor(item.node);
+      if (rect) place(item.el, rect);
+    });
+    Object.keys(clipLayers).forEach(function (key) {
+      var rect = rectFor(Number(key));
+      if (rect) place(clipLayers[key], rect);
+    });
+    if (overlayLayer) place(overlayLayer, [0, 0, STAGE_W, STAGE_H]);
+    applySliderVisuals();
+  }
+
+  window.addEventListener("resize", relayout);
   fitStage();
 
   /* ------------------------------------------------------------ draw screen */
 
-  function renderImage(drawable, root) {
-    var node = el("el img", drawable.rect);
+  function renderImage(drawable, rect, root) {
+    var node = el("el img", rect);
     node.style.backgroundSize = "100% 100%";
     node.style.opacity = drawable.active && drawable.enabled === false ? "0.35" : "1";
     if (!drawable.active) node.style.display = "none";
@@ -109,8 +191,8 @@
     "lower-right": ["flex-end", "flex-end", "right"]
   };
 
-  function renderText(drawable, root) {
-    var node = el("el txt", drawable.rect);
+  function renderText(drawable, rect, root) {
+    var node = el("el txt", rect);
     var align = ALIGN_FLEX[drawable.alignment] || ALIGN_FLEX["middle-center"];
     node.style.justifyContent = align[0];
     node.style.alignItems = align[1];
@@ -289,7 +371,10 @@
   }
 
   var overlayLayer = null;
-  var clipLayers = {};
+  var clipLayers = {};        // clip node id -> clipping container
+  var elementsByNode = {};    // layout node id -> rendered elements
+  var sliderRecords = [];
+  var placed = [];
 
   function overlayRoot() {
     if (!overlayLayer) {
@@ -306,28 +391,41 @@
   function resetFrames() {
     if (overlayLayer) { overlayLayer.remove(); overlayLayer = null; }
     clipLayers = {};
+    elementsByNode = {};
+    sliderRecords = [];
+    placed = [];
+    state.layout = null;
   }
 
-  function clipLayer(rect) {
-    var key = rect.join(":");
-    if (!clipLayers[key]) {
-      clipLayers[key] = el("layer clip", rect);
-      stage.appendChild(clipLayers[key]);
+  function register(nodeId, node) {
+    if (nodeId === undefined || nodeId === null || !node) return;
+    (elementsByNode[nodeId] = elementsByNode[nodeId] || []).push(node);
+  }
+
+  function rectOfNode(nodeId) {
+    var entry = state.layout && state.layout[nodeId];
+    return entry ? entry.rect : null;
+  }
+
+  function clipLayer(nodeId) {
+    if (!clipLayers[nodeId]) {
+      clipLayers[nodeId] = el("layer clip", rectOfNode(nodeId) || [0, 0, STAGE_W, STAGE_H]);
+      stage.appendChild(clipLayers[nodeId]);
     }
-    return clipLayers[key];
+    return clipLayers[nodeId];
   }
 
-  function renderDrawable(drawable, options, container) {
-    if (drawable.kind === "image") return renderImage(drawable, container);
-    if (drawable.kind === "text") return renderText(drawable, container);
+  function renderDrawable(drawable, rect, container, options) {
+    if (drawable.kind === "image") return renderImage(drawable, rect, container);
+    if (drawable.kind === "text") return renderText(drawable, rect, container);
     if (drawable.kind === "video-placeholder") {
-      var video = el("el video", drawable.rect);
+      var video = el("el video", rect);
       video.textContent = (options && options.videoLabel) || "video";
       container.appendChild(video);
       return video;
     }
     if (drawable.kind === "button") {
-      var button = el("el hit", drawable.rect);
+      var button = el("el hit", rect);
       var primary = (drawable.hooks || [])[0] || {};
       button.dataset.method = primary.method || "";
       if (primary.target_lesson) button.dataset.lesson = primary.target_lesson;
@@ -340,7 +438,7 @@
       container.appendChild(button);
       return button;
     }
-    if (drawable.kind === "slider") return attachSlider(drawable, container, options);
+    if (drawable.kind === "slider") return attachSlider(drawable, rect, container, options);
     return null;
   }
 
@@ -348,6 +446,10 @@
     clearStage();
     resetFrames();
     options = options || {};
+    fitStage();
+    state.screen = screen;
+    state.layout = computeLayout(screen);
+
     // Unity draws canvases by sorting order: reproduce it so a widget in a higher
     // canvas wins pointer hits over one in a lower canvas.
     var orders = [];
@@ -360,107 +462,112 @@
       var rank = orders.indexOf(order || 0);
       return rank < 0 ? 0 : rank;
     };
-    // Unity hit-tests the topmost widget in hierarchy order, so later siblings
-    // (within a canvas) must sit above earlier ones.
+
     var drawn = 0;
     (screen.drawables || []).forEach(function (drawable) {
       if (drawable.enabled === false && drawable.kind !== "button" && drawable.kind !== "slider") return;
+      var rect = rectOfNode(drawable.node);
+      if (!rect) return;
+      var container = drawable.clip_node !== undefined && drawable.clip_node !== null
+        ? clipLayer(drawable.clip_node)
+        : stage;
       if (drawable.overlay && !options.includeOverlay) {
-        renderDrawable(drawable, options, overlayRoot());
+        renderDrawable(drawable, rect, overlayRoot(), options);
         return;
       }
-      var container = drawable.clip ? clipLayer(drawable.clip) : stage;
-      var node = renderDrawable(drawable, options, container);
+      var node = renderDrawable(drawable, rect, container, options);
       drawn += 1;
       if (node) {
+        register(drawable.node, node);
+        placed.push({ node: drawable.node, el: node });
         node.dataset.z = String(canvasZ(drawable.canvas_order) * 1000 + drawn);
-        node.dataset.area = String(drawable.rect[2] * drawable.rect[3]);
+        node.dataset.area = String(rect[2] * rect[3]);
       }
     });
+    applySliderVisuals();
+
     // The shipped scenes contain overlapping hit areas (e.g. a wide Home button
     // spanning the smaller Prev/Next buttons). Unity resolves those through
     // hierarchy order; a flat DOM cannot, so within one canvas the smaller
     // widget wins the pointer hit.
-    var hits = Array.prototype.slice.call(stage.querySelectorAll(".el.hit[data-z]"));
     var byCanvas = {};
-    hits.forEach(function (node) {
-      var rank = Math.floor(Number(node.dataset.z) / 1000);
-      (byCanvas[rank] = byCanvas[rank] || []).push(node);
+    Array.prototype.forEach.call(stage.querySelectorAll(".el.hit[data-z]"), function (hit) {
+      var rank = Math.floor(Number(hit.dataset.z) / 1000);
+      (byCanvas[rank] = byCanvas[rank] || []).push(hit);
     });
     Object.keys(byCanvas).forEach(function (rank) {
-      var group = byCanvas[rank].sort(function (a, b) { return Number(a.dataset.area) - Number(b.dataset.area); });
-      group.forEach(function (node, index) {
-        node.style.zIndex = String(Number(rank) * 1000 + 900 - index);
-      });
+      byCanvas[rank]
+        .sort(function (a, b) { return Number(a.dataset.area) - Number(b.dataset.area); })
+        .forEach(function (hit, index) {
+          hit.style.zIndex = String(Number(rank) * 1000 + 900 - index);
+        });
     });
-    state.screen = screen;
     return stage;
   }
 
-  function attachSlider(drawable, container, options) {
-    var fillNode = findChildImage(drawable, drawable.fill);
-    var handleNode = findChildImage(drawable, drawable.handle);
+  function attachSlider(drawable, rect, container, options) {
     var input = document.createElement("input");
     input.type = "range";
     input.className = "el slider-hit";
-    place(input, drawable.rect);
+    place(input, rect);
     input.min = drawable.min === undefined ? 0 : drawable.min;
     input.max = drawable.max === undefined ? 1 : drawable.max;
     input.step = drawable.whole_numbers ? 1 : 0.01;
     input.value = drawable.value === undefined ? 1 : drawable.value;
-    var target = (drawable.hooks[0] || {});
-    var stem = (target.target || "").split("/").pop().toLowerCase();
+    var target = (drawable.hooks || [])[0] || {};
+    var stem = (target.game_object || target.target || "").split("/").pop().toLowerCase();
     input.dataset.stem = stem;
     input.dataset.initial = String(input.value);
+    var record = { drawable: drawable, input: input, fill: null, handle: null };
+    sliderRecords.push(record);
     if (options && options.onSlider) options.onSlider(stem, parseFloat(input.value), drawable);
     input.addEventListener("input", function () {
       var value = parseFloat(input.value);
-      updateSliderVisual(drawable, value, fillNode, handleNode);
+      updateSliderVisual(record);
       if (options && options.onSlider) options.onSlider(stem, value, drawable);
     });
     container.appendChild(input);
-    updateSliderVisual(drawable, parseFloat(input.value), fillNode, handleNode);
+    return input;
   }
 
-  function findChildImage(drawable, rect) {
-    if (!rect) return null;
-    var parent = stage;
-    var nodes = parent.querySelectorAll(".el.img");
-    for (var i = 0; i < nodes.length; i++) {
-      var node = nodes[i];
-      var left = parseFloat(node.style.left), top = parseFloat(node.style.top);
-      var width = parseFloat(node.style.width), height = parseFloat(node.style.height);
-      var expected = cssRect(rect);
-      if (Math.abs(left - parseFloat(expected.left)) < 0.6 &&
-          Math.abs(top - parseFloat(expected.top)) < 0.6 &&
-          Math.abs(width - parseFloat(expected.width)) < 0.6 &&
-          Math.abs(height - parseFloat(expected.height)) < 0.6) {
-        return node;
+  function applySliderVisuals() {
+    sliderRecords.forEach(function (record) {
+      if (!record.fill && record.drawable.fill_node !== undefined && record.drawable.fill_node !== null) {
+        record.fill = (elementsByNode[record.drawable.fill_node] || [])[0] || null;
       }
-    }
-    return null;
+      if (!record.handle && record.drawable.handle_node !== undefined && record.drawable.handle_node !== null) {
+        record.handle = (elementsByNode[record.drawable.handle_node] || [])[0] || null;
+      }
+      updateSliderVisual(record);
+    });
   }
 
-  function updateSliderVisual(drawable, value, fillNode, handleNode) {
+  function updateSliderVisual(record) {
+    var drawable = record.drawable;
+    var value = parseFloat(record.input.value);
     var min = drawable.min === undefined ? 0 : drawable.min;
     var max = drawable.max === undefined ? 1 : drawable.max;
     var ratio = max === min ? 0 : (value - min) / (max - min);
     var direction = drawable.direction || "left-to-right";
     var horizontal = direction === "left-to-right" || direction === "right-to-left";
     var inverted = direction === "right-to-left" || direction === "top-to-bottom";
-    if (fillNode) {
+    if (record.fill) {
       if (horizontal) {
-        fillNode.style.transformOrigin = inverted ? "right center" : "left center";
-        fillNode.style.transform = "scaleX(" + ratio + ")";
+        record.fill.style.transformOrigin = inverted ? "right center" : "left center";
+        record.fill.style.transform = "scaleX(" + ratio + ")";
       } else {
-        fillNode.style.transformOrigin = inverted ? "center top" : "center bottom";
-        fillNode.style.transform = "scaleY(" + ratio + ")";
+        record.fill.style.transformOrigin = inverted ? "center top" : "center bottom";
+        record.fill.style.transform = "scaleY(" + ratio + ")";
       }
     }
-    if (handleNode && drawable.fill) {
-      var travel = horizontal ? (drawable.fill[2] - drawable.handle[2]) : (drawable.fill[3] - drawable.handle[3]);
+    var fillRect = drawable.fill_node !== undefined && drawable.fill_node !== null ? rectOfNode(drawable.fill_node) : null;
+    var handleRect = drawable.handle_node !== undefined && drawable.handle_node !== null ? rectOfNode(drawable.handle_node) : null;
+    if (record.handle && fillRect && handleRect) {
+      var travel = horizontal ? (fillRect[2] - handleRect[2]) : (fillRect[3] - handleRect[3]);
       var offset = travel * (inverted ? 1 - ratio : ratio);
-      handleNode.style.transform = horizontal ? "translateX(" + offset + "px)" : "translateY(" + (-offset) + "px)";
+      record.handle.style.transform = horizontal
+        ? "translateX(" + offset + "px)"
+        : "translateY(" + (-offset) + "px)";
     }
   }
 
@@ -474,7 +581,7 @@
       if (method === "Play" || method === "Pause" || method === "Stop") {
         if (state.mixer) state.mixer[method.toLowerCase()]();
       } else if (method === "SetVolume" && options && options.onSlider) {
-        options.onSlider((hook.target || "").split("/").pop().toLowerCase(), hook.float_argument || 1, hook);
+        options.onSlider((hook.game_object || hook.target || "").split("/").pop().toLowerCase(), hook.float_argument || 1, hook);
       } else if (method === "LoadNextLevel" || method === "LoadPrevLevel") {
         stepLesson(method === "LoadNextLevel" ? 1 : -1);
       } else if (method === "Hide") {

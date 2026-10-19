@@ -35,8 +35,13 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
 - [x] **Content model** → `js/data.js` (classic script, no JSON fetch):
       volumes, lessons, stems, durations, credits, UI strings.
-- [x] **Layout model** → flattened absolute rects for all 65 screens at the
-      1920×1080 reference resolution, with mask clipping and canvas ordering.
+- [x] **Layout model** → anchor-relative layout graphs for all 65 screens; the
+      browser runs Unity's RectTransform math against the live canvas, with mask
+      clipping, canvas ordering and matching CanvasScaler semantics (verified at
+      720×1440, 1600×900 and 2560×1080).
+- [ ] Wire the original's **portrait menu canvas** (`298.5×456`, `Expand`) from
+      `Volume Selector` so the menu matches the phone screenshots rather than
+      letterboxing the landscape one.
 - [x] **Stage scaling**: fixed 1920×1080 stage scaled to the viewport,
       mirroring `CanvasScaler` (match height).
 - [x] **Screens**: opening → volume selector → toque index (Volume I) / oru seco

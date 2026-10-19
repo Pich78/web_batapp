@@ -34,24 +34,15 @@ FILL_METHOD = {0: "horizontal", 1: "vertical", 2: "radial-90", 3: "radial-180", 
 SLIDER_DIRECTION = {0: "left-to-right", 1: "right-to-left", 2: "bottom-to-top", 3: "top-to-bottom"}
 
 
-def local_rect_of(transform: dict, parent_size: list[float]) -> list[float]:
-    """[x, y, w, h] relative to the parent's rect minimum, in the parent's local units.
-
-    Unity resolves anchors against the parent's *local* size; the parent's
-    localScale is applied afterwards when converting to canvas units.
-    """
-    px, py, pw, ph = 0.0, 0.0, parent_size[0], parent_size[1]
-    amin, amax = transform["anchor_min"], transform["anchor_max"]
-    pivot = transform["pivot"]
-    delta = transform["size_delta"]
-    anchored = transform["anchored_position"]
-    min_x, min_y = amin[0] * pw, amin[1] * ph
-    max_x, max_y = amax[0] * pw, amax[1] * ph
-    width = (max_x - min_x) + delta[0]
-    height = (max_y - min_y) + delta[1]
-    pivot_x = min_x + (max_x - min_x) * pivot[0] + anchored[0]
-    pivot_y = min_y + (max_y - min_y) * pivot[1] + anchored[1]
-    return [pivot_x - width * pivot[0], pivot_y - height * pivot[1], width, height]
+def layout_payload(transform: dict) -> dict:
+    """Anchor-relative layout data for one RectTransform (Unity's own math runs in the browser)."""
+    return {
+        "anchors": [*transform["anchor_min"][:2], *transform["anchor_max"][:2]],
+        "pivot": transform["pivot"][:2],
+        "anchored": transform["anchored_position"][:2],
+        "delta": transform["size_delta"][:2],
+        "scale": float(transform.get("local_scale", [1.0])[0] or 1.0),
+    }
 
 
 def sprite_key(ref) -> str | None:
@@ -78,44 +69,53 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
     drawables: list[dict] = []
     unresolved: list[str] = []
 
-    rects_by_transform: dict[int, list[float]] = {}
 
-    def walk(node: dict, parent_origin: list[float], parent_size: list[float], parent_scale: float,
-             order: list[int], canvas_order: int = 0, clip: list[float] | None = None, parent_active: bool = True) -> None:
+    layout: list[dict] = []
+    node_id_by_transform: dict[int, int] = {}
+
+    def add_node(transform: dict | None, parent: int, *, canvas: bool = False,
+                 order: int = 0, plain: bool = False) -> int:
+        entry = {"id": len(layout), "parent": parent, "plain": plain}
+        if canvas:
+            entry["canvas"] = True
+            entry["canvas_order"] = order
+        elif plain:
+            # A plain Transform holder (e.g. "Actions") is not a UI node. Its 1.8
+            # local scale would push its anchored children far outside the canvas
+            # (Next Lesson ended up at x=2039 in a 1920 canvas), while the authored
+            # child positions form a tidy row only without it. Treat it as a
+            # pass-through, as the shipped layout behaves.
+            entry["scale"] = 1.0
+        else:
+            entry.update(layout_payload(transform))
+        layout.append(entry)
+        if transform is not None:
+            node_id_by_transform[transform["path_id"]] = entry["id"]
+        return entry["id"]
+
+    def walk(node: dict, parent_id: int, order: list[int], canvas_order: int = 0,
+             clip_id: int | None = None, parent_active: bool = True) -> None:
         transform = node.get("transform")
         if transform is None:
             return
         canvas_component = next((c for c in node["components"] if c.get("type") == "Canvas"), None)
+        current_clip = clip_id
         if canvas_component is not None:
-            # Unity drives a canvas RectTransform to the screen; its own canvas
-            # size (in reference units) is what its children anchor against.
-            local_scale = 1.0
-            canvas_order = int(canvas_component.get("sorting_order", 0))
-            scaler = next((c for c in node["components"] if c.get("type") == "CanvasScaler"), None) if False else None
-            size = [float(reference[0]), float(reference[1])]
-            rect = [0.0, 0.0, size[0], size[1]]
+            node_id = add_node(transform, parent_id, canvas=True,
+                               order=int(canvas_component.get("sorting_order", 0)))
+        elif "anchor_min" not in transform:
+            # a plain Transform (e.g. an "Actions" holder) has no rect of its own; its
+            # UI children still resolve against the nearest UI ancestor
+            node_id = add_node(transform, parent_id, plain=True)
         else:
-            if "anchor_min" not in transform:
-                # A plain Transform (e.g. an "Actions" holder) is not drawable, but
-                # its UI children still anchor to the nearest UI ancestor.
-                for child_transform in transform.get("children", []):
-                    child = by_transform.get(child_transform)
-                    if child is not None:
-                        walk(child, parent_origin, parent_size, parent_scale, order, canvas_order, clip, parent_active)
-                return
-            local_scale = float(transform.get("local_scale", [1.0])[0] or 1.0)
-            local = local_rect_of(transform, parent_size)
-            rect = [
-                round(parent_origin[0] + local[0] * parent_scale, 2),
-                round(parent_origin[1] + local[1] * parent_scale, 2),
-                round(local[2] * parent_scale * local_scale, 2),
-                round(local[3] * parent_scale * local_scale, 2),
-            ]
-            size = [local[2], local[3]]
-        rects_by_transform[transform["path_id"]] = rect
+            node_id = add_node(transform, parent_id)
+
         active = bool(node.get("active", True)) and parent_active
         if any(component.get("type") == "Mask" for component in node["components"]):
-            clip = rect  # Mask/ScrollRect viewport: descendants are clipped to it
+            current_clip = node_id
+        if canvas_component is not None:
+            canvas_order = int(canvas_component.get("sorting_order", 0))
+
         for component in node["components"]:
             kind = component.get("type")
             fields = component.get("fields") if isinstance(component.get("fields"), dict) else None
@@ -127,22 +127,16 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
                 if isinstance(ref, dict) and ref.get("path_id") and key is None:
                     unresolved.append(f"{model['file']}:{node['path']} -> {ref.get('name')}")
                 if kind == "RawImage" and key is None:
-                    drawables.append(
-                        {
-                            "kind": "video-placeholder",
-                            "rect": rect,
-                            "name": node["name"],
-                            "path": node["path"],
-                            "active": active,
-                            "order": len(order),
-                            "canvas_order": canvas_order,
-                        }
-                    )
+                    drawables.append({
+                        "kind": "video-placeholder", "node": node_id, "name": node["name"],
+                        "path": node["path"], "active": active, "order": len(order),
+                        "canvas_order": canvas_order, "clip_node": current_clip, "overlay": (not active),
+                    })
                     order.append(1)
                     continue
-                entry = {
+                drawables.append({
                     "kind": "image",
-                    "rect": rect,
+                    "node": node_id,
                     "sprite": key,
                     "color": fields.get("m_Color"),
                     "preserve_aspect": fields.get("m_PreserveAspect", False),
@@ -150,7 +144,6 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
                     "fill_method": FILL_METHOD.get(fields.get("m_FillMethod", 0)),
                     "fill_amount": fields.get("m_FillAmount"),
                     "fill_center": fields.get("m_FillCenter", True),
-                    "fill_origin": fields.get("m_FillOrigin"),
                     "raycast": fields.get("m_RaycastTarget", True),
                     "enabled": fields.get("m_Enabled", True),
                     "active": active,
@@ -158,87 +151,74 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
                     "path": node["path"],
                     "order": len(order),
                     "canvas_order": canvas_order,
-                    "clip": clip,
+                    "clip_node": current_clip,
                     "overlay": (not active),
-                }
-                drawables.append(entry)
+                })
                 order.append(1)
             elif kind == "Text":
                 if not fields:
                     continue
                 font = fields.get("m_FontData") or {}
-                drawables.append(
-                    {
-                        "kind": "text",
-                        "rect": rect,
-                        "text": fields.get("m_Text", ""),
-                        "font_size": font.get("m_FontSize"),
-                        "font_style": FONT_STYLE.get(font.get("m_FontStyle", 0), "normal"),
-                        "alignment": TEXT_ANCHOR.get(font.get("m_Alignment", 0), "upper-left"),
-                        "line_spacing": font.get("m_LineSpacing"),
-                        "best_fit": font.get("m_BestFit", False),
-                        "min_size": font.get("m_MinSize"),
-                        "max_size": font.get("m_MaxSize"),
-                        "align_by_geometry": font.get("m_AlignByGeometry", False),
-                        "rich_text": font.get("m_RichText", True),
-                        "horizontal_overflow": H_OVERFLOW.get(font.get("m_HorizontalOverflow", 0), "wrap"),
-                        "vertical_overflow": V_OVERFLOW.get(font.get("m_VerticalOverflow", 0), "truncate"),
-                        "color": fields.get("m_Color"),
-                        "enabled": fields.get("m_Enabled", True),
-                        "active": active,
-                        "name": node["name"],
-                        "path": node["path"],
-                        "order": len(order),
-                        "canvas_order": canvas_order,
-                        "clip": clip,
-                        "overlay": (not active),
-                    }
-                )
+                drawables.append({
+                    "kind": "text",
+                    "node": node_id,
+                    "text": fields.get("m_Text", ""),
+                    "font_size": font.get("m_FontSize"),
+                    "font_style": FONT_STYLE.get(font.get("m_FontStyle", 0), "normal"),
+                    "alignment": TEXT_ANCHOR.get(font.get("m_Alignment", 0), "upper-left"),
+                    "line_spacing": font.get("m_LineSpacing"),
+                    "best_fit": font.get("m_BestFit", False),
+                    "min_size": font.get("m_MinSize"),
+                    "max_size": font.get("m_MaxSize"),
+                    "rich_text": font.get("m_RichText", True),
+                    "horizontal_overflow": H_OVERFLOW.get(font.get("m_HorizontalOverflow", 0), "wrap"),
+                    "vertical_overflow": V_OVERFLOW.get(font.get("m_VerticalOverflow", 0), "truncate"),
+                    "color": fields.get("m_Color"),
+                    "enabled": fields.get("m_Enabled", True),
+                    "active": active,
+                    "name": node["name"],
+                    "path": node["path"],
+                    "order": len(order),
+                    "canvas_order": canvas_order,
+                    "clip_node": current_clip,
+                    "overlay": (not active),
+                })
                 order.append(1)
             elif kind in ("Slider", "Button"):
-                sub_rects = {}
-                sub_paths = {}
+                sub_nodes = {}
                 if kind == "Slider" and fields:
-                    for key_field, label in (("m_FillRect", "fill"), ("m_HandleRect", "handle")):
+                    for key_field, label in (("m_FillRect", "fill_transform"), ("m_HandleRect", "handle_transform")):
                         ref = fields.get(key_field)
                         if isinstance(ref, dict) and ref.get("path_id"):
-                            sub_paths[label] = ref["path_id"]
-                drawables.append(
-                    {
-                        "kind": kind.lower(),
-                        "rect": rect,
-                        "name": node["name"],
-                        "path": node["path"],
-                        "enabled": (fields or {}).get("m_Enabled", True),
-                        "interactable": (fields or {}).get("m_Interactable", True),
-                        "active": active,
-                        "order": len(order),
-                        "canvas_order": canvas_order,
-                        "clip": clip,
-                        "overlay": (not active),
-                        "sub_paths": sub_paths or None,
-                        **sub_rects,
-                        **(
-                            {
-                                "min": fields.get("m_MinValue"),
-                                "max": fields.get("m_MaxValue"),
-                                "value": fields.get("m_Value"),
-                                "whole_numbers": fields.get("m_WholeNumbers", False),
-                                "direction": SLIDER_DIRECTION.get(fields.get("m_Direction", 0)),
-                                "calls": fields.get("m_OnValueChanged", []),
-                            }
-                            if kind == "Slider"
-                            else {"calls": fields.get("m_OnClick", [])}
-                        ),
-                    }
-                )
+                            sub_nodes[label] = ref["path_id"]
+                drawables.append({
+                    "kind": kind.lower(),
+                    "node": node_id,
+                    "name": node["name"],
+                    "path": node["path"],
+                    "enabled": (fields or {}).get("m_Enabled", True),
+                    "interactable": (fields or {}).get("m_Interactable", True),
+                    "active": active,
+                    "order": len(order),
+                    "canvas_order": canvas_order,
+                    "clip_node": current_clip,
+                    "overlay": (not active),
+                    **sub_nodes,
+                    **({
+                        "min": fields.get("m_MinValue"),
+                        "max": fields.get("m_MaxValue"),
+                        "value": fields.get("m_Value"),
+                        "whole_numbers": fields.get("m_WholeNumbers", False),
+                        "direction": SLIDER_DIRECTION.get(fields.get("m_Direction", 0)),
+                        "calls": fields.get("m_OnValueChanged", []),
+                    } if kind == "Slider" else {"calls": fields.get("m_OnClick", [])}),
+                })
                 order.append(1)
-        child_origin = [rect[0], rect[1]]
-        child_scale = parent_scale * local_scale
+
         for child_transform in transform.get("children", []):
             child = by_transform.get(child_transform)
             if child is not None:
-                walk(child, child_origin, size, child_scale, order, canvas_order, clip, active)
+                walk(child, node_id, order, canvas_order, current_clip, active)
 
     roots = [
         node
@@ -246,55 +226,70 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
         if node.get("transform") and node["transform"]["parent"] not in by_transform
     ]
     for root in roots:
-        walk(root, [0.0, 0.0], [float(reference[0]), float(reference[1])], 1.0, [])
+        walk(root, -1, [])
 
-    for drawable in drawables:
-        if drawable["kind"] != "slider" or not drawable.get("sub_paths"):
-            continue
-        for label, transform_id in drawable["sub_paths"].items():
-            if transform_id in rects_by_transform:
-                drawable[label] = rects_by_transform[transform_id]
-        drawable.pop("sub_paths", None)
-
-    # Unity drives the fill's size at runtime, so a slider authored at value 0
-    # can carry a degenerate fill rect. Every slider in a scene comes from the
-    # same prefab, so take the modal fill geometry as the full-travel rect.
+    # resolve slider fill/handle transforms into layout nodes (visited after the slider)
     import collections as _collections
 
-    fills = _collections.Counter(
-        tuple(d["fill"]) for d in drawables if d["kind"] == "slider" and d.get("fill")
-    )
-    if fills:
-        modal, count = fills.most_common(1)[0]
-        for d in drawables:
-            if d["kind"] != "slider" or not d.get("fill"):
+    def node_payload(node_id: int) -> dict | None:
+        entry = layout[node_id]
+        if entry.get("plain") or entry.get("canvas"):
+            return None
+        return {k: entry[k] for k in ("anchors", "pivot", "anchored", "delta", "scale")}
+
+    fill_payloads: list[tuple[dict, int]] = []
+    for drawable in drawables:
+        if drawable["kind"] != "slider":
+            continue
+        for label in ("fill", "handle"):
+            transform_id = drawable.pop(label + "_transform", None)
+            if transform_id is None:
                 continue
-            if d["fill"][2] < 2 or d["fill"][3] < 2:
-                d["fill_source"] = "prefab-modal"
-                d["fill"] = list(modal)
-    # wire hook names: element name -> resolved calls from the scene dump
+            node_id = node_id_by_transform.get(transform_id)
+            if node_id is None:
+                continue
+            drawable[label + "_node"] = node_id
+            if label == "fill":
+                payload = node_payload(node_id)
+                if payload:
+                    fill_payloads.append((payload, node_id))
+
+    # Unity drives the fill's size at runtime, so a slider authored at value 0 can
+    # carry a zero-size fill node. Every slider in a scene shares one prefab, so the
+    # modal fill geometry is the full-travel rect; copy it onto degenerate ones.
+    if fill_payloads:
+        counts = _collections.Counter(
+            tuple(p["anchors"] + p["pivot"] + p["anchored"] + p["delta"]) for p, _ in fill_payloads
+        )
+        modal_key = counts.most_common(1)[0][0]
+        modal_payload = next(p for p, _ in fill_payloads
+                             if tuple(p["anchors"] + p["pivot"] + p["anchored"] + p["delta"]) == modal_key)
+        for drawable in drawables:
+            if drawable["kind"] != "slider" or "fill_node" not in drawable:
+                continue
+            entry = layout[drawable["fill_node"]]
+            degenerate = abs(entry["delta"][0]) < 1 and abs(entry["anchors"][2] - entry["anchors"][0]) < 0.001
+            if degenerate:
+                entry.update(modal_payload)
+                drawable["fill_source"] = "prefab-modal"
+
+    # attach the resolved UnityEvent wiring to the widgets that carry it
     hooks_by_element: dict[str, list[dict]] = {}
     for entry in model.get("wiring", []):
         hooks_by_element.setdefault(entry.get("element_path") or entry["element"], []).extend(
-            [
-                {
-                    "field": entry["field"],
-                    "method": call["method"],
-                    "target": call.get("game_object"),
-                    "script": call.get("resolved_script") or call.get("resolved_class"),
-                    "target_path_id": call.get("path_id"),
-                    "string_argument": call.get("string_argument"),
-                }
-                for call in entry["calls"]
-            ]
+            [self_call for self_call in entry["calls"]]
         )
-
     for drawable in drawables:
         if drawable["kind"] in ("slider", "button"):
-            drawable["hooks"] = hooks_by_element.get(drawable["path"]) or hooks_by_element.get(drawable["name"], [])
+            drawable["hooks"] = (
+                hooks_by_element.get(drawable["path"])
+                or hooks_by_element.get(drawable["name"], [])
+            )
+
     drawables.sort(key=lambda d: (d.get("canvas_order", 0), d["order"]))
     return {
         "file": model["file"],
+        "layout": layout,
         "slug": model["slug"],
         "scene": model["scene"],
         "title": model.get("title"),
