@@ -281,10 +281,10 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
         )
     for drawable in drawables:
         if drawable["kind"] in ("slider", "button"):
-            drawable["hooks"] = (
-                hooks_by_element.get(drawable["path"])
-                or hooks_by_element.get(drawable["name"], [])
-            )
+            # Strictly by node path: several widgets share the name "Button", and a
+            # name fallback silently wired a lesson card to an unrelated web-link
+            # handler.
+            drawable["hooks"] = hooks_by_element.get(drawable["path"], [])
 
     drawables.sort(key=lambda d: (d.get("canvas_order", 0), d["order"]))
     return {
@@ -398,12 +398,29 @@ def main() -> int:
     }
 
     scene_stem_to_slug = {lesson["scene_stem"]: lesson["slug"] for lesson in lessons}
-    for screen in screens.values():
+    slug_by_volume_number = {
+        (lesson["volume"], str(lesson["number"])): lesson["slug"] for lesson in lessons
+    }
+    for screen_name, screen in screens.items():
+        volume = {"toqueIndex": "volume-1", "oruSecoIndex": "volume-2"}.get(screen_name)
         for drawable in screen["drawables"]:
             for hook in drawable.get("hooks", []) or []:
                 argument = hook.get("string_argument")
                 if argument:
                     hook["target_lesson"] = scene_stem_to_slug.get(argument)
+            if drawable.get("kind") != "button" or not volume:
+                continue
+            if any(hook.get("target_lesson") for hook in drawable.get("hooks") or []):
+                continue
+            # The index screens are authored as numbered card templates whose
+            # buttons carry no scene name of their own; the card number is the
+            # lesson index in that volume.
+            match = re.search(r"Lezione \((\d+)[AB]?\)|Lezione (\d+)[AB]?\b", drawable.get("path", ""))
+            if match:
+                number = match.group(1) or match.group(2)
+                slug = slug_by_volume_number.get((volume, number)) or slug_by_volume_number.get((volume, number.lstrip("0")))
+                if slug:
+                    drawable["target_lesson"] = slug
 
     payload = {
         "generated_by": "tools/build_app_data.py",

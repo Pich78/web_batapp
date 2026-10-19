@@ -59,42 +59,50 @@
   }
 
   function fitStage() {
-    // The shipped scenes are authored on a 1920x1080 canvas with CanvasScaler
-    // match-height. On wider screens the canvas simply gets wider (the original
-    // behaviour). Narrower than 16:9 the canvas would shrink below the authored
-    // width and clip the player, which the app avoids by rotating; the browser
-    // equivalent is to keep 1920 units and letterbox.
+    // Match-height, exactly like the shipped CanvasScaler: the canvas keeps 1080
+    // units of height and widens with the window. Narrow canvases are handled by
+    // reflowForNarrowCanvas instead of letterboxing, so the app stays usable in
+    // any shape without an orientation lock.
     var vw = window.innerWidth, vh = window.innerHeight;
-    var authoredW = 1920;
     STAGE_H = 1080;
-    var wideW = STAGE_H * (vw / vh);
-    var scale, widthUnits;
-    if (wideW >= authoredW) {
-      widthUnits = wideW;
-      scale = vh / STAGE_H;
-    } else {
-      widthUnits = authoredW;
-      scale = Math.min(vw / authoredW, vh / STAGE_H);
-    }
-    STAGE_W = widthUnits;
+    STAGE_W = STAGE_H * (vw / vh);
+    var scale = vh / STAGE_H;
     stage.style.width = STAGE_W + "px";
     stage.style.height = STAGE_H + "px";
     stage.style.transform = "scale(" + scale + ")";
     stage.style.transformOrigin = "0 0";
-    stage.style.left = Math.max(0, (vw - STAGE_W * scale) / 2) + "px";
-    stage.style.top = Math.max(0, (vh - STAGE_H * scale) / 2) + "px";
+    stage.style.left = "0px";
+    stage.style.top = "0px";
   }
 
-  function computeLayout(screen) {
-    var nodes = (screen && screen.layout) || [];
+
+  var LAYOUT_KEYS = ["canvas", "canvas_order", "plain", "scale", "anchors", "pivot", "anchored", "delta"];
+
+  function cloneNodes(nodes) {
+    return nodes.map(function (node) {
+      var copy = { id: node.id, parent: node.parent };
+      LAYOUT_KEYS.forEach(function (key) {
+        if (node[key] !== undefined) copy[key] = Array.isArray(node[key]) ? node[key].slice() : node[key];
+      });
+      return copy;
+    });
+  }
+
+  function authoredLayout(screen) {
+    if (!screen) return [];
+    if (!screen.layoutAuthored) screen.layoutAuthored = cloneNodes(screen.layout || []);
+    return cloneNodes(screen.layoutAuthored);
+  }
+
+  function rectsAt(nodes, canvasW, canvasH) {
     var out = {};
-    var canvasRect = [0, 0, STAGE_W, STAGE_H];
+    var canvasRect = [0, 0, canvasW, canvasH];
     nodes.forEach(function (node) {
       var parent = node.parent >= 0 && out[node.parent]
         ? out[node.parent]
-        : { rect: canvasRect, size: [STAGE_W, STAGE_H], scale: 1 };
+        : { rect: canvasRect, size: [canvasW, canvasH], scale: 1 };
       if (node.canvas) {
-        out[node.id] = { rect: canvasRect.slice(), size: [STAGE_W, STAGE_H], scale: 1 };
+        out[node.id] = { rect: canvasRect.slice(), size: [canvasW, canvasH], scale: 1 };
         return;
       }
       if (node.plain) {
@@ -121,6 +129,50 @@
       };
     });
     return out;
+  }
+
+  function reflowForNarrowCanvas(nodes, reference) {
+    var canvasW = Math.max(STAGE_W, 1);
+    var dx = canvasW / 2 - 960;
+    var byId = {};
+    nodes.forEach(function (node) { byId[node.id] = node; });
+    var isCanvasChild = function (node) {
+      var parent = node.parent >= 0 ? byId[node.parent] : null;
+      return !parent || parent.canvas;
+    };
+    nodes.forEach(function (node) {
+      if (node.canvas || node.plain || !node.anchors) return;
+      // Only canvas-level groups move; descendants follow their parents, so a
+      // translation here shifts a whole subtree exactly once.
+      if (!isCanvasChild(node)) return;
+      var rect = (reference[node.id] || {}).rect;
+      if (!rect) return;
+      var spanX = node.anchors[2] - node.anchors[0];
+      if (rect[2] >= 1915 && Math.abs(rect[0]) < 6) {
+        node.anchors = [0, 0, 1, 1];
+        node.pivot = [0, 0];
+        node.anchored = [0, 0];
+        node.delta = [0, 0];
+        return;
+      }
+      if (rect[2] > 900 && rect[2] < 1915 && Math.abs(spanX) < 0.001) {
+        var yFrac = rect[1] / 1080;
+        var hFrac = rect[3] / 1080;
+        node.anchors = [0.03, yFrac, 0.97, yFrac + hFrac];
+        node.pivot = [0, 0];
+        node.anchored = [0, 0];
+        node.delta = [0, 0];
+        return;
+      }
+      if (spanX < 0.001) node.anchored = [node.anchored[0] + dx, node.anchored[1]];
+    });
+    return nodes;
+  }
+
+  function computeLayout(screen) {
+    var nodes = authoredLayout(screen);
+    if (STAGE_W < 1700) nodes = reflowForNarrowCanvas(nodes, rectsAt(nodes, 1920, 1080));
+    return rectsAt(nodes, STAGE_W, STAGE_H);
   }
 
   function relayout() {
@@ -375,6 +427,7 @@
   var elementsByNode = {};    // layout node id -> rendered elements
   var sliderRecords = [];
   var placed = [];
+  var pointerTargets = [];    // {rect, canvasRank, order, drawable, el}
 
   function overlayRoot() {
     if (!overlayLayer) {
@@ -394,6 +447,7 @@
     elementsByNode = {};
     sliderRecords = [];
     placed = [];
+    pointerTargets = [];
     state.layout = null;
   }
 
@@ -431,10 +485,7 @@
       if (primary.target_lesson) button.dataset.lesson = primary.target_lesson;
       if (primary.string_argument) button.dataset.scene = primary.string_argument;
       if (primary.target) button.dataset.target = primary.target;
-      button.addEventListener("click", function (event) {
-        event.stopPropagation();
-        fireHooks(drawable.hooks, options);
-      });
+      if (options && options.registerHit) options.registerHit(drawable, rect, button);
       container.appendChild(button);
       return button;
     }
@@ -476,6 +527,17 @@
         return;
       }
       var node = renderDrawable(drawable, rect, container, options);
+      if (drawable.kind === "button" && node) {
+        pointerTargets.push({
+          rect: rect,
+          canvasRank: canvasZ(drawable.canvas_order),
+          order: drawn,
+          drawable: drawable,
+          inner: node,
+          options: options,
+          layer: container
+        });
+      }
       drawn += 1;
       if (node) {
         register(drawable.node, node);
@@ -486,20 +548,20 @@
     });
     applySliderVisuals();
 
-    // The shipped scenes contain overlapping hit areas (e.g. a wide Home button
-    // spanning the smaller Prev/Next buttons). Unity resolves those through
-    // hierarchy order; a flat DOM cannot, so within one canvas the smaller
-    // widget wins the pointer hit.
+    // Pointer hits are resolved the way Unity does it, not by DOM stacking:
+    // among the widgets whose rect contains the point, the one in the highest
+    // canvas wins, and within that canvas the smallest (most specific) wins.
+    // This also makes a label inside a button clickable, which is what the
+    // shipped scenes rely on.
     var byCanvas = {};
-    Array.prototype.forEach.call(stage.querySelectorAll(".el.hit[data-z]"), function (hit) {
-      var rank = Math.floor(Number(hit.dataset.z) / 1000);
-      (byCanvas[rank] = byCanvas[rank] || []).push(hit);
+    pointerTargets.forEach(function (target) {
+      (byCanvas[target.canvasRank] = byCanvas[target.canvasRank] || []).push(target);
     });
     Object.keys(byCanvas).forEach(function (rank) {
       byCanvas[rank]
-        .sort(function (a, b) { return Number(a.dataset.area) - Number(b.dataset.area); })
-        .forEach(function (hit, index) {
-          hit.style.zIndex = String(Number(rank) * 1000 + 900 - index);
+        .sort(function (a, b) { return Number(a.rect[2] * a.rect[3]) - Number(b.rect[2] * b.rect[3]); })
+        .forEach(function (target, index) {
+          target.inner.style.zIndex = String(Number(rank) * 1000 + 900 - index);
         });
     });
     return stage;
@@ -571,6 +633,33 @@
     }
   }
 
+  function hitTest(clientX, clientY) {
+    var box = stage.getBoundingClientRect();
+    var unitPerPx = STAGE_W / box.width;
+    var x = (clientX - box.left) * unitPerPx;
+    var y = STAGE_H - (clientY - box.top) * unitPerPx;   // CSS is y-down, canvas is y-up
+    var best = null;
+    pointerTargets.forEach(function (target) {
+      if (!target.inner.offsetParent && target.inner.style.display !== "none") return;   // hidden layer
+      var rect = target.rect;
+      if (x < rect[0] || y < rect[1] || x > rect[0] + rect[2] || y > rect[1] + rect[3]) return;
+      var area = rect[2] * rect[3];
+      if (area <= 0) return;
+      if (!best ||
+          target.canvasRank > best.canvasRank ||
+          (target.canvasRank === best.canvasRank && area < best.area)) {
+        best = { target: target, area: area, canvasRank: target.canvasRank };
+      }
+    });
+    return best ? best.target : null;
+  }
+
+  stage.addEventListener("click", function (event) {
+    if (event.target && event.target.tagName === "INPUT") return;   // sliders handle themselves
+    var target = hitTest(event.clientX, event.clientY);
+    if (target) fireHooks(target.drawable.hooks, target.options);
+  });
+
   function fireHooks(hooks, options) {
     if (!hooks || !hooks.length) {
       if (options && options.onTap) options.onTap();
@@ -587,7 +676,9 @@
       } else if (method === "Hide") {
         hideOverlay();
       } else if (method === "ChangeScene") {
-        var target = hook.target_lesson || routeForScene(hook.string_argument, options);
+        // A lesson slug from the data needs the lesson route; a scene name is
+        // mapped by routeForScene (which already returns a full route).
+        var target = hook.target_lesson ? "lesson/" + hook.target_lesson : routeForScene(hook.string_argument, options);
         if (target) location.hash = "#/" + target;
       } else if (hook.script === "WebURLScript") {
         var url = hook.url || D.credits.site;
@@ -599,10 +690,17 @@
   }
 
   function routeForScene(sceneName, options) {
-    if (!sceneName) return null;
-    if (sceneName.indexOf("Volume Selector") === 0) return "volumes";
+    // Scene names arrive exactly as the shipped UnityEvents store them, e.g.
+    // "00 - Main Scene_Specific Toque", "2 - Lezione 1 - Elegba", "Volume Selector".
+    if (!sceneName) return options && options.fallbackRoute ? options.fallbackRoute : null;
     if (sceneName.indexOf("Oru Seco") >= 0) return "volume-2";
-    if (sceneName.indexOf("Main Scene") === 0) return "volume-1";
+    if (sceneName.indexOf("Specific Toque") >= 0) return "volume-1";
+    if (sceneName.indexOf("Main Scene") >= 0) return "volume-1";
+    if (sceneName.indexOf("Volume Selector") >= 0) return "volumes";
+    if (sceneName.indexOf("Lezione") >= 0) {
+      var slug = D.scene_stem_to_slug && D.scene_stem_to_slug[sceneName];
+      if (slug) return "lesson/" + slug;
+    }
     return options && options.fallbackRoute ? options.fallbackRoute : null;
   }
 
@@ -836,6 +934,13 @@
         wayfinding: document.querySelectorAll(".el.hit").length
       };
     },
+    hit: function (clientX, clientY) {
+      var target = hitTest(clientX, clientY);
+      if (!target) return null;
+      var hook = (target.drawable.hooks || [])[0] || {};
+      return { method: hook.method, scene: hook.string_argument, lesson: hook.target_lesson, path: target.drawable.path, rect: target.rect.map(Math.round) };
+    },
+    targets: function () { return pointerTargets.length; },
     tracks: function () {
       if (!state.mixer) return [];
       return state.mixer.tracks.map(function (record) {

@@ -151,6 +151,51 @@ const v2 = await page.evaluate(() => window.__batapp.tracks().map((t) => t.stem)
 check("Volume II lesson loads its four stems", v2.length === 4 && !v2.includes("vox"), JSON.stringify(v2));
 await shot("08-volume-2-lesson");
 
+// --- navigation: mouse clicks, not just hash routing ----------------------
+for (const [route, label] of [["#/volume-1", "toque index"], ["#/volume-2", "oru seco index"]]) {
+  await go(route, 1000);
+  const card = await page.evaluate(() => {
+    const el = Array.from(document.querySelectorAll("#stage .el.hit")).find((h) => h.dataset.lesson && h.getBoundingClientRect().width > 10);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, lesson: el.dataset.lesson };
+  });
+  check(label + " shows clickable lesson cards", !!card, card ? card.lesson : "no card with data-lesson found");
+  if (card) {
+    await page.mouse.click(card.x, card.y);
+    await page.waitForTimeout(900);
+    const opened = await page.evaluate(() => window.__batapp.state().lesson);
+    check(label + " card click opens the lesson player", opened === card.lesson, "opened " + opened + " from " + card.lesson);
+    const sliderCount = await page.locator("#stage .el.slider-hit").count();
+    check(label + " card click reaches a working mixer", sliderCount === 5, sliderCount + " sliders");
+  }
+}
+
+await go("#/volumes", 900);
+const selectorTargets = await page.evaluate(() =>
+  Array.from(document.querySelectorAll("#stage .el.hit"))
+    .filter((el) => el.getBoundingClientRect().width > 10)
+    .map((el) => {
+      const r = el.getBoundingClientRect();
+      const info = window.__batapp.hit(r.left + r.width / 2, r.top + r.height / 2);
+      return info ? info.method + ":" + (info.scene || "") : "none";
+    })
+);
+check("volume selector resolves a hit for every visible button",
+  selectorTargets.every((entry) => entry !== "none"),
+  selectorTargets.filter((entry) => entry === "none").length + " dead");
+const volumeTwo = await page.evaluate(() => {
+  const el = Array.from(document.querySelectorAll("#stage .el.hit")).find((h) => (h.dataset.scene || "").indexOf("Oru Seco") >= 0 && h.getBoundingClientRect().width > 10);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+});
+if (volumeTwo) {
+  await page.mouse.click(volumeTwo.x, volumeTwo.y);
+  await page.waitForTimeout(800);
+  check("selector 'Oru Seco' opens the Volume II index", page.url().includes("#/volume-2"), page.url().split("#")[1]);
+}
+
 // --- credits ---------------------------------------------------------------
 await go("#/credits", 500);
 await shot("09-credits");
