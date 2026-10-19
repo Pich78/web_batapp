@@ -80,6 +80,37 @@ $P tools/unity_schema.py   --data .work/unity/Data        # schema validation
 vgmstream's codebook table (needs network); the committed copy keeps the audio
 export offline-reproducible.
 
+## Native analysis (REA + Ghidra)
+
+REA is driven through its **CLI** here. The MCP server cannot be used with this
+client: it advertises a 3.4 MB catalog (largest schema 196 KB) which the client
+drops silently — `opencode mcp list` says "connected" but no tools appear. The
+issue draft is in `.work/rea-mcp-catalog-issue.md`.
+
+```bash
+# user-level toolchain (installed once, outside the repo)
+#   ~/tools/ghidra_12.1.4_PUBLIC   (Ghidra 12.1.x, verified sha256)
+#   ~/tools/jdk-21.0.12.1+1        (JDK 21, JAVA_HOME)
+#   ~/tools/dotnet + ~/tools/il2cppdumper  (Il2CppDumper v6.7.46, net6 build)
+export GHIDRA_INSTALL_DIR="$HOME/tools/ghidra_12.1.4_PUBLIC" JAVA_HOME="$HOME/tools/jdk-21.0.12.1+1"
+export DOTNET_ROLL_FORWARD=LatestMajor
+
+# 1) IL2CPP metadata: dump.cs + script.json (method -> RVA/offset/VA)
+~/tools/dotnet/dotnet ~/tools/il2cppdumper/Il2CppDumper.dll \
+  .work/native/arm64-v8a/libil2cpp.so \
+  .work/unity/Data/Managed/Metadata/global-metadata.dat .work/il2cpp
+.venv/bin/python tools/extract_app_classes.py --dump .work/il2cpp/dump.cs
+
+# 2) decompile an app method by its VA from script.json
+rea decompile .work/native/arm64-v8a/libil2cpp.so 0x4E86D0 \
+  --provider ghidra --snapshot .work/ghidra/libil2cpp.snapshot --format json
+```
+
+Addresses for the app's own methods are cached in
+`.work/il2cpp/interesting-methods.json` (names as `Type$$Method`). The first
+decompilation pays for Ghidra's analysis of the 14 MB binary; `--snapshot`
+keeps it for later queries.
+
 ## Verification rules
 
 - **Never claim observed runtime behaviour.** There is no device or emulator in
