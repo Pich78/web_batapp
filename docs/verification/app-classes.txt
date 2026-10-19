@@ -1,0 +1,322 @@
+// Il2CppDumper dump: .work/il2cpp/dump.cs
+// types in dump: 2220; selected: 16
+
+=== BackButton
+    public class BackButton : MonoBehaviour // TypeDefIndex: 2612
+    private void Update() { }
+    public void .ctor() { }
+
+=== IconPreview
+    public class IconPreview : MonoBehaviour // TypeDefIndex: 2623
+    public Sprite[] icons; // 0x18
+    private GameObject icon; // 0x20
+    private void Awake() { }
+    private void Update() { }
+    public void .ctor() { }
+
+=== MoveOnClick
+    public class MoveOnClick : MonoBehaviour // TypeDefIndex: 2613
+    public void ChangeScene(string sceneName) { }
+    public void .ctor() { }
+
+=== OutputVolume
+    public class OutputVolume : MonoBehaviour // TypeDefIndex: 2625
+    public bool isEnabled; // 0x18
+    public OutputVolume.SourceType sourceType; // 0x1C
+    public AudioSource audioSource; // 0x20
+    public int sampleAmount; // 0x28
+    public int channel; // 0x2C
+    public float attackDamp; // 0x30
+    public float decayDamp; // 0x34
+    public OutputVolume.OutputType outputType; // 0x38
+    public Vector3 valueMultiplier; // 0x3C
+    public float outputScaleMin; // 0x48
+    public float outputScaleMax; // 0x4C
+    public GameObject prefab; // 0x50
+    public bool scalePrefab; // 0x58
+    public bool useColorGradient; // 0x59
+    public Color MinColor; // 0x5C
+    public Color MaxColor; // 0x6C
+    public AnimationCurve colorCurve; // 0x80
+    public float colorAttackDamp; // 0x88
+    public float colorDecayDamp; // 0x8C
+    private GameObject bar; // 0x90
+    private Transform barT; // 0x98
+    private float newValue; // 0xA0
+    private float oldScale; // 0xA4
+    private float oldColorVal; // 0xA8
+    private Material mat; // 0xB0
+    private int mat_ValId; // 0xB8
+    private bool materialColourCanBeUsed; // 0xBC
+    public float inputValue { set; }
+    public float outputValue { get; }
+    public void set_inputValue(float value) { }
+    public float get_outputValue() { }
+    private void Start() { }
+    private void Update() { }
+    public static float GetRMS(AudioSource aSource, int sampleSize, int channelUsed = 0) { }
+    public static float GetRMS(int sampleSize, int channelUsed = 0) { }
+    public void .ctor() { }
+
+=== PauseGame
+    public class PauseGame : MonoBehaviour // TypeDefIndex: 2614
+    public Transform canvas; // 0x18
+    private void Update() { }
+    public void Pause() { }
+    public void .ctor() { }
+
+=== PauseMenu
+    public class PauseMenu : MonoBehaviour // TypeDefIndex: 2615
+    private void Start() { }
+    public void PauseGame() { }
+    public void .ctor() { }
+
+=== SceneSurf
+    public class SceneSurf : MonoBehaviour // TypeDefIndex: 2616
+    private int sceneIndex; // 0x18
+    private void Start() { }
+    public void LoadPrevLevel() { }
+    public void LoadNextLevel() { }
+    public void .ctor() { }
+
+=== SimpleSpectrum
+    public class SimpleSpectrum : MonoBehaviour // TypeDefIndex: 2628
+    public AudioMixerGroup muteGroup; // 0x18
+    public bool isEnabled; // 0x20
+    public SimpleSpectrum.SourceType sourceType; // 0x24
+    public AudioSource audioSource; // 0x28
+    public int sampleChannel; // 0x30
+    public int numSamples; // 0x34
+    public FFTWindow windowUsed; // 0x38
+    public bool useLogarithmicFrequency; // 0x3C
+    public bool multiplyByFrequency; // 0x3D
+    public float highFrequencyTrim; // 0x40
+    public float linearSampleStretch; // 0x44
+    public int barAmount; // 0x48
+    public float barYScale; // 0x4C
+    public float barMinYScale; // 0x50
+    public GameObject barPrefab; // 0x58
+    public float barXScale; // 0x60
+    public float barXSpacing; // 0x64
+    public float barCurveAngle; // 0x68
+    public float barXRotation; // 0x6C
+    public float attackDamp; // 0x70
+    public float decayDamp; // 0x74
+    public bool useColorGradient; // 0x78
+    public Color colorMin; // 0x7C
+    public Color colorMax; // 0x8C
+    public AnimationCurve colorValueCurve; // 0xA0
+    public float colorAttackDamp; // 0xA8
+    public float colorDecayDamp; // 0xAC
+    private float[] spectrum; // 0xB0
+    private Transform[] bars; // 0xB8
+    private Material[] barMaterials; // 0xC0
+    private float[] oldYScales; // 0xC8
+    private float[] oldColorValues; // 0xD0
+    private int materialValId; // 0xD8
+    private bool materialColourCanBeUsed; // 0xDC
+    private float logFreqMultiplier; // 0xE0
+    private float highestLogFreq; // 0xE4
+    private string microphoneName; // 0xE8
+    private float lastMicRestartTime; // 0xF0
+    private float micRestartWait; // 0xF4
+    public float[] spectrumInputData { get; set; }
+    public float[] spectrumOutputData { get; }
+    public float[] get_spectrumInputData() { }
+    public void set_spectrumInputData(float[] value) { }
+    public float[] get_spectrumOutputData() { }
+    private void Start() { }
+    public void RebuildSpectrum() { }
+    public void RestartMicrophone() { }
+    private void Update() { }
+    public static float[] GetLogarithmicSpectrumData(AudioSource source, int spectrumSize, int sampleSize, FFTWindow windowUsed = 5, int channelUsed = 0) { }
+    public void .ctor() { }
+
+=== SliderMenu
+    public class SliderMenu : MonoBehaviour // TypeDefIndex: 2637
+    public bool MainObjectBlock; // 0x18
+    public Canvas SliderMenuCanvas; // 0x20
+    public GameObject ScrollObject; // 0x28
+    public GameObject SlidesContent; // 0x30
+    public List<GameObject> Slides; // 0x38
+    public bool ScrollSettingsBlock; // 0x40
+    public scrolltype ScrollType; // 0x44
+    public bool ShowHorizontalScrollbar; // 0x48
+    public Scrollbar HorizontalScrollbar; // 0x50
+    public slidesverticalalign SlidesVerticalAlign; // 0x58
+    public bool ShowVerticalScrollbar; // 0x5C
+    public Scrollbar VerticalScrollbar; // 0x60
+    public slideshorizontalalign SlidesHorizontalAlign; // 0x68
+    public bool ScrollWithArrowBlock; // 0x6C
+    public bool ScrollWithArrow; // 0x6D
+    public bool LeftAndRight; // 0x6E
+    public bool HorizontalArrowStepByStep; // 0x6F
+    public bool UpAndDown; // 0x70
+    public bool VerticalArrowStepByStep; // 0x71
+    public float ArrowTransition; // 0x74
+    public bool ScrollWithButtonsBlock; // 0x78
+    public bool ScrollWithButtons; // 0x79
+    public GameObject ScrollButtons; // 0x80
+    private GameObject PreviousButtonObject; // 0x88
+    public Sprite PreviousButtonImage; // 0x90
+    public previousbuttonhorizontalalign PreviousButtonHorizontalAlign; // 0x98
+    public previousbuttonverticalalign PreviousButtonVerticalAlign; // 0x9C
+    public Vector4 PreviousButtonMargin; // 0xA0
+    private bool PreviousButtonActive; // 0xB0
+    private GameObject NextButtonObject; // 0xB8
+    public Sprite NextButtonImage; // 0xC0
+    public nextbuttonhorizontalalign NextButtonHorizontalAlign; // 0xC8
+    public nextbuttonverticalalign NextButtonVerticalAlign; // 0xCC
+    public Vector4 NextButtonMargin; // 0xD0
+    private bool NextButtonActive; // 0xE0
+    public float ButtonTransition; // 0xE4
+    public bool SliderMagnet; // 0xE8
+    public float MagnetTransition; // 0xEC
+    public bool SlidesPropertyBlock; // 0xF0
+    public int SlidesInView; // 0xF4
+    public bool DefaultOffset; // 0xF8
+    public int ActiveSlideOffset; // 0xFC
+    public Vector2 SlideSize; // 0x100
+    public Vector4 SlideMargin; // 0x108
+    public bool AnimationBlock; // 0x118
+    public bool PreviousPositionAnimation; // 0x119
+    public float PreviousOffset; // 0x11C
+    public float PreviousOffsetTransition; // 0x120
+    public bool PreviousScaleAnimation; // 0x124
+    public Vector2 PreviousScale; // 0x128
+    public float PreviousScaleTransition; // 0x130
+    public bool PreviousRotateAnimation; // 0x134
+    public Vector3 PreviousRotation; // 0x138
+    public float PreviousRotationTransition; // 0x144
+    public bool PreviousColorAnimation; // 0x148
+    public Color PreviousColor; // 0x14C
+    public float PreviousColorTransition; // 0x15C
+    public bool PreviousBlurAnimation; // 0x160
+    public Material PreviousBlurMaterial; // 0x168
+    public float PreviousBlurDistance; // 0x170
+    public float PreviousBlurTransition; // 0x174
+    public int PreviousSiblingIndex; // 0x178
+    public bool ActivePositionAnimation; // 0x17C
+    public float ActiveOffset; // 0x180
+    public float ActiveOffsetTransition; // 0x184
+    public bool ActiveScaleAnimation; // 0x188
+    public Vector2 ActiveScale; // 0x18C
+    public float ActiveScaleTransition; // 0x194
+    public bool ActiveRotateAnimation; // 0x198
+    public Vector3 ActiveRotation; // 0x19C
+    public float ActiveRotationTransition; // 0x1A8
+    public bool ActiveColorAnimation; // 0x1AC
+    public Color ActiveColor; // 0x1B0
+    public float ActiveColorTransition; // 0x1C0
+    public bool ActiveBlurAnimation; // 0x1C4
+    public Material ActiveBlurMaterial; // 0x1C8
+    public float ActiveBlurDistance; // 0x1D0
+    public float ActiveBlurTransition; // 0x1D4
+    public int ActiveSiblingIndex; // 0x1D8
+    public bool NextPositionAnimation; // 0x1DC
+    public float NextOffset; // 0x1E0
+    public float NextOffsetTransition; // 0x1E4
+    public bool NextScaleAnimation; // 0x1E8
+    public Vector2 NextScale; // 0x1EC
+    public float NextScaleTransition; // 0x1F4
+    public bool NextRotateAnimation; // 0x1F8
+    public Vector3 NextRotation; // 0x1FC
+    public float NextRotationTransition; // 0x208
+    public bool NextColorAnimation; // 0x20C
+    public Color NextColor; // 0x210
+    public float NextColorTransition; // 0x220
+    public bool NextBlurAnimation; // 0x224
+    public Material NextBlurMaterial; // 0x228
+    public float NextBlurDistance; // 0x230
+    public float NextBlurTransition; // 0x234
+    public int NextSiblingIndex; // 0x238
+    private float n; // 0x23C
+    private float ScrollStep; // 0x240
+    private float k; // 0x244
+    private bool ButtonClicked; // 0x248
+    private void Update() { }
+    public void NextButton() { }
+    public void PreviousButton() { }
+    public void .ctor() { }
+
+=== SoundFileOpener
+    public class SoundFileOpener : MonoBehaviour // TypeDefIndex: 2624
+    public InputField pathBox; // 0x18
+    private void Start() { }
+    public void PlayFile() { }
+    public void .ctor() { }
+
+=== UIController
+    public class UIController : MonoBehaviour // TypeDefIndex: 2617
+    public bool showOnAwake; // 0x18
+    public UIController.OnHideAction onHideAction; // 0x1C
+    private UnityEvent m_OnShow; // 0x20
+    private UnityEvent m_OnHide; // 0x28
+    private UnityEvent m_OnShowDisposable; // 0x30
+    private UnityEvent m_OnHideDisposable; // 0x38
+    private Animator m_Animator; // 0x40
+    private bool isShowWhenNoController; // 0x48
+    private int lastShowAtFrame; // 0x4C
+    public UnityEvent onShow { get; }
+    public UnityEvent onHide { get; }
+    public bool isShow { get; set; }
+    public bool isPlaying { get; }
+    public Animator animator { get; }
+    private bool canTransitionToSelf { get; }
+    public UnityEvent get_onShow() { }
+    public UnityEvent get_onHide() { }
+    public bool get_isShow() { }
+    private void set_isShow(bool value) { }
+    public bool get_isPlaying() { }
+    public Animator get_animator() { }
+    private bool get_canTransitionToSelf() { }
+    public virtual void Show() { }
+    public virtual void Hide() { }
+    public void Show(UnityAction onShow) { }
+    public void Hide(UnityAction onHide) { }
+    public UIController.PlayAsync ShowAsync() { }
+    public UIController.PlayAsync HideAsync() { }
+    protected virtual void OnEnable() { }
+    protected virtual void OnShow() { }
+    protected virtual void OnHide() { }
+    public void .ctor() { }
+
+=== VolumeValueChange
+    public class VolumeValueChange : MonoBehaviour // TypeDefIndex: 2620
+    private AudioSource audioSrc; // 0x18
+    private float musicVolume; // 0x20
+    private void Start() { }
+    private void Update() { }
+    public void SetVolume(float vol) { }
+    public void .ctor() { }
+
+=== VolumeValueChangefromzero
+    public class VolumeValueChangefromzero : MonoBehaviour // TypeDefIndex: 2621
+    private AudioSource audioSrc; // 0x18
+    private float musicVolume; // 0x20
+    private void Start() { }
+    private void Update() { }
+    public void SetVolume(float vol) { }
+    public void .ctor() { }
+
+=== WebURLScript
+    public class WebURLScript : MonoBehaviour // TypeDefIndex: 2622
+    private void Start() { }
+    public void btnFacebook() { }
+    public void btnYoutube() { }
+    public void btnInstagram() { }
+    public void btnAmazon() { }
+    public void btnAppleMusic() { }
+    public void btnBatangoma() { }
+    private void Update() { }
+    public void .ctor() { }
+
+=== gameClose
+    public class gameClose : MonoBehaviour // TypeDefIndex: 2638
+    private void Update() { }
+    public void .ctor() { }
+
+=== pauseScript
+    public class pauseScript : MonoBehaviour // TypeDefIndex: 2639
+    public void PauseGame() { }
+    public void .ctor() { }

@@ -221,3 +221,57 @@ Batà Ngoma, and an Amazon link for the album “Don't Stress”.
   Volume II audio.
 - `TextMeshPro` is present as assets/settings but no `TextMeshProUGUI`
   component exists in any scene — the UI uses legacy uGUI `Text`.
+
+## 7. The app's own code (IL2CPP metadata)
+
+`Il2CppDumper` v6.7.46 (.NET build, user-level) on our extracted
+`libil2cpp.so` + `global-metadata.dat` reports Il2Cpp **24.2 → 24.3** with
+`CodeRegistration = 0xcc0080` and `MetadataRegistration = 0xcc0260`, writing
+`dump.cs` (4.2 MB, 2631 types), `il2cpp.h`, `script.json` (method → RVA/offset/VA
+map) and `DummyDll/`. Those live under `.work/il2cpp/` (regenerable, not
+committed); the app-class slice is recorded in
+[docs/verification/app-classes.txt](verification/app-classes.txt) and can be
+re-extracted with `tools/extract_app_classes.py`.
+
+The 16 app classes, as they appear in the metadata:
+
+| class | serialized interest | methods |
+|---|---|---|
+| `BackButton` | none | `Update` |
+| `gameClose` | none | `Update` |
+| `pauseScript` | none | `PauseGame` |
+| `PauseMenu` | none | `Start`, `PauseGame` |
+| `MoveOnClick` | none | `ChangeScene(string sceneName)` |
+| `SceneSurf` | `private int sceneIndex` | `Start`, `LoadPrevLevel()`, `LoadNextLevel()` |
+| `VolumeValueChange` | `private AudioSource audioSrc`, `private float musicVolume` | `Start`, `Update`, `SetVolume(float vol)` |
+| `VolumeValueChangefromzero` | same fields as above | `Start`, `Update`, `SetVolume(float vol)` |
+| `PauseGame` | `public Transform canvas` | `Update`, `Pause` |
+| `IconPreview` | `public Sprite[] icons`, `private GameObject icon` | `Awake`, `Update` |
+| `SoundFileOpener` | `public InputField pathBox` | `Start`, `PlayFile` |
+| `OutputVolume` | 20+ public fields (spectrum/RMS bars) | `set_inputValue`, `get_outputValue`, `GetRMS` |
+| `SimpleSpectrum` | 25+ public fields (FFT bars) | `RebuildSpectrum`, `RestartMicrophone`, `GetLogarithmicSpectrumData` |
+| `SliderMenu` | 80+ public fields (a purchased carousel asset) | `Update`, `NextButton`, `PreviousButton` |
+| `UIController` | `showOnAwake`, `onHideAction`, four `UnityEvent`s | `Show`, `Hide`, `ShowAsync`, `HideAsync`, `OnShow`, `OnHide` |
+| `WebURLScript` | none | `btnFacebook`, `btnYoutube`, `btnInstagram`, `btnAmazon`, `btnAppleMusic`, `btnBatangoma` |
+
+Findings that matter for the port:
+
+- **The volume components store no serialized state.** `audioSrc` and
+  `musicVolume` are private and unannotated, so Unity writes neither; their
+  32-byte payload is the MonoBehaviour preamble plus the same unexplained
+  4-byte slot every fieldless component carries. They resolve their
+  `AudioSource` at runtime (`Start`), which is why the port needs no per-track
+  configuration beyond the slider's `SetVolume` target.
+- **The links screen is explicit**: `WebURLScript` exposes one method per
+  destination (`btnFacebook`, `btnYoutube`, `btnInstagram`, `btnAmazon`,
+  `btnAppleMusic`, `btnBatangoma`) — the Amazon/Apple Music art in
+  `assets/img/` belongs to those buttons.
+- **Navigation is index-based**: `SceneSurf` keeps `private int sceneIndex` and
+  implements `LoadPrevLevel()` / `LoadNextLevel()` (the `"Entermenu"` string
+  seen in the UnityEvent is a *stale argument* left in the inspector — the
+  method takes no parameter).
+- `MoveOnClick.ChangeScene(string sceneName)` is the carousel's route to a
+  lesson scene, matching the `ChangeScene` strings recorded per button.
+- `SimpleSpectrum`/`OutputVolume` are the third-party FFT/RMS visualisers; their
+  full public field lists are in the recorded slice and are what a faithful
+  spectrum animation would read.
