@@ -50,7 +50,9 @@
       var track = (self.lesson.tracks || []).filter(function (candidate) {
         return self.stemForTrack(candidate) === entry.stem;
       })[0] || {};
-      var source = new Audio("assets/audio/" + entry.path);
+      var source = new Audio(options.resolveSource
+        ? options.resolveSource(entry)
+        : "assets/audio/" + entry.path);
       source.preload = "auto";
       source.loop = !!track.loop;
       var initial = track.volume === undefined || track.volume === null ? 1 : clamp01(track.volume);
@@ -214,6 +216,17 @@
       current: reference.element.currentTime || 0,
       duration: duration && isFinite(duration) ? duration : 0
     };
+  };
+
+  BatappMixer.prototype.seek = function (seconds) {
+    // One position for every stem: the drift loop keeps them together after
+    // the seek, whether playback is paused or running.
+    var duration = this.progress().duration;
+    var target = Math.max(0, duration > 0 ? Math.min(seconds, duration) : seconds);
+    this.tracks.forEach(function (record) {
+      try { record.element.currentTime = target; } catch (error) { /* not seekable yet */ }
+    });
+    return target;
   };
 
   BatappMixer.prototype.dispose = function () {

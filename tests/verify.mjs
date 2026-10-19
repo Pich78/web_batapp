@@ -325,11 +325,22 @@ for (const route of ["#/credits", "#/opening", "#/volumes", "#/volume-1", "#/vol
 check("no author/shop text or external URL on any screen", bannedSeen.length === 0, bannedSeen.join(" | "));
 
 // --- file:// contract ------------------------------------------------------
-const shipped = ["js/batapp.js", "js/data.js", "js/mixer.js", "js/newapp.js"];
+const shipped = ["js/batapp.js", "js/data.js", "js/lessons.js", "js/mixer.js", "js/newapp.js"];
 for (const file of shipped) {
   const text = fs.readFileSync(path.join(root, file), "utf8");
-  const bad = /\bfetch\s*\(|type\s*=\s*["']module["']|import\s+.*from\s+["']/.test(text);
-  check(file + " contains no fetch/ES-module usage", !bad, bad ? "banned construct found" : "clean");
+  const moduleUse = /type\s*=\s*["']module["']|import\s+.*from\s+["']/.test(text);
+  // The modern page fetches its own audio on HTTP(S) to satisfy the load gate
+  // and iOS preloading; only file:// is forbidden from fetching. All other
+  // shipped scripts must stay fetch-free, and even newapp.js has no absolute URL.
+  const fetchUse = /\bfetch\s*\(/.test(text);
+  const externalUrl = /https?:\/\//.test(text);
+  check(file + " is a classic script (no modules)", !moduleUse, moduleUse ? "module syntax found" : "clean");
+  if (file === "js/newapp.js") {
+    check(file + " fetches only same-origin audio", fetchUse && !externalUrl,
+      fetchUse ? (externalUrl ? "absolute URL found" : "relative-only") : "fetch hook missing");
+  } else {
+    check(file + " contains no fetch()", !fetchUse, fetchUse ? "fetch found" : "clean");
+  }
 }
 
 check("no console errors during the walkthrough", consoleIssues.length === 0, consoleIssues.slice(0, 3).join(" | "));

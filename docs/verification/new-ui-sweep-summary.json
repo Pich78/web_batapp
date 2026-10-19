@@ -1,7 +1,9 @@
 {
-  "generated_at": "2026-10-19T13:34:39.270Z",
+  "generated_at": "2026-10-19T14:27:47.346Z",
+  "browser": "chromium",
   "target": "file:///home/apicciano/ai/batapp-web/index.html",
   "viewport": "390x844",
+  "full_sweep": true,
   "lessons": 61,
   "passed": 61,
   "failed": [],

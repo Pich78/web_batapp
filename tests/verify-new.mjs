@@ -1,22 +1,32 @@
 /* Behavioural verification of the modern layout (index.html).
  *
  * Opens the page over file:// and over HTTP, walks the library, exercises the
- * shared mixer (play/pause/stop, per-stem volume and mute, prev/next), sweeps
- * all 61 lessons, and records screenshots plus JSON reports.
+ * load gate, seek bar, shared mixer and layouts, sweeps the lessons, and writes
+ * screenshots plus JSON reports.
  *
- *   cd tests && node verify-new.mjs
+ *   cd tests && node verify-new.mjs                  # Chromium, full sweep
+ *   BROWSER=firefox node verify-new.mjs              # representative lessons
+ *   BROWSER=webkit node verify-new.mjs
  */
-import { chromium } from "playwright";
+import { chromium, firefox, webkit } from "playwright";
 import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
+import vm from "vm";
 import { fileURLToPath } from "url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pageUrl = "file://" + root + "/index.html";
-const shots = path.join(root, ".work/screenshots-new");
-const reportFile = path.join(root, ".work/verification/new-ui-report.json");
-const summaryFile = path.join(root, "docs/verification/new-ui-sweep-summary.json");
+const browserName = process.env.BROWSER || "chromium";
+const engines = { chromium, firefox, webkit };
+const engine = engines[browserName];
+if (!engine) throw new Error("Unknown BROWSER=" + browserName);
+const fullSweep = browserName === "chromium" || process.env.FULL_SWEEP === "1";
+const shots = path.join(root, ".work/screenshots-new", browserName);
+const reportFile = path.join(root, ".work/verification/new-ui-report-" + browserName + ".json");
+const summaryFile = browserName === "chromium"
+  ? path.join(root, "docs/verification/new-ui-sweep-summary.json")
+  : path.join(root, ".work/verification/new-ui-sweep-" + browserName + ".json");
 fs.mkdirSync(shots, { recursive: true });
 fs.mkdirSync(path.dirname(reportFile), { recursive: true });
 
@@ -27,10 +37,71 @@ function check(name, ok, detail) {
   if (!ok) problems.push(name + (detail ? " (" + detail + ")" : ""));
 }
 
-const browser = await chromium.launch({
-  args: ["--autoplay-policy=no-user-gesture-required", "--mute-audio"]
-});
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+function loadData(file) {
+  const context = { window: {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), context);
+  return context.window.BATAPP;
+}
+
+// --- static data checks ----------------------------------------------------
+const full = loadData("js/data.js");
+const slim = loadData("js/lessons.js");
+function projectLesson(lesson) {
+  return {
+    slug: lesson.slug,
+    volume: lesson.volume,
+    number: lesson.number,
+    title: lesson.title,
+    tracks: lesson.tracks.map((track) => ({
+      object: track.object,
+      stem: track.stem,
+      clip: track.clip,
+      volume: track.stem === "vox" ? 1 : track.volume,
+      loop: track.loop,
+      play_on_awake: track.play_on_awake
+    })),
+    audio: lesson.audio.map((entry) => ({
+      stem: entry.stem,
+      path: entry.path,
+      clip_name: entry.clip_name,
+      seconds: entry.seconds
+    }))
+  };
+}
+check("slim lessons match the full data (with modern Vox at 100%)",
+  JSON.stringify(slim.lessons) === JSON.stringify(full.lessons.map(projectLesson)),
+  "slim=" + slim.lessons.length + " full=" + full.lessons.length);
+const slimBytes = fs.statSync(path.join(root, "js/lessons.js")).size;
+check("slim modern data stays compact", slimBytes < 200000, slimBytes + " bytes");
+const modernHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
+const legacyHtml = fs.readFileSync(path.join(root, "index_old.html"), "utf8");
+check("modern page loads lessons.js only",
+  modernHtml.includes("js/lessons.js") && !modernHtml.includes("js/data.js"));
+check("legacy page keeps the full data.js",
+  legacyHtml.includes("js/data.js") && !legacyHtml.includes("js/lessons.js"));
+
+const iconFiles = [
+  "assets/icon.svg", "assets/icon-16.png", "assets/icon-32.png",
+  "assets/icon-180.png", "assets/icon-192.png", "assets/icon-512.png",
+  "site.webmanifest"
+];
+const missingIcons = iconFiles.filter((file) => !fs.existsSync(path.join(root, file)));
+check("icon set and manifest exist", missingIcons.length === 0, missingIcons.join(", "));
+const manifest = JSON.parse(fs.readFileSync(path.join(root, "site.webmanifest"), "utf8"));
+check("manifest lists the 192 and 512 icons",
+  manifest.icons.some((icon) => icon.sizes === "192x192") &&
+  manifest.icons.some((icon) => icon.sizes === "512x512"),
+  JSON.stringify(manifest.icons));
+const pngHeader = fs.readFileSync(path.join(root, "assets/icon-32.png")).subarray(1, 4).toString();
+check("icon PNGs are valid", pngHeader === "PNG", pngHeader);
+
+// --- browser ---------------------------------------------------------------
+const browser = await engine.launch(browserName === "chromium"
+  ? { args: ["--autoplay-policy=no-user-gesture-required", "--mute-audio"] }
+  : {});
+const viewport = { width: 390, height: 844 };
+const page = await browser.newPage({ viewport });
 const external = [];
 const pageErrors = [];
 page.on("request", (request) => {
@@ -54,10 +125,14 @@ async function go(hash, wait = 500) {
 }
 async function ready(scope = page) {
   await scope.waitForFunction(
-    () => window.__batapp_new.tracks().length > 0 &&
-      window.__batapp_new.tracks().every((track) => track.duration > 1 || track.error),
+    () => {
+      const state = window.__batapp_new.state();
+      const tracks = window.__batapp_new.tracks();
+      return state.lesson && !state.loading && tracks.length > 0 &&
+        tracks.every((track) => track.duration > 1 || track.error);
+    },
     null,
-    { timeout: 10000 }
+    { timeout: 25000 }
   );
 }
 
@@ -66,6 +141,7 @@ await go("#/");
 await shot("01-library-toques");
 let ui = await page.evaluate(() => window.__batapp_new.ui());
 check("library renders two volume tabs", ui.tabs === 2, ui.tabs + " tabs");
+check("root page title", ui.documentTitle === "Batá · Toques & Oru Seco", ui.documentTitle);
 let rows = await page.locator(".row").count();
 check("Toques lists 38 rhythms", rows === 38, rows + " rows");
 const first = await page.locator(".row .name").first().textContent();
@@ -79,11 +155,20 @@ const fits = await page.evaluate(() => document.documentElement.scrollWidth <= w
 check("library has no horizontal overflow at 390px", fits);
 const fills = await page.evaluate(() => document.getElementById("app").getBoundingClientRect().height >= window.innerHeight - 1);
 check("app column fills the phone viewport", fills);
+const iconLinks = await page.evaluate(() =>
+  Array.from(document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"], link[rel="manifest"]'))
+    .map((link) => link.getAttribute("href")));
+check("modern page links the icon set",
+  iconLinks.includes("assets/icon.svg") && iconLinks.includes("assets/icon-32.png") &&
+  iconLinks.includes("assets/icon-180.png") && iconLinks.includes("site.webmanifest"),
+  iconLinks.join(", "));
 
 await page.locator(".tab").nth(1).click();
 await page.waitForTimeout(300);
 rows = await page.locator(".row").count();
 check("Oru Seco lists 23 lessons", rows === 23, rows + " rows");
+check("Oru Seco tab title", (await page.evaluate(() => window.__batapp_new.ui())).documentTitle === "Oru Seco · Batá",
+  await page.evaluate(() => document.title));
 const oruOrder = await page.locator(".row .num").allTextContents();
 check("Oru Seco follows natural lesson order 1, 2, … 20A, 20B, 21, 22",
   oruOrder.join(",") === "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20A,20B,21,22",
@@ -96,18 +181,19 @@ await ready();
 await shot("03-player-idle");
 ui = await page.evaluate(() => window.__batapp_new.ui());
 check("player shows the lesson title", ui.title === "Alubanche", ui.title);
+check("lesson page title", ui.documentTitle === "Alubanche · Toque 01 · Batá", ui.documentTitle);
 check("voiced toque gets five mixer rows", ui.rows === 5, ui.rows + " rows");
+check("loading gate is gone and Play is enabled", !ui.loader && ui.playEnabled, JSON.stringify(ui));
 const initial = await page.evaluate(() => window.__batapp_new.tracks());
-check("Vox starts at volume 0", initial.find((track) => track.stem === "vox").volume === 0,
+check("Vox starts at 100%",
+  initial.find((track) => track.stem === "vox").volume === 1,
   "vox=" + initial.find((track) => track.stem === "vox").volume);
-check(
-  "other stems start at volume 1",
-  ["iya", "ito", "oko", "beat"].every((stem) => initial.find((track) => track.stem === stem).volume === 1),
-  JSON.stringify(initial.map((track) => track.stem + "=" + track.volume))
-);
+check("all stems start at 100%",
+  initial.every((track) => track.volume === 1),
+  JSON.stringify(initial.map((track) => track.stem + "=" + track.volume)));
 
 // Play: every stem advances, in sync, and the progress ring moves
-await page.locator(".play").click();
+await page.locator("button.play").click();
 await page.waitForTimeout(1600);
 const playing = await page.evaluate(() => window.__batapp_new.tracks());
 const times = playing.map((track) => track.currentTime);
@@ -118,13 +204,31 @@ const ring = await page.evaluate(() => window.__batapp_new.ui().ringOffset);
 check("progress ring advances while playing", Number(ring) >= 0 && Number(ring) < 326.7, "offset=" + ring);
 await shot("04-player-playing");
 
-// Pause / resume
-await page.locator(".play").click();
+// Pause, seek while paused, resume
+await page.locator("button.play").click();
 await page.waitForTimeout(300);
 check("Pause pauses every stem", await page.evaluate(() => window.__batapp_new.tracks().every((track) => track.paused)));
-await page.locator(".play").click();
-await page.waitForTimeout(400);
-check("Play resumes the stems", await page.evaluate(() => window.__batapp_new.tracks().every((track) => !track.paused)));
+await page.locator(".seek-input").evaluate((input) => {
+  input.value = "10";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+});
+await page.waitForTimeout(350);
+const seeked = await page.evaluate(() => window.__batapp_new.tracks());
+const seekTimes = seeked.map((track) => track.currentTime);
+check("seek moves every stem to 10 s",
+  seekTimes.every((time) => Math.abs(time - 10) < 0.3),
+  JSON.stringify(seekTimes.map((time) => +time.toFixed(2))));
+check("seek keeps the stems together",
+  Math.max(...seekTimes) - Math.min(...seekTimes) < 0.12,
+  "spread=" + (Math.max(...seekTimes) - Math.min(...seekTimes)).toFixed(3));
+check("seek time label follows",
+  (await page.locator(".time.current").textContent()).trim() === "0:10",
+  await page.locator(".time.current").textContent());
+await page.locator("button.play").click();
+await page.waitForTimeout(500);
+const resumed = await page.evaluate(() => window.__batapp_new.tracks().map((track) => track.currentTime));
+check("Play resumes from the seek point", resumed.every((time) => time > 9.5), JSON.stringify(resumed.map((time) => +time.toFixed(2))));
 
 // Volume slider + fill
 await page.locator(".stem[data-stem='iya'] input").evaluate((input) => {
@@ -151,16 +255,19 @@ check("unmute restores the level", iya.muted === false && Math.abs(iya.effective
 await page.locator(".stop").click();
 await page.waitForTimeout(400);
 check("Stop rewinds every stem", await page.evaluate(() => window.__batapp_new.tracks().every((track) => track.currentTime < 0.25)));
+check("Stop resets the seek label", (await page.locator(".time.current").textContent()).trim() === "0:00");
 
 // Prev / Next (DOM order: prev, next among the ghost buttons)
 const ghosts = page.locator(".transport .ghost");
 check("Prev is disabled on the first lesson", await ghosts.nth(0).isDisabled());
 await ghosts.nth(1).click();
 await page.waitForTimeout(700);
+await ready();
 check("Next opens the next rhythm", (await page.evaluate(() => window.__batapp_new.state().lesson)) === "volume-1/02-tani-tani-cho-bi",
   await page.evaluate(() => window.__batapp_new.state().lesson));
 await page.locator(".transport .ghost").nth(0).click();
 await page.waitForTimeout(700);
+await ready();
 check("Prev steps back", (await page.evaluate(() => window.__batapp_new.state().lesson)) === "volume-1/01-alubanche",
   await page.evaluate(() => window.__batapp_new.state().lesson));
 
@@ -204,8 +311,10 @@ check("no author/shop text, no links, no external URLs", surface.length === 0, s
 
 // --- mobile landscape ------------------------------------------------------
 const landscape = await browser.newPage({ viewport: { width: 844, height: 390 } });
+await landscape.bringToFront();
 await landscape.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
-await landscape.waitForTimeout(700);
+await landscape.waitForTimeout(800);
+await landscape.waitForFunction(() => window.__batapp_new.state().lesson && !window.__batapp_new.state().loading, null, { timeout: 20000 });
 const landscapeLayout = await landscape.evaluate(() => {
   const box = (node) => {
     const rect = node.getBoundingClientRect();
@@ -216,6 +325,7 @@ const landscapeLayout = await landscape.evaluate(() => {
   return {
     hero: box(document.querySelector(".hero")),
     mixer: box(document.querySelector(".mixer")),
+    seek: box(document.querySelector(".seek")),
     rows,
     app: { left: app.left, top: app.top, right: app.right, bottom: app.bottom },
     viewport: [window.innerWidth, window.innerHeight],
@@ -225,6 +335,9 @@ const landscapeLayout = await landscape.evaluate(() => {
 check("landscape player uses two columns",
   landscapeLayout.hero.right <= landscapeLayout.mixer.left + 2,
   JSON.stringify({ hero: landscapeLayout.hero, mixer: landscapeLayout.mixer }));
+check("landscape shows the seek bar inside the viewport",
+  landscapeLayout.seek.top >= 0 && landscapeLayout.seek.bottom <= landscapeLayout.viewport[1],
+  JSON.stringify(landscapeLayout.seek));
 check("landscape shows all five mixer rows inside the viewport",
   landscapeLayout.rows.length === 5 && landscapeLayout.rows.every((row) =>
     row.top >= -1 && row.bottom <= landscapeLayout.viewport[1] + 1 &&
@@ -236,8 +349,8 @@ check("landscape player fills the viewport without page scroll",
   landscapeLayout.scroll[0] <= landscapeLayout.viewport[0] &&
   landscapeLayout.scroll[1] <= landscapeLayout.viewport[1],
   JSON.stringify(landscapeLayout));
-await landscape.locator(".play").click();
-await landscape.waitForTimeout(1300);
+await landscape.locator("button.play").click();
+await landscape.waitForTimeout(2200);
 const landscapeTimes = await landscape.evaluate(() => window.__batapp_new.tracks().map((track) => track.currentTime));
 check("landscape playback starts every stem together",
   landscapeTimes.every((time) => time > 0.3) && Math.max(...landscapeTimes) - Math.min(...landscapeTimes) < 0.12,
@@ -266,6 +379,7 @@ await landscape.close();
 
 // --- desktop ---------------------------------------------------------------
 const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await desktop.bringToFront();
 await desktop.goto(pageUrl + "#/");
 await desktop.waitForTimeout(500);
 const desktopEmpty = await desktop.evaluate(() => {
@@ -304,6 +418,7 @@ const desktopPlayer = await desktop.evaluate(() => {
     libraryWidth: library.width,
     twoCols: hero.right <= mixer.left + 2,
     mixerRows: document.querySelectorAll(".stem").length,
+    seek: !!document.querySelector(".seek"),
     backVisible: !!(back && back.getClientRects().length),
     scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
     viewport: [window.innerWidth, window.innerHeight]
@@ -312,6 +427,7 @@ const desktopPlayer = await desktop.evaluate(() => {
 check("desktop sidebar persists while a lesson is open", desktopPlayer.libraryWidth >= 340, desktopPlayer.libraryWidth + "px");
 check("desktop marks the active sidebar row", desktopPlayer.active === "Alubanche", desktopPlayer.active);
 check("desktop player shows hero and mixer side by side", desktopPlayer.twoCols, JSON.stringify(desktopPlayer));
+check("desktop player has the seek bar", desktopPlayer.seek);
 check("desktop hides the back button", !desktopPlayer.backVisible);
 check("desktop mixer has five rows", desktopPlayer.mixerRows === 5, desktopPlayer.mixerRows + " rows");
 check("desktop player has no page overflow",
@@ -322,6 +438,7 @@ await desktop.screenshot({ path: path.join(shots, "09-desktop-player.png") });
 
 await desktop.locator(".transport .ghost").nth(1).click();
 await desktop.waitForTimeout(700);
+await ready(desktop);
 const desktopNext = await desktop.evaluate(() => ({
   lesson: window.__batapp_new.state().lesson,
   active: window.__batapp_new.ui().active
@@ -333,8 +450,10 @@ await desktop.close();
 
 // Narrow desktop/tablet: both panes must remain, player stacks vertically.
 const tablet = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+await tablet.bringToFront();
 await tablet.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
 await tablet.waitForTimeout(700);
+await tablet.waitForFunction(() => window.__batapp_new.state().lesson && !window.__batapp_new.state().loading, null, { timeout: 20000 });
 const tabletState = await tablet.evaluate(() => ({
   libraryWidth: document.getElementById("library-pane").getBoundingClientRect().width,
   columns: getComputedStyle(document.querySelector(".player-body")).gridTemplateColumns,
@@ -351,9 +470,11 @@ await tablet.screenshot({ path: path.join(shots, "10-tablet-player.png") });
 await tablet.close();
 
 // --- theme follows the system ---------------------------------------------
-const dark = await browser.newPage({ viewport: { width: 390, height: 844 }, colorScheme: "dark" });
+const dark = await browser.newPage({ viewport, colorScheme: "dark" });
+await dark.bringToFront();
 await dark.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
 await dark.waitForTimeout(700);
+await dark.waitForFunction(() => window.__batapp_new.state().lesson && !window.__batapp_new.state().loading, null, { timeout: 20000 });
 const darkState = await dark.evaluate(() => ({
   scheme: getComputedStyle(document.documentElement).colorScheme,
   background: getComputedStyle(document.body).backgroundColor
@@ -365,15 +486,23 @@ await dark.screenshot({ path: path.join(shots, "11-dark-player.png") });
 await dark.close();
 
 const darkDesktop = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: "dark" });
+await darkDesktop.bringToFront();
 await darkDesktop.goto(pageUrl + "#/lesson/volume-1/14-oya-otagua");
 await darkDesktop.waitForTimeout(800);
+await darkDesktop.waitForFunction(() => window.__batapp_new.state().lesson && !window.__batapp_new.state().loading, null, { timeout: 20000 });
 await darkDesktop.screenshot({ path: path.join(shots, "12-dark-desktop.png") });
 await darkDesktop.close();
 
-// --- all 61 lessons --------------------------------------------------------
+// --- lesson sweep (full in Chromium, representative elsewhere) -------------
 const lessons = await page.evaluate(() => window.__batapp_new.data.lessons);
+const representatives = new Set([
+  "volume-1/01-alubanche",
+  "volume-1/19-egbi-pami",
+  "volume-2/1-elegba"
+]);
+const sweepLessons = fullSweep ? lessons : lessons.filter((lesson) => representatives.has(lesson.slug));
 const sweep = [];
-for (const lesson of lessons) {
+for (const lesson of sweepLessons) {
   const lessonProblems = [];
   const consoleIssues = [];
   const listener = (message) => {
@@ -382,11 +511,14 @@ for (const lesson of lessons) {
   page.on("console", listener);
   await page.goto(pageUrl + "#/lesson/" + lesson.slug);
   try {
-    await page.waitForFunction((slug) => window.__batapp_new.state().lesson === slug, lesson.slug, { timeout: 5000 });
+    await page.waitForFunction((slug) => {
+      const state = window.__batapp_new.state();
+      return state.lesson === slug && !state.loading;
+    }, lesson.slug, { timeout: 10000 });
     await page.waitForFunction(
       () => window.__batapp_new.tracks().every((track) => track.duration > 1 || track.error),
       null,
-      { timeout: 8000 }
+      { timeout: 10000 }
     );
   } catch (error) {
     lessonProblems.push("not ready: " + error.message.split("\n")[0]);
@@ -396,6 +528,7 @@ for (const lesson of lessons) {
     stems: window.__batapp_new.tracks().map((track) => track.stem),
     rows: window.__batapp_new.ui().rows,
     title: window.__batapp_new.ui().title,
+    documentTitle: document.title,
     errors: window.__batapp_new.tracks().filter((track) => track.error).map((track) => track.stem + ":" + track.error)
   }));
   page.off("console", listener);
@@ -404,17 +537,22 @@ for (const lesson of lessons) {
   if (snapshot.stems.slice().sort().join(",") !== expected) lessonProblems.push("stems " + snapshot.stems.join(",") + " != " + expected);
   if (snapshot.rows !== lesson.audio.length) lessonProblems.push("rows " + snapshot.rows);
   if (snapshot.title !== lesson.title) lessonProblems.push("title " + snapshot.title);
+  if (snapshot.documentTitle.indexOf(lesson.title) !== 0) lessonProblems.push("document title " + snapshot.documentTitle);
   if (snapshot.errors.length) lessonProblems.push("audio " + snapshot.errors.join(","));
   if (consoleIssues.length) lessonProblems.push("console " + consoleIssues[0]);
   sweep.push({ slug: lesson.slug, rows: snapshot.rows, stems: snapshot.stems, passed: lessonProblems.length === 0, problems: lessonProblems });
   process.stdout.write((lessonProblems.length ? "FAIL " : "PASS ") + lesson.slug + "\n");
 }
 const failed = sweep.filter((result) => !result.passed);
-check("all 61 lessons load in the modern layout", failed.length === 0, failed.slice(0, 3).map((result) => result.slug + ": " + result.problems.join(";")).join(" | "));
+check((fullSweep ? "all 61 lessons" : "representative lessons") + " load in the modern layout",
+  failed.length === 0,
+  failed.slice(0, 3).map((result) => result.slug + ": " + result.problems.join(";")).join(" | "));
 fs.writeFileSync(summaryFile, JSON.stringify({
   generated_at: new Date().toISOString(),
+  browser: browserName,
   target: pageUrl,
   viewport: "390x844",
+  full_sweep: fullSweep,
   lessons: sweep.length,
   passed: sweep.length - failed.length,
   failed: failed.map((result) => result.slug),
@@ -423,34 +561,38 @@ fs.writeFileSync(summaryFile, JSON.stringify({
 
 await page.close();
 
-// --- served over HTTP (GitHub Pages path): Web Audio gains -----------------
+// --- served over HTTP (GitHub Pages path): fetch gate + Web Audio gains -----
 const port = 8153;
+const servedUrl = `http://127.0.0.1:${port}/index.html`;
 const server = spawn("python3", ["-m", "http.server", String(port), "--bind", "127.0.0.1"], { cwd: root, stdio: "ignore" });
 await new Promise((resolve) => setTimeout(resolve, 900));
 try {
-  const served = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const served = await browser.newPage({ viewport });
+  await served.bringToFront();
   const servedErrors = [];
   served.on("console", (message) => {
     if (message.type() === "error") servedErrors.push(message.text().slice(0, 150));
   });
   served.on("pageerror", (error) => servedErrors.push("pageerror: " + error.message.slice(0, 150)));
-  await served.goto(`http://127.0.0.1:${port}/index.html#/lesson/volume-1/01-alubanche`);
-  await served.waitForFunction(
-    () => window.__batapp_new && window.__batapp_new.tracks().length === 5 &&
-      window.__batapp_new.tracks().every((track) => track.duration > 1 || track.error),
-    null,
-    { timeout: 10000 }
-  );
+  await served.goto(servedUrl + "#/lesson/volume-1/01-alubanche");
+  await ready(served);
   check("served page uses the Web Audio mixer", (await served.evaluate(() => window.__batapp_new.state().mode)) === "webaudio");
+  let vox = await served.evaluate(() => window.__batapp_new.tracks().find((track) => track.stem === "vox"));
+  check("Vox starts at 100% on HTTP",
+    vox.volume === 1 && vox.gain === 1 && vox.elementVolume === 1,
+    JSON.stringify({ gain: vox.gain, elementVolume: vox.elementVolume, volume: vox.volume }));
+  await served.locator(".stem[data-stem='vox'] input").evaluate((input) => {
+    input.value = "50";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  vox = await served.evaluate(() => window.__batapp_new.tracks().find((track) => track.stem === "vox"));
+  check("Vox gain follows its slider on HTTP", vox.gain === 0.5 && vox.elementVolume === 1,
+    JSON.stringify({ gain: vox.gain, elementVolume: vox.elementVolume }));
   await served.locator(".stem[data-stem='vox'] input").evaluate((input) => {
     input.value = "100";
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  const vox = await served.evaluate(() => window.__batapp_new.tracks().find((track) => track.stem === "vox"));
-  check("Vox unmutes on HTTP (element volume stays 1, gain follows)",
-    vox.gain === 1 && vox.elementVolume === 1,
-    JSON.stringify({ gain: vox.gain, elementVolume: vox.elementVolume, volume: vox.volume }));
-  await served.locator(".play").click();
+  await served.locator("button.play").click();
   await served.waitForTimeout(1400);
   const servedTimes = await served.evaluate(() => window.__batapp_new.tracks().map((track) => track.currentTime));
   check("served page starts every stem together",
@@ -458,6 +600,54 @@ try {
     JSON.stringify(servedTimes.map((time) => +time.toFixed(2))));
   check("no console errors over HTTP", servedErrors.length === 0, servedErrors.slice(0, 2).join(" | "));
   await served.close();
+
+  // Load gate: delay the audio responses, then assert Play is disabled.
+  const slow = await browser.newPage({ viewport });
+  await slow.bringToFront();
+  await slow.route("**/assets/audio/**", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    await route.continue();
+  });
+  await slow.goto(servedUrl + "#/lesson/volume-1/01-alubanche");
+  await slow.waitForSelector(".loading", { timeout: 5000 });
+  await slow.waitForTimeout(250);
+  const gated = await slow.evaluate(() => ({
+    loader: !!document.querySelector(".loading"),
+    playEnabled: window.__batapp_new.ui().playEnabled,
+    status: (document.querySelector(".load-status") || {}).textContent || "",
+    seek: !!document.querySelector(".seek")
+  }));
+  check("HTTP load gate shows a loader with Play disabled",
+    gated.loader && !gated.playEnabled && !gated.seek,
+    JSON.stringify(gated));
+  await slow.screenshot({ path: path.join(shots, "13-http-loading.png") });
+  await ready(slow);
+  const readyState = await slow.evaluate(() => ({
+    loader: !!document.querySelector(".loading"),
+    playEnabled: window.__batapp_new.ui().playEnabled,
+    seek: !!document.querySelector(".seek")
+  }));
+  check("load gate opens only after all stems are local",
+    !readyState.loader && readyState.playEnabled && readyState.seek,
+    JSON.stringify(readyState));
+  await slow.close();
+
+  // Error + Retry: abort the Vox fetch, then retry with the route removed.
+  const failing = await browser.newPage({ viewport });
+  await failing.bringToFront();
+  await failing.route("**/vox.ogg", (route) => route.abort());
+  await failing.goto(servedUrl + "#/lesson/volume-1/01-alubanche");
+  await failing.waitForSelector(".loading.error", { timeout: 15000 });
+  await failing.waitForTimeout(250);
+  const errorText = (await failing.locator(".load-status").textContent()).trim();
+  check("failed stem is named in the error state", errorText.indexOf("Vox") >= 0, errorText);
+  await failing.screenshot({ path: path.join(shots, "14-http-error.png") });
+  await failing.unroute("**/vox.ogg");
+  await failing.locator(".retry").click();
+  await ready(failing);
+  check("Retry completes the load after a failure",
+    (await failing.evaluate(() => !window.__batapp_new.state().loading && window.__batapp_new.ui().playEnabled)));
+  await failing.close();
 } finally {
   server.kill("SIGTERM");
 }
@@ -470,14 +660,16 @@ check("no console errors during the file:// walkthrough", fileErrors.length === 
 
 const report = {
   generated_at: new Date().toISOString(),
+  browser: browserName,
   target: pageUrl,
+  full_sweep: fullSweep,
   checks_passed: checks.filter((entry) => entry.ok).length,
   checks_total: checks.length,
   problems,
   checks
 };
 fs.writeFileSync(reportFile, JSON.stringify(report, null, 2) + "\n");
-console.log(checks.filter((entry) => entry.ok).length + "/" + checks.length + " checks passed; report: " + reportFile);
+console.log(browserName + ": " + checks.filter((entry) => entry.ok).length + "/" + checks.length + " checks passed; report: " + reportFile);
 if (problems.length) {
   console.log(problems.join("\n"));
   process.exitCode = 1;

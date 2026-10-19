@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="amber" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4b963"/>
+      <stop offset="1" stop-color="#cf8427"/>
+    </linearGradient>
+    <clipPath id="drum"><polygon points="292,196 732,196 760,236 668,466 620,500 620,524 668,558 760,788 732,828 292,828 264,788 356,558 404,524 404,500 356,466 264,236"/></clipPath>
+  </defs>
+  <rect width="1024" height="1024" rx="224" fill="#0d0f13"/>
+  <polygon points="292,196 732,196 760,236 668,466 620,500 620,524 668,558 760,788 732,828 292,828 264,788 356,558 404,524 404,500 356,466 264,236" fill="url(#amber)"/>
+  <g clip-path="url(#drum)" stroke="#0d0f13" stroke-width="12" stroke-linecap="round">
+      <line x1="270" y1="300" x2="754" y2="300"/>
+      <line x1="270" y1="724" x2="754" y2="724"/>
+      <line x1="450" y1="460" x2="450" y2="564"/>
+      <line x1="512" y1="460" x2="512" y2="564"/>
+      <line x1="574" y1="460" x2="574" y2="564"/>
+  </g>
+</svg>

@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-10-19T14:28:18.293Z",
+  "target": "file:///home/apicciano/ai/batapp-web/index.html",
+  "note": "Chromium runs the full sweep; Firefox/WebKit run representative lessons. Real iPhone Safari and Android Chrome are covered by the manual device pass.",
+  "browsers": [
+    {
+      "browser": "chromium",
+      "status": "passed",
+      "checks_passed": 82,
+      "checks_total": 82,
+      "full_sweep": true,
+      "exit_code": 0,
+      "reason": "",
+      "diagnostics": ""
+    },
+    {
+      "browser": "firefox",
+      "status": "passed",
+      "checks_passed": 82,
+      "checks_total": 82,
+      "full_sweep": false,
+      "exit_code": 0,
+      "reason": "",
+      "diagnostics": ""
+    },
+    {
+      "browser": "webkit",
+      "status": "unavailable",
+      "checks_passed": null,
+      "checks_total": null,
+      "full_sweep": null,
+      "exit_code": 1,
+      "reason": "browser could not launch on this host (run: sudo npx playwright install-deps webkit)",
+      "diagnostics": "║ Host system is missing dependencies to run browsers. ║\n║ Missing libraries:                                   ║\n║     libgtk-4.so.1                                    ║\n║     libevent-2.1.so.7                                ║\n║     libgstcodecparsers-1.0.so.0                      ║\n║     libavif.so.13                                    ║"
+    }
+  ]
+}
