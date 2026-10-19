@@ -81,8 +81,19 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
 ## Next: the original app's own logic (optional depth)
 
-- [ ] Metadata → method inventory, and a method→address map for
-      `libil2cpp.so` (REA does not decode IL2CPP metadata; the mapping is ours).
+- [x] Metadata → method inventory and a method→address map: Il2CppDumper v6.7.46
+      (.NET 8 runtime, user-level) reports Il2Cpp 24.3, `CodeRegistration 0xcc0080`,
+      and writes `dump.cs` + `script.json`; the app's 16 classes and their
+      signatures are recorded in `docs/verification/app-classes.txt`, and
+      `tools/extract_app_classes.py` re-extracts them.
+- [x] REA MCP evaluated — **not usable with this client**: the server advertises a
+      3.4 MB catalog (largest schema 196 KB) that OpenCode drops silently
+      (`rea mcp doctor` green; issue draft in `.work/rea-mcp-catalog-issue.md`).
+      REA is driven through its CLI instead (documented in AGENTS.md).
+- [~] Decompile the app's own methods with Ghidra by their VA from `script.json`:
+      `VolumeValueChange.SetVolume`, `VolumeValueChangefromzero.SetVolume`,
+      `SceneSurf.LoadNextLevel/LoadPrevLevel`, `MoveOnClick.ChangeScene`
+      (running via `rea decompile … --provider ghidra --snapshot …`).
 - [ ] Install Ghidra 12.1.4 + JDK 21 (byo) and register the REA MCP server
       (`rea setup --client opencode --dry-run` first, review paths and backups,
       then apply, then restart).
