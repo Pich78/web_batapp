@@ -76,27 +76,48 @@
   }
 
 
-  var LAYOUT_KEYS = ["canvas", "canvas_order", "plain", "scale", "anchors", "pivot", "anchored", "delta"];
-
-  function cloneNodes(nodes) {
-    return nodes.map(function (node) {
-      var copy = { id: node.id, parent: node.parent };
-      LAYOUT_KEYS.forEach(function (key) {
-        if (node[key] !== undefined) copy[key] = Array.isArray(node[key]) ? node[key].slice() : node[key];
-      });
-      return copy;
-    });
-  }
-
-  function authoredLayout(screen) {
-    if (!screen) return [];
-    if (!screen.layoutAuthored) screen.layoutAuthored = cloneNodes(screen.layout || []);
-    return cloneNodes(screen.layoutAuthored);
+  function clampIntoParent(rect, size, parentRect, scale, lockX, lockY) {
+    // CSS-overflow style clamp: a box never leaves its containing box. Shift it
+    // back inside when it overflows, and shrink the local size when the box is
+    // wider or taller than the container. Updating `size` (not just the rect)
+    // makes the node's own children follow the clamped box, because they are
+    // anchored to that size on the next pass.
+    //
+    // An oversized group whose children use fixed offsets is left alone on that
+    // axis: shrinking a scroll strip, a carousel or a centred banner would
+    // rewrite its children's coordinate system and stack them. Those groups are
+    // clipped by the stage (or by their own Mask layer), exactly like overflow
+    // content in CSS. Leaves and stretch-anchored groups shrink normally.
+    var maxW = parentRect[2], maxH = parentRect[3];
+    if (!lockX) {
+      if (rect[2] > maxW) {
+        rect[2] = Math.max(0, maxW);
+        size[0] = scale > 0 ? rect[2] / scale : 0;
+      }
+      if (rect[0] < parentRect[0]) rect[0] = parentRect[0];
+      if (rect[0] + rect[2] > parentRect[0] + maxW) {
+        rect[0] = parentRect[0] + maxW - rect[2];
+      }
+    }
+    if (!lockY) {
+      if (rect[3] > maxH) {
+        rect[3] = Math.max(0, maxH);
+        size[1] = scale > 0 ? rect[3] / scale : 0;
+      }
+      if (rect[1] < parentRect[1]) rect[1] = parentRect[1];
+      if (rect[1] + rect[3] > parentRect[1] + maxH) {
+        rect[1] = parentRect[1] + maxH - rect[3];
+      }
+    }
   }
 
   function rectsAt(nodes, canvasW, canvasH) {
     var out = {};
     var canvasRect = [0, 0, canvasW, canvasH];
+    var children = {};
+    nodes.forEach(function (node) {
+      if (node.parent >= 0) (children[node.parent] = children[node.parent] || []).push(node);
+    });
     nodes.forEach(function (node) {
       var parent = node.parent >= 0 && out[node.parent]
         ? out[node.parent]
@@ -117,84 +138,30 @@
       var pivotY = minY + (maxY - minY) * pivot[1] + pos[1];
       var localX = pivotX - width * pivot[0], localY = pivotY - height * pivot[1];
       var scale = parent.scale * (node.scale || 1);
-      out[node.id] = {
-        rect: [
-          parent.rect[0] + localX * parent.scale,
-          parent.rect[1] + localY * parent.scale,
-          width * scale,
-          height * scale
-        ],
-        size: [width, height],
-        scale: scale
-      };
+      var rect = [
+        parent.rect[0] + localX * parent.scale,
+        parent.rect[1] + localY * parent.scale,
+        width * scale,
+        height * scale
+      ];
+      var size = [width, height];
+      var kids = children[node.id] || [];
+      var fixedX = kids.some(function (kid) {
+        return kid.anchors && Math.abs(kid.anchors[2] - kid.anchors[0]) < 0.001;
+      });
+      var fixedY = kids.some(function (kid) {
+        return kid.anchors && Math.abs(kid.anchors[3] - kid.anchors[1]) < 0.001;
+      });
+      var lockX = kids.length > 0 && fixedX && rect[2] > parent.rect[2];
+      var lockY = kids.length > 0 && fixedY && rect[3] > parent.rect[3];
+      clampIntoParent(rect, size, parent.rect, scale, lockX, lockY);
+      out[node.id] = { rect: rect, size: size, scale: scale };
     });
     return out;
   }
 
-  function reflowForNarrowCanvas(nodes, reference) {
-    // Unity's anchor math already adapts centred and stretched widgets to the
-    // canvas width. What it cannot know is that a group authored for 1920 units
-    // would sit outside a phone-width canvas, so each canvas-level group is
-    // measured and, if necessary, shifted as a unit to stay inside.
-    var canvasW = Math.max(STAGE_W, 1);
-    var byId = {};
-    nodes.forEach(function (node) { byId[node.id] = node; });
-    var groups = {};
-    var fixed = function (node) { return node.anchors && Math.abs(node.anchors[2] - node.anchors[0]) < 0.001; };
-    nodes.forEach(function (node) {
-      if (node.canvas || node.plain || !node.anchors) return;
-      var parent = node.parent >= 0 ? byId[node.parent] : null;
-      var rect = (reference[node.id] || {}).rect;
-      if (!rect) return;
-      var spanX = node.anchors[2] - node.anchors[0];
-      if (rect[2] >= 1915 && Math.abs(rect[0]) < 6) {
-        node.anchors = [0, 0, 1, 1];
-        node.pivot = [0, 0];
-        node.anchored = [0, 0];
-        node.delta = [0, 0];
-        return;
-      }
-      // Track rows in the lesson player are the interactive core: give them a
-      // stable fraction of their container so a phone-width canvas stays usable.
-      if (/Panel_Content\/[^/]+\/Image_VolumeBar\/Slider_Volume$/.test(node.path || "")) {
-        node.anchors = [0.06, node.anchors[1], 0.94, node.anchors[3]];
-        return;
-      }
-      var isContainer = parent && parent.canvas && rect[2] >= 100 && rect[2] < 1915 && Math.abs(spanX) < 0.001;
-      if (isContainer) {
-        var yFrac = rect[1] / 1080;
-        var hFrac = rect[3] / 1080;
-        node.anchors = [0.03, yFrac, 0.97, yFrac + hFrac];
-        node.pivot = [0, 0];
-        node.anchored = [0, 0];
-        node.delta = [0, 0];
-        return;
-      }
-      if (!parent || !parent.canvas || !fixed(node)) return;
-      var groupKey = parent.id;
-      var group = groups[groupKey] || (groups[groupKey] = { nodes: [], min: Infinity, max: -Infinity });
-      group.nodes.push(node);
-      group.min = Math.min(group.min, rect[0]);
-      group.max = Math.max(group.max, rect[0] + rect[2]);
-    });
-    Object.keys(groups).forEach(function (key) {
-      var group = groups[key];
-      var margin = 8;
-      var shift = 0;
-      if (group.max > canvasW - margin) shift = (canvasW - margin) - group.max;
-      if (group.min + shift < margin) shift = margin - group.min;
-      if (Math.abs(shift) < 0.5) return;
-      group.nodes.forEach(function (node) {
-        node.anchored = [node.anchored[0] + shift, node.anchored[1]];
-      });
-    });
-    return nodes;
-  }
-
   function computeLayout(screen) {
-    var nodes = authoredLayout(screen);
-    if (STAGE_W < 1700) nodes = reflowForNarrowCanvas(nodes, rectsAt(nodes, 1920, 1080));
-    return rectsAt(nodes, STAGE_W, STAGE_H);
+    return rectsAt(screen ? (screen.layout || []) : [], STAGE_W, STAGE_H);
   }
 
   function relayout() {
@@ -215,7 +182,7 @@
     });
     Object.keys(clipLayers).forEach(function (key) {
       var rect = rectFor(Number(key));
-      if (rect) place(clipLayers[key], rect);
+      if (rect) applyClip(clipLayers[key], rect);
     });
     if (overlayLayer) place(overlayLayer, [0, 0, STAGE_W, STAGE_H]);
     applySliderVisuals();
@@ -489,10 +456,25 @@
 
   function clipLayer(nodeId) {
     if (!clipLayers[nodeId]) {
-      clipLayers[nodeId] = el("layer clip", rectOfNode(nodeId) || [0, 0, STAGE_W, STAGE_H]);
-      stage.appendChild(clipLayers[nodeId]);
+      // Clip layers stay full-stage so children keep using canvas coordinates;
+      // the mask is expressed with clip-path rather than by moving the layer
+      // (moving it would offset every child by the mask's own origin).
+      var layer = el("layer clip", [0, 0, STAGE_W, STAGE_H]);
+      applyClip(layer, rectOfNode(nodeId) || [0, 0, STAGE_W, STAGE_H]);
+      clipLayers[nodeId] = layer;
+      stage.appendChild(layer);
     }
     return clipLayers[nodeId];
+  }
+
+  function applyClip(layer, rect) {
+    var top = STAGE_H - rect[1] - rect[3];
+    var right = STAGE_W - rect[0] - rect[2];
+    var bottom = rect[1];
+    var left = rect[0];
+    var inset = "inset(" + top + "px " + right + "px " + bottom + "px " + left + "px)";
+    layer.style.clipPath = inset;
+    layer.style.webkitClipPath = inset;
   }
 
   function renderDrawable(drawable, rect, container, options) {
@@ -543,6 +525,10 @@
     var drawn = 0;
     (screen.drawables || []).forEach(function (drawable) {
       if (drawable.enabled === false && drawable.kind !== "button" && drawable.kind !== "slider") return;
+      // Inactive scene objects do not render. The pause layer is the one
+      // exception: its widgets are inactive in the shipped scenes, but the port
+      // renders them into the overlay that replaces the original's pause menu.
+      if (drawable.active === false && !drawable.overlay) return;
       var rect = rectOfNode(drawable.node);
       if (!rect) return;
       var container = drawable.clip_node !== undefined && drawable.clip_node !== null
@@ -861,8 +847,9 @@
           (lesson.number || "") + " - " + (lesson.title || "");
       }
     });
-    // lesson-specific label over the blueprint title
-    var label = el("el txt", [660, 840, 600, 60]);
+    // lesson-specific label over the blueprint title (canvas-width, so it
+    // follows the same reactive width as the rest of the stage)
+    var label = el("el txt", [0, 840, STAGE_W, 60]);
     label.style.justifyContent = "center";
     label.style.alignItems = "center";
     label.style.color = "#ffffff";

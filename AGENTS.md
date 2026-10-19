@@ -122,12 +122,19 @@ in the browser, so geometry follows the live canvas.
 Canvas rules (derived from the scenes, not chosen):
 
 - authored reference is 1920x1080 with `CanvasScaler` **match-height**;
-- wide screens: canvas height = 1080 units, width = `1080 x aspect`, scale =
-  `height / 1080` (this is what the original does, so edge-anchored widgets stay
-  put and extra width is simply revealed);
-- narrower than 16:9 the canvas would shrink under the authored width and push
-  the player off-screen — the original rotates instead, so the port keeps 1920
-  units and letterboxes;
+- wide or narrow screens: canvas height = 1080 units, width = `1080 x aspect`,
+  scale = `height / 1080` (this is what the original does, so edge-anchored
+  widgets stay put and extra width is simply revealed). The port is reactive in
+  both orientations: it never rotates, locks orientation or letterboxes;
+- `rectsAt` clamps every node into its parent after computing the anchor rect.
+  Overflow is shifted back in, and an oversized box shrinks its local size so
+  its children follow the new box. Oversized groups whose children use fixed
+  offsets (scroll strips, carousels, centred banners) keep that axis unchanged
+  so their content is not stacked; the stage or their own mask clips them, as
+  in CSS overflow. `tests/verify.mjs` asserts zero widgets outside the canvas
+  and five ≥200-unit sliders at 720×1440, 1080×1920, 1600×900 and 2560×1080;
+- mask layers stay full-stage and clip with `clip-path`, so their children keep
+  using canvas coordinates instead of inheriting the mask origin;
 - nodes with a plain `Transform` (e.g. an `Actions` holder) are non-drawing
   pass-throughs and deliberately do **not** contribute their localScale: the
   shipped child positions only form a sane row without it (applying the 1.8

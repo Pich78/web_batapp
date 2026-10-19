@@ -37,8 +37,9 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       volumes, lessons, stems, durations, credits, UI strings.
 - [x] **Layout model** → anchor-relative layout graphs for all 65 screens; the
       browser runs Unity's RectTransform math against the live canvas, with mask
-      clipping, canvas ordering and matching CanvasScaler semantics (verified at
-      720×1440, 1600×900 and 2560×1080).
+      clipping, canvas ordering, matching CanvasScaler semantics and a reactive
+      clamp pass (verified at 720×1440, 1080×1920, 1600×900 and 2560×1080; the
+      Playwright suite now has 60 checks).
 - [ ] Wire the original's **portrait menu canvas** (`298.5×456`, `Expand`) from
       `Volume Selector` so the menu matches the phone screenshots rather than
       letterboxing the landscape one.
@@ -79,14 +80,15 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - [x] Anchor-relative layout with live CanvasScaler semantics; full-bleed art
       follows the canvas, canvas-level containers stretch to it, and the player's
       five track rows are pinned to a stable fraction of their container.
-- [ ] **Clamp pass in `rectsAt`** — the remaining gap. Nested chains
-      (`Content/Panel/Panel_Content/<Track>/Image_VolumeBar/Slider_Volume`) keep
-      their authored offsets, so on a phone-width canvas (540 units) the sliders
-      land at x≈-15 and 15 widgets sit outside. Fix: after computing a node's rect,
-      clamp it into its parent (shift when it overflows, shrink `sizeLocal` when it
-      is wider than the parent) and let children follow, exactly like CSS overflow
-      handling. Measured today: 1600×900 and 2560×1080 → 0 widgets outside;
-      1080×1920 → 4; 720×1440 → 15.
+- [x] **Clamp pass in `rectsAt`**. Every node is clamped into its parent after
+      its rect is computed: overflow is shifted back in, and an oversized box
+      shrinks its local size so its children follow the new box. Oversized
+      groups whose children use fixed offsets (scroll strips, carousels,
+      centred banners) keep that axis unchanged so their content is not stacked;
+      they stay clipped by the stage or their own mask, as in CSS overflow.
+      Result: zero visible widgets outside the canvas at 720×1440, 1080×1920,
+      1600×900 and 2560×1080, and the five lesson sliders stay 256 units wide
+      (previously x≈-15 at 540-unit canvas width). Covered by `tests/verify.mjs`.
 - [ ] Wire the original's portrait menu canvas (`298.5×456`, `Expand`).
 
 ## Next: verification

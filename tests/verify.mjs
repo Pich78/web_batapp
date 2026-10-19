@@ -46,6 +46,64 @@ async function go(hash, wait = 700) {
   await page.waitForTimeout(wait);
 }
 
+/* Runs in the page: report widgets whose rendered box leaves the canvas.
+ * Clipping ancestors (stage masks / scroll viewports) are applied first, so
+ * content that is intentionally scrolled out of view is not counted. */
+function widgetGeometry() {
+  const stage = document.getElementById("stage");
+  const sb = stage.getBoundingClientRect();
+  const scale = sb.width / parseFloat(stage.style.width);
+  const canvasW = parseFloat(stage.style.width);
+  const canvasH = parseFloat(stage.style.height);
+  const isWidget = (node) =>
+    node.classList.contains("hit") || node.classList.contains("txt") || node.classList.contains("slider-hit");
+  const outside = [];
+  const sliders = [];
+  document.querySelectorAll("#stage .el").forEach((node) => {
+    if (!isWidget(node) || !node.offsetParent) return;
+    const style = getComputedStyle(node);
+    if (style.display === "none" || style.visibility === "hidden") return;
+    const box = node.getBoundingClientRect();
+    let x = (box.left - sb.left) / scale;
+    let y = (box.top - sb.top) / scale;
+    let x2 = x + box.width / scale;
+    let y2 = y + box.height / scale;
+    for (let parent = node.parentElement; parent && parent !== stage; parent = parent.parentElement) {
+      const pcs = getComputedStyle(parent);
+      if (pcs.overflowX !== "hidden" && pcs.overflowY !== "hidden") continue;
+      const pb = parent.getBoundingClientRect();
+      const px = (pb.left - sb.left) / scale;
+      const py = (pb.top - sb.top) / scale;
+      if (pcs.overflowX === "hidden") {
+        x = Math.max(x, px);
+        x2 = Math.min(x2, px + pb.width / scale);
+      }
+      if (pcs.overflowY === "hidden") {
+        y = Math.max(y, py);
+        y2 = Math.min(y2, py + pb.height / scale);
+      }
+    }
+    if (x2 <= x || y2 <= y || box.width < 1 || box.height < 1) return;
+    if (x < -0.5 || y < -0.5 || x2 > canvasW + 0.5 || y2 > canvasH + 0.5) {
+      outside.push({
+        cls: node.className,
+        text: (node.textContent || "").trim().slice(0, 24),
+        rect: [x, y, x2 - x, y2 - y].map(Math.round)
+      });
+    }
+    if (node.classList.contains("slider-hit")) {
+      sliders.push({ stem: node.dataset.stem || "", width: Math.round(x2 - x) });
+    }
+  });
+  return {
+    outside,
+    sliders,
+    canvas: [canvasW, canvasH],
+    stage: [sb.width, sb.height],
+    viewport: [window.innerWidth, window.innerHeight]
+  };
+}
+
 // --- opening ---------------------------------------------------------------
 await go("#/opening");
 await shot("01-opening");
@@ -199,6 +257,44 @@ if (volumeTwo) {
   await page.mouse.click(volumeTwo.x, volumeTwo.y);
   await page.waitForTimeout(800);
   check("selector 'Oru Seco' opens the Volume II index", page.url().includes("#/volume-2"), page.url().split("#")[1]);
+}
+
+// --- reactive layout across shapes ----------------------------------------
+// The port must follow the live canvas in portrait as well as landscape: no
+// orientation lock, no letterboxing, and nested widgets clamped into their
+// parents (the lesson sliders used to sit at x=-15 on a 540-unit canvas).
+const layoutSizes = [[720, 1440], [1080, 1920], [1600, 900], [2560, 1080]];
+for (const [width, height] of layoutSizes) {
+  const probe = await browser.newPage({ viewport: { width, height } });
+  for (const [route, label, wait] of [
+    ["#/lesson/" + lessonSlug, "lesson player", 1000],
+    ["#/volumes", "volume selector", 600],
+    ["#/volume-1", "toque index", 700]
+  ]) {
+    await probe.goto(pageUrl + route);
+    await probe.waitForTimeout(wait);
+    const geometry = await probe.evaluate(widgetGeometry);
+    check(
+      "reactive layout " + width + "x" + height + ": " + label + " has no widget outside the canvas",
+      geometry.outside.length === 0,
+      geometry.outside.length + " outside: " + JSON.stringify(geometry.outside.slice(0, 3))
+    );
+    const fills = Math.abs(geometry.stage[0] - geometry.viewport[0]) < 1 &&
+      Math.abs(geometry.stage[1] - geometry.viewport[1]) < 1;
+    check(
+      "reactive layout " + width + "x" + height + ": " + label + " fills the viewport",
+      fills,
+      "stage=" + geometry.stage.map(Math.round).join("x") + " viewport=" + geometry.viewport.join("x")
+    );
+    if (route.indexOf("lesson") >= 0) {
+      check(
+        "reactive layout " + width + "x" + height + ": five sliders stay at least 200 units wide",
+        geometry.sliders.length === 5 && geometry.sliders.every((slider) => slider.width >= 200),
+        JSON.stringify(geometry.sliders)
+      );
+    }
+  }
+  await probe.close();
 }
 
 // --- credits ---------------------------------------------------------------

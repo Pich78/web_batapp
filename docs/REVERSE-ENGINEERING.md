@@ -190,8 +190,12 @@ That match-height behaviour also explains the store screenshots' framing: on a
 720×1440 phone the canvas is only **540 units wide**, while the lesson player is
 authored around x≈675–1170 — i.e. the player cannot fit a portrait canvas and
 the app rotates to landscape (its 2.1 changelog calls out landscape
-optimisation). The port reproduces this as: match height on wide windows,
-letterbox at the authored 1920 width on narrow ones.
+optimisation). The port keeps match-height on every window but stays reactive
+instead of rotating: `rectsAt` clamps nested nodes into their parents (shifting
+overflow and shrinking oversized boxes, with fixed-offset scroll/carousel groups
+left clipped rather than stacked). At 540 units the five sliders now sit at
+x=108 with width 256; no visible widget leaves the canvas at 720×1440,
+1080×1920, 1600×900 or 2560×1080.
 Sprite/UI sorting orders observed: 0, 1, 2.
 
 Text in the shipped scenes confirms the intended UI copy, e.g.
