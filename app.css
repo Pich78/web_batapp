@@ -1,0 +1,126 @@
+/* BatApp static port - the app renders into a fixed 1920x1080 stage (the
+   original canvas reference resolution, match-height) which is scaled to the
+   window, so rects keep the geometry they have in the shipped scenes. */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #05070a;
+  overflow: hidden;
+  font-family: Arial, "Helvetica Neue", Helvetica, "Liberation Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#viewport {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#stage {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  transform-origin: center center;
+  background: #000;
+  overflow: hidden;
+}
+
+#hint {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  text-align: center;
+  font-size: 12px;
+  color: #4a5a6a;
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.layer { position: absolute; overflow: visible; }
+.layer.clip { overflow: hidden; }
+
+.el {
+  position: absolute;
+  pointer-events: none;
+}
+
+.el.img {
+  background-repeat: no-repeat;
+  background-position: center center;
+}
+
+.el.txt {
+  display: flex;
+  white-space: pre-wrap;
+  overflow: hidden;
+}
+
+.el.txt.nowrap { white-space: pre; }
+.el.txt.truncate { overflow: hidden; }
+.el.txt.overflow { overflow: visible; }
+
+.el.hit {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.el.hit:active { filter: brightness(1.15); }
+
+.el.slider-hit {
+  pointer-events: auto;
+  cursor: ew-resize;
+  opacity: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.el.slider-hit::-webkit-slider-thumb { -webkit-appearance: none; width: 40px; height: 100%; }
+.el.slider-hit::-moz-range-thumb { width: 40px; height: 100%; border: 0; background: transparent; }
+
+.el.video {
+  background: rgba(12, 16, 22, 0.85);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #7f8fa3;
+  font-size: 22px;
+  text-align: center;
+}
+
+.badge {
+  position: absolute;
+  right: 24px;
+  top: 16px;
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+
+#credits {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  color: #dfe7f0;
+  padding: 80px 140px;
+  overflow: auto;
+}
+
+#credits h1 { font-size: 46px; margin: 0 0 12px; }
+#credits h2 { font-size: 26px; margin: 28px 0 8px; color: #9fb3c8; font-weight: 400; }
+#credits a { color: #7fc4ff; font-size: 24px; display: block; margin: 8px 0; text-decoration: none; }
+#credits a:hover { text-decoration: underline; }
+#credits p { font-size: 20px; line-height: 1.5; color: #a9b6c4; max-width: 1100px; }
+#credits .close { position: absolute; right: 60px; top: 40px; font-size: 30px; cursor: pointer; color: #fff; }

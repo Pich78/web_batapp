@@ -33,25 +33,23 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 
 ## Next: build the app
 
-- [ ] **Content model** → `js/data.js` (classic script, no JSON fetch):
+- [x] **Content model** → `js/data.js` (classic script, no JSON fetch):
       volumes, lessons, stems, durations, credits, UI strings.
-- [ ] **Layout model** → `js/scenes.js`: for each of the 4 app screens plus the
-      lesson player blueprint, the measured rects/anchors/pivots/sizes taken
-      from the dump, at the 1920×1080 reference resolution.
-- [ ] **Stage scaling**: render into a fixed 1920×1080 stage and scale it to the
-      viewport, mirroring `CanvasScaler` (match height), so geometry matches the
-      original.
-- [ ] **Screens**: opening → volume selector → toque index (Volume I) / oru seco
+- [x] **Layout model** → flattened absolute rects for all 65 screens at the
+      1920×1080 reference resolution, with mask clipping and canvas ordering.
+- [x] **Stage scaling**: fixed 1920×1080 stage scaled to the viewport,
+      mirroring `CanvasScaler` (match height).
+- [x] **Screens**: opening → volume selector → toque index (Volume I) / oru seco
       index (Volume II) → lesson player → credits/links, with hash routing.
-- [ ] **Mixer**: five `Slider_Volume` controls (0…1, not whole numbers), track
-      labels `Iya/Itotele/Okonkolo/Beat/Vox`, Play/Pause/Stop; one stem starts at
-      volume 0 as in the original.
+- [x] **Mixer**: five `Slider_Volume` controls (0…1, not whole numbers), track
+      labels `Iya/Itotele/Okonkolo/Beat/Vox`, Play/Pause/Stop; the Vox stem starts
+      at volume 0 as in the original.
 - [ ] **Playback strategy**:
       - `https://` (GitHub Pages): Web Audio, sample-accurate start, per-track
         `GainNode`, live spectrum;
       - `file://`: `<audio>` elements with per-element volume and a drift
         correction loop (Web Audio cannot read local media).
-- [ ] **Pause/resume semantics** matching `AudioSource.Pause`/`Stop` for all five
+- [x] **Pause/resume semantics** matching `AudioSource.Pause`/`Stop` for all five
       stems, plus per-track mute without losing the slider value.
 - [ ] **Keyboard/pointer affordances** for Prev/Next/Home/Menu as in the
       original bindings.
@@ -63,6 +61,13 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
 - [ ] **Self-test page** (`selftest.html`): every lesson resolves its stems and
       sprites, durations match the manifest, no `fetch`/module syntax anywhere in
       the shipped scripts.
+- [ ] **Browser pass by the maintainer**: open `index.html` from `file://` and
+      confirm each screen against the original (geometry is generated from the
+      scenes, so this is a confirmation rather than a design review).
+- [ ] **Index screens as shipped**: the visible cards are drawn from the scene
+      dump; the generated scroll strip is a stand-in for the original
+      `ScrollRect` carousel and should be replaced by the full card list once
+      inactive cards are rendered inside the clipped viewport.
 
 ## Next: verification
 

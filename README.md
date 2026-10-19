@@ -15,9 +15,10 @@ losslessly — and rebuilds the interface as plain HTML/CSS/JavaScript.
 |---|---|
 | Audio (281 stems, 61 lessons, 88.5 MB) | **done**, verified against the original bytes |
 | Reverse engineering of scene layout, UI schemas, widget wiring | **done** |
-| All 65 scenes dumped to a machine-readable model | in progress |
-| Sprites/textures exported | not started |
-| The web app itself (`index.html`, `js/`, `css/`) | not started |
+| All 65 scenes dumped to a machine-readable model | **done** |
+| Sprites/textures exported (3.7 MB) | **done** |
+| Layout + content model emitted as `js/data.js` | **done** |
+| The web app itself (`index.html`, `js/`, `css/`) | **working first version** |
 
 See [docs/PLAN.md](docs/PLAN.md) for the next steps and
 [docs/REVERSE-ENGINEERING.md](docs/REVERSE-ENGINEERING.md) for the evidence
@@ -25,9 +26,10 @@ behind the reconstruction.
 
 ## Running the app
 
-Once `index.html` exists:
-
 - **Double-click `index.html`** — it runs from `file://` with no server.
+  Screens: opening → volume selector → toque/oru-seco index → lesson player
+  (five sliders, Play/Pause/Stop, Prev/Next/Home, pause layer on `Esc`), plus a
+  credits view with the author's links.
 - Or publish the repository with GitHub Pages (Settings → Pages → deploy from
   the branch root). All paths are relative, so it works from a subpath too.
 

@@ -231,6 +231,7 @@ class SceneDumper:
         file = self.files_by_base[file_name]
         objects = getattr(file, "objects", {})
         go_names: dict[int, str] = {}
+        go_active: dict[int, bool] = {}
         components: dict[int, list[dict]] = collections.defaultdict(list)
         transforms: dict[int, dict] = {}
         raws: dict[int, bytes] = {}
@@ -238,11 +239,10 @@ class SceneDumper:
         # first pass: game objects and component membership
         for path_id, reader in objects.items():
             if reader.type.name == "GameObject":
-                raw = reader.get_raw_data()
-                count = struct.unpack_from("<i", raw, 4 + 4 + 12 * 0)[0] if False else None
                 try:
                     go = reader.read()
                     go_names[path_id] = go.m_Name
+                    go_active[path_id] = bool(getattr(go, "m_IsActive", True))
                     for component in go.m_Components:
                         components[component.m_PathID].append({"owner": path_id, "type": None})
                 except Exception:
@@ -380,6 +380,7 @@ class SceneDumper:
                     "game_object": go_id,
                     "name": go_names.get(go_id, f"<go:{go_id}>"),
                     "path": self.game_object_path(file_name, go_id),
+                    "active": go_active.get(go_id, True),
                     "transform": transform,
                     "components": [],
                 },
@@ -408,21 +409,11 @@ class SceneDumper:
                     wiring.append(
                         {
                             "element": node["name"],
+                            "element_path": node["path"],
                             "element_kind": component["type"],
                             "field": field_name,
                             "calls": [
-                                {
-                                    "method": call["method"],
-                                    **self.describe_pptr(
-                                        file_name,
-                                        {"file_id": call.get("target_file_id", 0), "path_id": call.get("target_path_id", 0)},
-                                    ),
-                                    "resolved_class": call["target_class"],
-                                    "resolved_script": call.get("script_class"),
-                                    "target_name": call["target"],
-                                    "string_argument": call["string_argument"],
-                                    "float_argument": call["float_argument"],
-                                }
+                                self.describe_call(file_name, call)
                                 for call in calls
                             ],
                         }
@@ -439,6 +430,20 @@ class SceneDumper:
                     if component.get("type") == "AudioSource" and component.get("clip")
                 }
             ),
+        }
+
+    def describe_call(self, file_name: str, call: dict) -> dict:
+        resolved = self.describe_pptr(
+            file_name,
+            {"file_id": call.get("target_file_id", 0), "path_id": call.get("target_path_id", 0)},
+        )
+        return {
+            "method": call["method"],
+            **resolved,
+            "resolved_class": resolved.get("script_class") or call["target_class"],
+            "target_name": call["target"],
+            "string_argument": call["string_argument"],
+            "float_argument": call["float_argument"],
         }
 
     def decode_fields(self, file_name: str, class_name: str, parsed: dict) -> dict:

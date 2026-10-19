@@ -1,0 +1,665 @@
+/* BatApp static port runtime.
+ *
+ * Renders the geometry and wiring that tools/build_app_data.py lifted out of the
+ * shipped Unity scenes, and plays the lessons from the remuxed Ogg stems.
+ *
+ * Two playback modes, chosen at runtime:
+ *   - file:// (double-clicked page): five <audio> elements, per-element volume,
+ *     drift correction. Web Audio cannot read local media without a server.
+ *   - http(s) (e.g. GitHub Pages): Web Audio graph with one GainNode per stem,
+ *     started in the same tick, plus master transport actions.
+ */
+(function () {
+  "use strict";
+
+  var D = window.BATAPP;
+  var STAGE_W = 1920, STAGE_H = 1080;
+  var stage = document.getElementById("stage");
+  var viewport = document.getElementById("viewport");
+  var STEM_ORDER = ["iya", "ito", "oko", "vox", "beat"];
+
+  /* ---------------------------------------------------------------- helpers */
+
+  function rgba(color) {
+    if (!color) return "rgba(255,255,255,1)";
+    var r = Math.round(color[0] * 255), g = Math.round(color[1] * 255);
+    var b = Math.round(color[2] * 255), a = color[3] === undefined ? 1 : color[3];
+    return "rgba(" + r + "," + g + "," + b + "," + a + ")";
+  }
+
+  function cssRect(rect) {
+    // Unity rects are y-up from the bottom-left; CSS is y-down from the top-left.
+    return {
+      left: rect[0] + "px",
+      top: (STAGE_H - rect[1] - rect[3]) + "px",
+      width: rect[2] + "px",
+      height: rect[3] + "px"
+    };
+  }
+
+  function place(el, rect) {
+    var box = cssRect(rect);
+    el.style.left = box.left;
+    el.style.top = box.top;
+    el.style.width = box.width;
+    el.style.height = box.height;
+    return el;
+  }
+
+  function el(className, rect) {
+    var node = document.createElement("div");
+    node.className = className;
+    return rect ? place(node, rect) : node;
+  }
+
+  function spriteUrl(name) {
+    var path = D.sprites[name];
+    return path ? "assets/img/" + path : null;
+  }
+
+  function fitStage() {
+    var scale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+    stage.style.transform = "scale(" + scale + ")";
+  }
+  window.addEventListener("resize", fitStage);
+  fitStage();
+
+  /* ------------------------------------------------------------ draw screen */
+
+  function renderImage(drawable, root) {
+    var node = el("el img", drawable.rect);
+    node.style.backgroundSize = "100% 100%";
+    node.style.opacity = drawable.active && drawable.enabled === false ? "0.35" : "1";
+    if (!drawable.active) node.style.display = "none";
+    if (drawable.color) node.style.backgroundColor = rgba(drawable.color);
+    var url = spriteUrl(drawable.sprite);
+    if (url) {
+      var meta = (D.sprite_meta || {})[drawable.sprite] || {};
+      var border = meta.border || [0, 0, 0, 0];
+      var sliced = drawable.image_type === "sliced" && border.some(function (v) { return v > 0; });
+      if (sliced) {
+        node.style.backgroundImage = "none";
+        node.style.borderStyle = "solid";
+        node.style.borderWidth = border[1] + "px " + border[3] + "px " + border[0] + "px " + border[2] + "px";
+        node.style.borderImage = "url('" + url + "') " + border[0] + " " + border[3] + " " + border[2] + " " + border[1] + " stretch";
+        node.style.boxSizing = "border-box";
+      } else {
+        node.style.backgroundImage = "url('" + url + "')";
+        if (drawable.preserve_aspect) {
+          node.style.backgroundSize = "contain";
+        } else if (drawable.image_type === "tiled") {
+          node.style.backgroundSize = meta.width ? meta.width + "px " + meta.height + "px" : "auto";
+          node.style.backgroundRepeat = "repeat";
+        }
+      }
+    }
+    root.appendChild(node);
+    return node;
+  }
+
+  var ALIGN_FLEX = {
+    "upper-left": ["flex-start", "flex-start", "left"],
+    "upper-center": ["center", "flex-start", "center"],
+    "upper-right": ["flex-end", "flex-start", "right"],
+    "middle-left": ["flex-start", "center", "left"],
+    "middle-center": ["center", "center", "center"],
+    "middle-right": ["flex-end", "center", "right"],
+    "lower-left": ["flex-start", "flex-end", "left"],
+    "lower-center": ["center", "flex-end", "center"],
+    "lower-right": ["flex-end", "flex-end", "right"]
+  };
+
+  function renderText(drawable, root) {
+    var node = el("el txt", drawable.rect);
+    var align = ALIGN_FLEX[drawable.alignment] || ALIGN_FLEX["middle-center"];
+    node.style.justifyContent = align[0];
+    node.style.alignItems = align[1];
+    node.style.textAlign = align[2];
+    node.style.color = rgba(drawable.color);
+    node.style.fontSize = (drawable.font_size || 36) + "px";
+    node.style.fontWeight = drawable.font_style && drawable.font_style.indexOf("bold") >= 0 ? "bold" : "normal";
+    node.style.fontStyle = drawable.font_style && drawable.font_style.indexOf("italic") >= 0 ? "italic" : "normal";
+    node.style.lineHeight = ((drawable.font_size || 36) * 1.16).toFixed(1) + "px";
+    if (drawable.horizontal_overflow === "overflow") node.classList.add("nowrap");
+    node.classList.add(drawable.vertical_overflow === "overflow" ? "overflow" : "truncate");
+    if (drawable.active === false) node.style.display = "none";
+    node.textContent = (drawable.text || "").replace(/\\n/g, "\n");
+    root.appendChild(node);
+    return node;
+  }
+
+  /* --------------------------------------------------------------- transport */
+
+  function Mixer(lesson) {
+    this.lesson = lesson;
+    this.audio = document.createElement("audio");
+    this.tracks = [];
+    this.context = null;
+    this.gains = {};
+    this.mode = location.protocol === "http:" || location.protocol === "https:" ? "webaudio" : "elements";
+    this.build();
+  }
+
+  Mixer.prototype.stemForTrack = function (track) {
+    var object = track.object || "";
+    var name = object.split("/").pop().toLowerCase();
+    return name;
+  };
+
+  Mixer.prototype.build = function () {
+    var self = this;
+    (this.lesson.audio || []).forEach(function (entry) {
+      var track = (self.lesson.tracks || []).filter(function (t) {
+        return self.stemForTrack(t) === entry.stem;
+      })[0] || {};
+      var source = new Audio("assets/audio/" + entry.path);
+      source.preload = "auto";
+      source.loop = !!track.loop;
+      var initial = track.volume === undefined || track.volume === null ? 1 : track.volume;
+      var startedAt = null;
+      var record = {
+        stem: entry.stem,
+        path: entry.path,
+        clip: entry.clip_name,
+        seconds: entry.seconds,
+        track: track,
+        element: source,
+        gain: null,
+        volume: initial,
+        started: false
+      };
+      source.volume = initial;
+      self.tracks.push(record);
+    });
+    if (this.mode === "webaudio") {
+      try {
+        var Ctx = window.AudioContext || window.webkitAudioContext;
+        this.context = new Ctx();
+        this.tracks.forEach(function (record) {
+          var node = self.context.createMediaElementSource(record.element);
+          var gain = self.context.createGain();
+          gain.gain.value = record.volume;
+          node.connect(gain);
+          gain.connect(self.context.destination);
+          record.gain = gain;
+        });
+      } catch (error) {
+        this.mode = "elements";
+        this.context = null;
+      }
+    }
+    this.tracks.forEach(function (record) {
+      record.element.addEventListener("ended", function () {
+        if (!record.element.loop) record.started = false;
+      });
+    });
+  };
+
+  Mixer.prototype.resume = function () {
+    if (this.context && this.context.state === "suspended") this.context.resume();
+  };
+
+  Mixer.prototype.play = function () {
+    this.resume();
+    var self = this;
+    var active = this.tracks.filter(function (record) { return record.volume > 0.001; });
+    if (!active.length) active = this.tracks.slice(0, 1);
+    var reference = null;
+    active.forEach(function (record) {
+      if (reference === null) reference = record;
+      var target = reference.started ? reference.element.currentTime : 0;
+      try {
+        record.element.currentTime = target;
+        var promise = record.element.play();
+        if (promise && promise.catch) promise.catch(function () {});
+        record.started = true;
+      } catch (error) { /* ignored: the browser will report it on the element */ }
+    });
+    this.startSync(reference);
+  };
+
+  Mixer.prototype.startSync = function (reference) {
+    var self = this;
+    if (this.syncTimer) clearInterval(this.syncTimer);
+    if (!reference) return;
+    this.syncTimer = setInterval(function () {
+      var target = reference.element.currentTime;
+      self.tracks.forEach(function (record) {
+        if (record === reference || !record.started || record.element.paused) return;
+        if (Math.abs(record.element.currentTime - target) > 0.08) {
+          record.element.currentTime = target;
+        }
+      });
+    }, 500);
+  };
+
+  Mixer.prototype.pause = function () {
+    this.tracks.forEach(function (record) {
+      if (!record.element.paused) record.element.pause();
+    });
+  };
+
+  Mixer.prototype.stop = function () {
+    this.tracks.forEach(function (record) {
+      record.element.pause();
+      try { record.element.currentTime = 0; } catch (error) { /* not seekable yet */ }
+      record.started = false;
+    });
+  };
+
+  Mixer.prototype.setVolume = function (stem, value) {
+    this.tracks.forEach(function (record) {
+      if (record.stem !== stem) return;
+      record.volume = value;
+      if (record.gain) {
+        record.gain.gain.value = value;
+      } else {
+        record.element.volume = value;
+      }
+    });
+  };
+
+  Mixer.prototype.zoom = function () { return this.tracks.length; };
+
+  /* ------------------------------------------------------------------ router */
+
+  var state = { screen: null, lesson: null, mixer: null, overlay: null };
+
+  function stopMixer() {
+    if (state.mixer) {
+      state.mixer.stop();
+      if (state.mixer.syncTimer) clearInterval(state.mixer.syncTimer);
+      if (state.mixer.context) {
+        try { state.mixer.context.close(); } catch (error) { /* already closed */ }
+      }
+      state.mixer = null;
+    }
+  }
+
+  function clearStage() {
+    stage.innerHTML = "";
+    state.screen = null;
+  }
+
+  function screenFor(name) {
+    return D.screens[name];
+  }
+
+  var overlayLayer = null;
+  var clipLayers = {};
+
+  function overlayRoot() {
+    if (!overlayLayer) {
+      overlayLayer = el("layer", [0, 0, STAGE_W, STAGE_H]);
+      overlayLayer.style.background = "rgba(6,8,12,0.95)";
+      overlayLayer.style.display = "none";
+      overlayLayer.style.zIndex = 70;
+      overlayLayer.style.pointerEvents = "auto";
+      stage.appendChild(overlayLayer);
+    }
+    return overlayLayer;
+  }
+
+  function resetFrames() {
+    if (overlayLayer) { overlayLayer.remove(); overlayLayer = null; }
+    clipLayers = {};
+  }
+
+  function clipLayer(rect) {
+    var key = rect.join(":");
+    if (!clipLayers[key]) {
+      clipLayers[key] = el("layer clip", rect);
+      stage.appendChild(clipLayers[key]);
+    }
+    return clipLayers[key];
+  }
+
+  function renderDrawable(drawable, options, container) {
+    if (drawable.kind === "image") return renderImage(drawable, container);
+    if (drawable.kind === "text") return renderText(drawable, container);
+    if (drawable.kind === "video-placeholder") {
+      var video = el("el video", drawable.rect);
+      video.textContent = (options && options.videoLabel) || "video";
+      container.appendChild(video);
+      return video;
+    }
+    if (drawable.kind === "button") {
+      var button = el("el hit", drawable.rect);
+      button.addEventListener("click", function (event) {
+        event.stopPropagation();
+        fireHooks(drawable.hooks, options);
+      });
+      container.appendChild(button);
+      return button;
+    }
+    if (drawable.kind === "slider") return attachSlider(drawable, container, options);
+    return null;
+  }
+
+  function renderScreen(screen, options) {
+    clearStage();
+    resetFrames();
+    options = options || {};
+    (screen.drawables || []).forEach(function (drawable) {
+      if (drawable.enabled === false && drawable.kind !== "button" && drawable.kind !== "slider") return;
+      if (drawable.overlay && !options.includeOverlay) {
+        renderDrawable(drawable, options, overlayRoot());
+        return;
+      }
+      var container = drawable.clip ? clipLayer(drawable.clip) : stage;
+      renderDrawable(drawable, options, container);
+    });
+    state.screen = screen;
+    return stage;
+  }
+
+  function attachSlider(drawable, container, options) {
+    var fillNode = findChildImage(drawable, drawable.fill);
+    var handleNode = findChildImage(drawable, drawable.handle);
+    var input = document.createElement("input");
+    input.type = "range";
+    input.className = "el slider-hit";
+    place(input, drawable.rect);
+    input.min = drawable.min === undefined ? 0 : drawable.min;
+    input.max = drawable.max === undefined ? 1 : drawable.max;
+    input.step = drawable.whole_numbers ? 1 : 0.01;
+    input.value = drawable.value === undefined ? 1 : drawable.value;
+    var target = (drawable.hooks[0] || {});
+    var stem = (target.target || "").split("/").pop().toLowerCase();
+    if (options && options.onSlider) options.onSlider(stem, parseFloat(input.value), drawable);
+    input.addEventListener("input", function () {
+      var value = parseFloat(input.value);
+      updateSliderVisual(drawable, value, fillNode, handleNode);
+      if (options && options.onSlider) options.onSlider(stem, value, drawable);
+    });
+    container.appendChild(input);
+    updateSliderVisual(drawable, parseFloat(input.value), fillNode, handleNode);
+  }
+
+  function findChildImage(drawable, rect) {
+    if (!rect) return null;
+    var parent = stage;
+    var nodes = parent.querySelectorAll(".el.img");
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var left = parseFloat(node.style.left), top = parseFloat(node.style.top);
+      var width = parseFloat(node.style.width), height = parseFloat(node.style.height);
+      var expected = cssRect(rect);
+      if (Math.abs(left - parseFloat(expected.left)) < 0.6 &&
+          Math.abs(top - parseFloat(expected.top)) < 0.6 &&
+          Math.abs(width - parseFloat(expected.width)) < 0.6 &&
+          Math.abs(height - parseFloat(expected.height)) < 0.6) {
+        return node;
+      }
+    }
+    return null;
+  }
+
+  function updateSliderVisual(drawable, value, fillNode, handleNode) {
+    var min = drawable.min === undefined ? 0 : drawable.min;
+    var max = drawable.max === undefined ? 1 : drawable.max;
+    var ratio = max === min ? 0 : (value - min) / (max - min);
+    var direction = drawable.direction || "left-to-right";
+    var horizontal = direction === "left-to-right" || direction === "right-to-left";
+    var inverted = direction === "right-to-left" || direction === "top-to-bottom";
+    if (fillNode) {
+      if (horizontal) {
+        fillNode.style.transformOrigin = inverted ? "right center" : "left center";
+        fillNode.style.transform = "scaleX(" + ratio + ")";
+      } else {
+        fillNode.style.transformOrigin = inverted ? "center top" : "center bottom";
+        fillNode.style.transform = "scaleY(" + ratio + ")";
+      }
+    }
+    if (handleNode && drawable.fill) {
+      var travel = horizontal ? (drawable.fill[2] - drawable.handle[2]) : (drawable.fill[3] - drawable.handle[3]);
+      var offset = travel * (inverted ? 1 - ratio : ratio);
+      handleNode.style.transform = horizontal ? "translateX(" + offset + "px)" : "translateY(" + (-offset) + "px)";
+    }
+  }
+
+  function fireHooks(hooks, options) {
+    if (!hooks || !hooks.length) {
+      if (options && options.onTap) options.onTap();
+      return;
+    }
+    hooks.forEach(function (hook) {
+      var method = hook.method;
+      if (method === "Play" || method === "Pause" || method === "Stop") {
+        if (state.mixer) state.mixer[method.toLowerCase()]();
+      } else if (method === "SetVolume" && options && options.onSlider) {
+        options.onSlider((hook.target || "").split("/").pop().toLowerCase(), hook.float_argument || 1, hook);
+      } else if (method === "LoadNextLevel" || method === "LoadPrevLevel") {
+        stepLesson(method === "LoadNextLevel" ? 1 : -1);
+      } else if (method === "Hide") {
+        hideOverlay();
+      } else if (method === "ChangeScene") {
+        var target = hook.target_lesson || routeForScene(hook.string_argument, options);
+        if (target) location.hash = "#/" + target;
+      } else if (hook.script === "WebURLScript") {
+        var url = hook.url || D.credits.site;
+        window.open(url, "_blank");
+      } else if (options && options.onTap) {
+        options.onTap(hook);
+      }
+    });
+  }
+
+  function routeForScene(sceneName, options) {
+    if (!sceneName) return null;
+    if (sceneName.indexOf("Volume Selector") === 0) return "volumes";
+    if (sceneName.indexOf("Oru Seco") >= 0) return "volume-2";
+    if (sceneName.indexOf("Main Scene") === 0) return "volume-1";
+    return options && options.fallbackRoute ? options.fallbackRoute : null;
+  }
+
+  function stepLesson(delta) {
+    if (!state.lesson) return;
+    var volume = state.lesson.volume;
+    var pool = D.lessons.filter(function (lesson) { return lesson.volume === volume; });
+    var index = pool.indexOf(state.lesson) + delta;
+    if (index < 0) index = 0;
+    if (index >= pool.length) index = pool.length - 1;
+    location.hash = "#/lesson/" + pool[index].slug;
+  }
+
+  function showOverlay() {
+    if (overlayLayer) {
+      overlayLayer.style.display = "block";
+      if (state.mixer) state.mixer.pause();
+    }
+  }
+
+  function hideOverlay() {
+    if (overlayLayer) overlayLayer.style.display = "none";
+  }
+
+  /* ----------------------------------------------------------------- screens */
+
+  function showOpening() {
+    stopMixer();
+    var screen = screenFor("opening");
+    if (!screen) return showVolumes();
+    renderScreen(screen, {
+      onTap: function () { location.hash = "#/volumes"; }
+    });
+    var hit = el("el hit", [0, 0, STAGE_W, STAGE_H]);
+    hit.style.zIndex = 5;
+    hit.addEventListener("click", function () { location.hash = "#/volumes"; });
+    stage.appendChild(hit);
+  }
+
+  function showVolumes() {
+    stopMixer();
+    renderScreen(screenFor("volumeSelector"), {
+      videoLabel: "Libri Video\n(streamed in the original app)",
+      onTap: function () { location.hash = "#/credits"; }
+    });
+    var credits = el("el hit", [0, 0, 260, 90]);
+    credits.textContent = "";
+    credits.addEventListener("click", function () { location.hash = "#/credits"; });
+    stage.appendChild(credits);
+  }
+
+  function showIndex(volume) {
+    stopMixer();
+    var screen = screenFor(volume === "volume-2" ? "oruSecoIndex" : "toqueIndex");
+    if (!screen) return showVolumes();
+    var lessons = D.lessons.filter(function (lesson) { return lesson.volume === volume; });
+    renderScreen(screen, {
+      fallbackRoute: volume,
+      onTap: function (hook) {
+        if (hook && hook.string_argument && hook.target_lesson) {
+          location.hash = "#/lesson/" + hook.target_lesson;
+        }
+      }
+    });
+    // map every button that names a lesson onto that lesson, then add a scroll
+    // strip so the whole volume is reachable exactly as in the original.
+    var strip = document.createElement("div");
+    strip.className = "layer";
+    strip.style.left = "0px";
+    strip.style.top = (STAGE_H - 300) + "px";
+    strip.style.width = STAGE_W + "px";
+    strip.style.height = "300px";
+    strip.style.display = "flex";
+    strip.style.gap = "20px";
+    strip.style.alignItems = "flex-end";
+    strip.style.pointerEvents = "auto";
+    strip.style.overflowX = "auto";
+    strip.style.zIndex = 40;
+    strip.style.background = "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.65) 40%, rgba(0,0,0,0.85) 100%)";
+    lessons.forEach(function (lesson) {
+      var card = document.createElement("div");
+      card.style.minWidth = "300px";
+      card.style.height = "220px";
+      card.style.padding = "18px 16px";
+      card.style.color = "#fff";
+      card.style.background = "rgba(18,24,32,0.9)";
+      card.style.border = "2px solid rgba(255,255,255,0.14)";
+      card.style.borderRadius = "10px";
+      card.style.cursor = "pointer";
+      card.style.fontSize = "22px";
+      card.style.flex = "0 0 auto";
+      var number = document.createElement("div");
+      number.textContent = String(lesson.number || "");
+      number.style.fontSize = "40px";
+      number.style.opacity = "0.5";
+      var title = document.createElement("div");
+      title.textContent = lesson.title || "";
+      title.style.marginTop = "8px";
+      title.style.fontSize = "26px";
+      var play = document.createElement("div");
+      play.textContent = "PLAY";
+      play.style.marginTop = "26px";
+      play.style.color = "#7fc4ff";
+      card.appendChild(number); card.appendChild(title); card.appendChild(play);
+      card.addEventListener("click", function () {
+        location.hash = "#/lesson/" + lesson.slug;
+      });
+      strip.appendChild(card);
+    });
+    stage.appendChild(strip);
+  }
+
+  function showLesson(slug) {
+    stopMixer();
+    var lesson = D.lessons.filter(function (item) { return item.slug === slug; })[0];
+    if (!lesson) return showIndex("volume-1");
+    state.lesson = lesson;
+    var screen = screenFor(lesson.level) || screenFor("player");
+    var mixer = new Mixer(lesson);
+    state.mixer = mixer;
+    renderScreen(screen, {
+      fallbackRoute: lesson.volume,
+      onSlider: function (stem, value) {
+        if (mixer) mixer.setVolume(stem, value);
+      }
+    });
+    // lesson-specific label over the blueprint title
+    var label = el("el txt", [660, 840, 600, 60]);
+    label.style.justifyContent = "center";
+    label.style.alignItems = "center";
+    label.style.color = "#ffffff";
+    label.style.fontSize = "36px";
+    label.style.pointerEvents = "none";
+    label.textContent = (lesson.volume === "volume-2" ? "Oru Seco " : "Toque ") +
+      (lesson.number || "") + " - " + (lesson.title || "");
+    stage.appendChild(label);
+
+    var missing = [];
+    STEM_ORDER.forEach(function (stem) {
+      var track = (lesson.tracks || []).filter(function (item) {
+        return (item.object || "").split("/").pop().toLowerCase() === stem;
+      })[0];
+      if (track && !track.clip) missing.push(stem);
+    });
+    if (missing.length) {
+      var note = el("badge");
+      note.textContent = "no audio for: " + missing.join(", ");
+      stage.appendChild(note);
+    }
+    // the shipped scene keeps its own pause layer inactive; it now holds the
+    // original overlay controls (Prev / Next / Home / Cambia / Torna).
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        if (overlayLayer && overlayLayer.style.display === "block") hideOverlay();
+        else showOverlay();
+      }
+    });
+    var menuHit = el("el hit", [520, 860, 300, 60]);
+    menuHit.addEventListener("click", showOverlay);
+    stage.appendChild(menuHit);
+  }
+
+  function showCredits() {
+    stopMixer();
+    var existing = document.getElementById("credits");
+    if (existing) existing.remove();
+    var box = document.createElement("div");
+    box.id = "credits";
+    var title = document.createElement("h1");
+    title.textContent = "BatApp - Diario di un Omo Aña";
+    var subtitle = document.createElement("h2");
+    subtitle.textContent = "Static port of the original Android app. Content, recordings and scores belong to Paolo Batà Bianconcini.";
+    box.appendChild(title); box.appendChild(subtitle);
+    [["site", "batangoma.it — didattica"], ["facebook", "Facebook — BataNgoma"],
+     ["instagram", "Instagram — paolobatablanco"], ["youtube", "YouTube — paoloBata"],
+     ["itunes", "iTunes — Batà Ngoma"]].forEach(function (pair) {
+      var link = document.createElement("a");
+      link.href = D.credits[pair[0]];
+      link.target = "_blank";
+      link.rel = "noreferrer";
+      link.textContent = pair[1];
+      box.appendChild(link);
+    });
+    var note = document.createElement("p");
+    note.textContent = D.credits.note + " The volume selector in the original streams a video (" +
+      "Libri Video); this offline port shows a placeholder instead.";
+    box.appendChild(note);
+    var close = document.createElement("div");
+    close.className = "close";
+    close.textContent = "✕";
+    close.addEventListener("click", function () { box.remove(); history.back(); });
+    box.appendChild(close);
+    document.body.appendChild(box);
+  }
+
+  /* ------------------------------------------------------------------- routes */
+
+  function route() {
+    var hash = location.hash.replace(/^#\/?/, "");
+    if (!hash) return showOpening();
+    if (hash === "volumes") return showVolumes();
+    if (hash === "volume-1") return showIndex("volume-1");
+    if (hash === "volume-2") return showIndex("volume-2");
+    if (hash === "credits") return showCredits();
+    var lessonMatch = hash.match(/^lesson\/(.+)$/);
+    if (lessonMatch) return showLesson(decodeURIComponent(lessonMatch[1]));
+    showOpening();
+  }
+
+  window.addEventListener("hashchange", route);
+  if (!location.hash) location.hash = "#/opening";
+  route();
+})();
