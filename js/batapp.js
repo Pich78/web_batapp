@@ -47,6 +47,27 @@
     return el;
   }
 
+  function placeEntry(el, entry) {
+    // Renders an affine layout entry: an unrotated box around its centre plus
+    // the accumulated rotation (CSS is y-down, so Unity's +z is CSS -angle).
+    var w = entry.size[0] * entry.scale;
+    var h = entry.size[1] * entry.scale;
+    var cx = entry.center[0], cy = entry.center[1];
+    el.style.left = (cx - w / 2) + "px";
+    el.style.top = (STAGE_H - cy - h / 2) + "px";
+    el.style.width = Math.max(0, w) + "px";
+    el.style.height = Math.max(0, h) + "px";
+    if (entry.angle) {
+      el.style.transform = "rotate(" + (-entry.angle) + "deg)";
+      el.style.transformOrigin = "center center";
+    } else if (el.classList.contains("fit-center")) {
+      el.style.transform = "translateX(-50%)";
+    } else if (el.style.transform && el.style.transform.indexOf("rotate") === 0) {
+      el.style.transform = "";
+    }
+    return el;
+  }
+
   function el(className, rect) {
     var node = document.createElement("div");
     node.className = className;
@@ -58,13 +79,55 @@
     return path ? "assets/img/" + path : null;
   }
 
-  function fitStage() {
-    // Match-height, exactly like the shipped CanvasScaler: the canvas keeps 1080
-    // units of height and widens with the window. Narrow canvases are handled by
-    // reflowForNarrowCanvas instead of letterboxing, so the app stays usable in
-    // any shape without an orientation lock.
+  var tintFilters = {};
+  function tintFilter(color) {
+    // CSS masks cannot load file:// images, so tint sprites with an SVG filter:
+    // flood the sprite's alpha with Unity's m_Color (works for 9-slice borders
+    // and preserves transparent pixels).
+    var key = color.slice(0, 3).map(function (channel) {
+      return Math.round(channel * 255);
+    }).join("-");
+    if (!tintFilters[key]) {
+      var svg = document.getElementById("batapp-filters");
+      if (!svg) {
+        svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.id = "batapp-filters";
+        svg.setAttribute("aria-hidden", "true");
+        svg.style.position = "absolute";
+        svg.style.width = "0";
+        svg.style.height = "0";
+        svg.style.overflow = "hidden";
+        document.body.appendChild(svg);
+      }
+      var id = "batapp-tint-" + key;
+      var filter = document.createElementNS("http://www.w3.org/2000/svg", "filter");
+      filter.id = id;
+      filter.setAttribute("color-interpolation-filters", "sRGB");
+      var flood = document.createElementNS("http://www.w3.org/2000/svg", "feFlood");
+      flood.setAttribute("flood-color", "rgb(" + key.split("-").join(",") + ")");
+      flood.setAttribute("result", "tint");
+      var composite = document.createElementNS("http://www.w3.org/2000/svg", "feComposite");
+      composite.setAttribute("in", "tint");
+      composite.setAttribute("in2", "SourceGraphic");
+      composite.setAttribute("operator", "in");
+      filter.appendChild(flood);
+      filter.appendChild(composite);
+      svg.appendChild(filter);
+      tintFilters[key] = id;
+    }
+    return "url(#" + tintFilters[key] + ")";
+  }
+
+  function fitStage(screen) {
+    // Match-height, exactly like the shipped CanvasScaler, but against the
+    // canvas RectTransform the content was authored in. The app menus and the
+    // lesson player use 584.7x1169.4 (1:2); the stage keeps that height and
+    // widens with the window, so a 720x1440 phone fills exactly and no
+    // orientation lock or letterboxing is needed.
+    var design = (screen && screen.canvas_size) || [1920, 1080];
+    if (!(design[0] > 0) || !(design[1] > 0)) design = [1920, 1080];
     var vw = window.innerWidth, vh = window.innerHeight;
-    STAGE_H = 1080;
+    STAGE_H = design[1];
     STAGE_W = STAGE_H * (vw / vh);
     var scale = vh / STAGE_H;
     stage.style.width = STAGE_W + "px";
@@ -111,23 +174,41 @@
     }
   }
 
+  function rotatePoint(angle, x, y) {
+    var rad = angle * Math.PI / 180;
+    var c = Math.cos(rad), s = Math.sin(rad);
+    return [x * c - y * s, x * s + y * c];
+  }
+
   function rectsAt(nodes, canvasW, canvasH) {
     var out = {};
-    var canvasRect = [0, 0, canvasW, canvasH];
+    var root = {
+      rect: [0, 0, canvasW, canvasH],
+      size: [canvasW, canvasH],
+      scale: 1,
+      angle: 0,
+      origin: [0, 0],
+      center: [canvasW / 2, canvasH / 2]
+    };
     var children = {};
     nodes.forEach(function (node) {
       if (node.parent >= 0) (children[node.parent] = children[node.parent] || []).push(node);
     });
     nodes.forEach(function (node) {
-      var parent = node.parent >= 0 && out[node.parent]
-        ? out[node.parent]
-        : { rect: canvasRect, size: [canvasW, canvasH], scale: 1 };
-      if (node.canvas) {
-        out[node.id] = { rect: canvasRect.slice(), size: [canvasW, canvasH], scale: 1 };
+      var parent = node.parent >= 0 && out[node.parent] ? out[node.parent] : root;
+      if (node.canvas && node.parent < 0) {
+        out[node.id] = {
+          rect: root.rect.slice(), size: root.size.slice(), scale: 1,
+          angle: 0, origin: [0, 0], center: root.center.slice()
+        };
         return;
       }
       if (node.plain) {
-        out[node.id] = { rect: parent.rect, size: parent.size, scale: parent.scale * (node.scale || 1) };
+        out[node.id] = {
+          rect: parent.rect, size: parent.size,
+          scale: parent.scale * (node.scale || 1),
+          angle: parent.angle, origin: parent.origin, center: parent.center
+        };
         return;
       }
       var a = node.anchors, pivot = node.pivot, pos = node.anchored, delta = node.delta;
@@ -136,26 +217,49 @@
       var width = (maxX - minX) + delta[0], height = (maxY - minY) + delta[1];
       var pivotX = minX + (maxX - minX) * pivot[0] + pos[0];
       var pivotY = minY + (maxY - minY) * pivot[1] + pos[1];
-      var localX = pivotX - width * pivot[0], localY = pivotY - height * pivot[1];
-      var scale = parent.scale * (node.scale || 1);
-      var rect = [
-        parent.rect[0] + localX * parent.scale,
-        parent.rect[1] + localY * parent.scale,
-        width * scale,
-        height * scale
+      var nodeScale = node.scale || 1;
+      var scale = parent.scale * nodeScale;
+      var angle = parent.angle + (node.rotation || 0);
+      // Affine frame: local (0,0) in stage coordinates plus a rotation. The
+      // pivot's stage position follows the parent frame; localScale scales the
+      // rectangle and its children around that pivot (Unity's RectTransform).
+      var pivotOffset = rotatePoint(parent.angle, pivotX * parent.scale, pivotY * parent.scale);
+      var pivotStage = [parent.origin[0] + pivotOffset[0], parent.origin[1] + pivotOffset[1]];
+      var back = rotatePoint(angle, -pivot[0] * width * scale, -pivot[1] * height * scale);
+      var origin = [pivotStage[0] + back[0], pivotStage[1] + back[1]];
+      var forward = rotatePoint(angle, width * scale / 2, height * scale / 2);
+      var center = [origin[0] + forward[0], origin[1] + forward[1]];
+      var halfW = Math.abs(width * scale) / 2, halfH = Math.abs(height * scale) / 2;
+      var corners = [
+        rotatePoint(angle, -halfW, -halfH),
+        rotatePoint(angle, halfW, -halfH),
+        rotatePoint(angle, halfW, halfH),
+        rotatePoint(angle, -halfW, halfH)
       ];
+      var minCX = Math.min(corners[0][0], corners[1][0], corners[2][0], corners[3][0]);
+      var maxCX = Math.max(corners[0][0], corners[1][0], corners[2][0], corners[3][0]);
+      var minCY = Math.min(corners[0][1], corners[1][1], corners[2][1], corners[3][1]);
+      var maxCY = Math.max(corners[0][1], corners[1][1], corners[2][1], corners[3][1]);
+      var rect = [center[0] + minCX, center[1] + minCY, maxCX - minCX, maxCY - minCY];
       var size = [width, height];
-      var kids = children[node.id] || [];
-      var fixedX = kids.some(function (kid) {
-        return kid.anchors && Math.abs(kid.anchors[2] - kid.anchors[0]) < 0.001;
-      });
-      var fixedY = kids.some(function (kid) {
-        return kid.anchors && Math.abs(kid.anchors[3] - kid.anchors[1]) < 0.001;
-      });
-      var lockX = kids.length > 0 && fixedX && rect[2] > parent.rect[2];
-      var lockY = kids.length > 0 && fixedY && rect[3] > parent.rect[3];
-      clampIntoParent(rect, size, parent.rect, scale, lockX, lockY);
-      out[node.id] = { rect: rect, size: size, scale: scale };
+      if (angle === 0 && parent.angle === 0) {
+        var kids = children[node.id] || [];
+        var fixedX = kids.some(function (kid) {
+          return kid.anchors && Math.abs(kid.anchors[2] - kid.anchors[0]) < 0.001;
+        });
+        var fixedY = kids.some(function (kid) {
+          return kid.anchors && Math.abs(kid.anchors[3] - kid.anchors[1]) < 0.001;
+        });
+        var lockX = kids.length > 0 && fixedX && rect[2] > parent.rect[2];
+        var lockY = kids.length > 0 && fixedY && rect[3] > parent.rect[3];
+        clampIntoParent(rect, size, parent.rect, scale, lockX, lockY);
+        origin = [rect[0], rect[1]];
+        center = [rect[0] + rect[2] / 2, rect[1] + rect[3] / 2];
+      }
+      out[node.id] = {
+        rect: rect, size: size, scale: scale,
+        angle: angle, origin: origin, center: center
+      };
     });
     return out;
   }
@@ -165,7 +269,7 @@
   }
 
   function relayout() {
-    fitStage();
+    fitStage(state.screen);
     if (!state.screen) return;
     state.layout = computeLayout(state.screen);
     var rectFor = function (nodeId) {
@@ -177,8 +281,8 @@
         place(item.el, [STAGE_W * 0.60, STAGE_H * 0.90, STAGE_W * 0.38, STAGE_H * 0.08]);
         return;
       }
-      var rect = rectFor(item.node);
-      if (rect) place(item.el, rect);
+      var entry = state.layout[item.node];
+      if (entry) placeEntry(item.el, entry);
     });
     Object.keys(clipLayers).forEach(function (key) {
       var rect = rectFor(Number(key));
@@ -189,7 +293,7 @@
   }
 
   window.addEventListener("resize", relayout);
-  fitStage();
+  fitStage(null);
 
   /* ------------------------------------------------------------ draw screen */
 
@@ -198,28 +302,38 @@
     node.style.backgroundSize = "100% 100%";
     node.style.opacity = drawable.active && drawable.enabled === false ? "0.35" : "1";
     if (!drawable.active) node.style.display = "none";
-    if (drawable.color) node.style.backgroundColor = rgba(drawable.color);
+    var color = drawable.color;
+    var alpha = color && color[3] !== undefined ? color[3] : 1;
+    var white = !color || (color[0] >= 0.995 && color[1] >= 0.995 && color[2] >= 0.995);
     var url = spriteUrl(drawable.sprite);
-    if (url) {
-      var meta = (D.sprite_meta || {})[drawable.sprite] || {};
-      var border = meta.border || [0, 0, 0, 0];
-      var sliced = drawable.image_type === "sliced" && border.some(function (v) { return v > 0; });
-      if (sliced) {
-        node.style.backgroundImage = "none";
-        node.style.borderStyle = "solid";
-        node.style.borderWidth = border[1] + "px " + border[3] + "px " + border[0] + "px " + border[2] + "px";
-        node.style.borderImage = "url('" + url + "') " + border[0] + " " + border[3] + " " + border[2] + " " + border[1] + " stretch";
-        node.style.boxSizing = "border-box";
-      } else {
-        node.style.backgroundImage = "url('" + url + "')";
-        if (drawable.preserve_aspect) {
-          node.style.backgroundSize = "contain";
-        } else if (drawable.image_type === "tiled") {
-          node.style.backgroundSize = meta.width ? meta.width + "px " + meta.height + "px" : "auto";
-          node.style.backgroundRepeat = "repeat";
-        }
+    if (!url) {
+      if (color) node.style.backgroundColor = rgba(color);
+      root.appendChild(node);
+      return node;
+    }
+    var meta = (D.sprite_meta || {})[drawable.sprite] || {};
+    var border = meta.border || [0, 0, 0, 0];
+    var sliced = drawable.image_type === "sliced" && border.some(function (v) { return v > 0; });
+    if (sliced) {
+      node.style.backgroundImage = "none";
+      node.style.borderStyle = "solid";
+      node.style.borderWidth = border[1] + "px " + border[3] + "px " + border[0] + "px " + border[2] + "px";
+      node.style.borderImage = "url('" + url + "') " + border[0] + " " + border[3] + " " + border[2] + " " + border[1] + " stretch";
+      node.style.boxSizing = "border-box";
+    } else {
+      node.style.backgroundImage = "url('" + url + "')";
+      if (drawable.preserve_aspect) {
+        node.style.backgroundSize = "contain";
+      } else if (drawable.image_type === "tiled") {
+        node.style.backgroundSize = meta.width ? meta.width + "px " + meta.height + "px" : "auto";
+        node.style.backgroundRepeat = "repeat";
       }
     }
+    // Unity multiplies the sprite by m_Color; the filter keeps transparent
+    // pixels transparent (a plain background-color used to cover the yellow
+    // band and the portrait behind white sprites).
+    if (!white) node.style.filter = tintFilter(color);
+    if (alpha < 1) node.style.opacity = String((drawable.enabled === false ? 0.35 : 1) * alpha);
     root.appendChild(node);
     return node;
   }
@@ -249,6 +363,11 @@
     node.style.lineHeight = ((drawable.font_size || 36) * 1.16).toFixed(1) + "px";
     if (drawable.horizontal_overflow === "overflow") node.classList.add("nowrap");
     node.classList.add(drawable.vertical_overflow === "overflow" ? "overflow" : "truncate");
+    // Unity's ContentSizeFitter horizontal preference: the authored Text rect
+    // can be zero-width and grows around its centre pivot (all fitted labels in
+    // this build use pivot 0.5,1).
+    if (drawable.fit_width) node.classList.add("fit-width", "fit-center");
+    if (drawable.fit_height) node.classList.add("fit-height");
     if (drawable.active === false) node.style.display = "none";
     node.textContent = (drawable.text || "").replace(/\\n/g, "\n");
     root.appendChild(node);
@@ -505,8 +624,9 @@
     clearStage();
     resetFrames();
     options = options || {};
-    fitStage();
     state.screen = screen;
+    fitStage(screen);
+    stage.style.background = rgba(screen.background || [0, 0, 0, 1]);
     state.layout = computeLayout(screen);
 
     // Unity draws canvases by sorting order: reproduce it so a widget in a higher
@@ -535,10 +655,11 @@
         ? clipLayer(drawable.clip_node)
         : stage;
       if (drawable.overlay && !options.includeOverlay) {
-        renderDrawable(drawable, rect, overlayRoot(), options);
-        return;
+        container = overlayRoot();
       }
       var node = renderDrawable(drawable, rect, container, options);
+      var entry = state.layout[drawable.node];
+      if (node && entry) placeEntry(node, entry);
       if (drawable.kind === "button" && node) {
         pointerTargets.push({
           rect: rect,
@@ -847,18 +968,6 @@
           (lesson.number || "") + " - " + (lesson.title || "");
       }
     });
-    // lesson-specific label over the blueprint title (canvas-width, so it
-    // follows the same reactive width as the rest of the stage)
-    var label = el("el txt", [0, 840, STAGE_W, 60]);
-    label.style.justifyContent = "center";
-    label.style.alignItems = "center";
-    label.style.color = "#ffffff";
-    label.style.fontSize = "36px";
-    label.style.pointerEvents = "none";
-    label.textContent = (lesson.volume === "volume-2" ? "Oru Seco " : "Toque ") +
-      (lesson.number || "") + " - " + (lesson.title || "");
-    stage.appendChild(label);
-
     var missing = [];
     STEM_ORDER.forEach(function (stem) {
       var track = (lesson.tracks || []).filter(function (item) {

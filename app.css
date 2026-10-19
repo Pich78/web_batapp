@@ -66,6 +66,12 @@ html, body {
 .el.txt.truncate { overflow: hidden; }
 .el.txt.overflow { overflow: visible; }
 
+/* ContentSizeFitter (horizontal preferred): zero-width authored labels grow
+   around their centre pivot. */
+.el.txt.fit-width { width: max-content !important; }
+.el.txt.fit-center { transform: translateX(-50%); }
+.el.txt.fit-height { height: auto !important; }
+
 .el.hit {
   pointer-events: auto;
   cursor: pointer;

@@ -115,17 +115,20 @@ keeps it for later queries.
 
 Screens are emitted as **anchor-relative layout graphs**, not baked rectangles:
 `tools/build_app_data.py` writes `layout` (one node per RectTransform, with
-`anchors/pivot/anchored/delta/scale` and a parent index) and every drawable
-references a `node`. `js/batapp.js#computeLayout` runs Unity's RectTransform math
-in the browser, so geometry follows the live canvas.
+`anchors/pivot/anchored/delta/scale/rotation` and a parent index) and every
+drawable references a `node`. `js/batapp.js#computeLayout` runs Unity's
+RectTransform math in the browser, so geometry follows the live canvas.
 
 Canvas rules (derived from the scenes, not chosen):
 
-- authored reference is 1920x1080 with `CanvasScaler` **match-height**;
-- wide or narrow screens: canvas height = 1080 units, width = `1080 x aspect`,
-  scale = `height / 1080` (this is what the original does, so edge-anchored
-  widgets stay put and extra width is simply revealed). The port is reactive in
-  both orientations: it never rotates, locks orientation or letterboxes;
+- the menu and lesson canvases are authored in **584.69×1169.38** (1:2), which
+  matches the phone screenshots. The `CanvasScaler` still says 1920×1080, but
+  the root RectTransform's `sizeDelta` is the design space the children were
+  laid out in; `screen.canvas_size` carries it;
+- the stage keeps that authored height (`height = 1169.38` units) and widens
+  with the window (`width = height × aspect`), mirroring match-height CanvasScaler
+  semantics. The port is reactive in both orientations: it never rotates, locks
+  orientation or letterboxes;
 - `rectsAt` clamps every node into its parent after computing the anchor rect.
   Overflow is shifted back in, and an oversized box shrinks its local size so
   its children follow the new box. Oversized groups whose children use fixed
@@ -133,15 +136,25 @@ Canvas rules (derived from the scenes, not chosen):
   so their content is not stacked; the stage or their own mask clips them, as
   in CSS overflow. `tests/verify.mjs` asserts zero widgets outside the canvas
   and five ≥200-unit sliders at 720×1440, 1080×1920, 1600×900 and 2560×1080;
-- mask layers stay full-stage and clip with `clip-path`, so their children keep
-  using canvas coordinates instead of inheriting the mask origin;
+- local rotations are applied as affine frames (`rotation` in degrees); e.g. the
+  index's 91×3070 list gradient is rotated 90° and must not be treated as a
+  vertical stripe. Mask layers stay full-stage and clip with `clip-path`, so
+  children keep using canvas coordinates instead of inheriting the mask origin;
+- `ContentSizeFitter` labels are grown with `width: max-content` around their
+  centre pivot; sprite `m_Color` is applied with an SVG `feFlood`/`feComposite`
+  filter because CSS mask images cannot load `file://` resources;
+- nested canvases without `overrideSorting` draw after their parent canvas's
+  background images (yellow band above the white panel) while foreground
+  text/buttons draw above the band; per-screen camera background is recorded in
+  `screen.background`;
 - nodes with a plain `Transform` (e.g. an `Actions` holder) are non-drawing
   pass-throughs and deliberately do **not** contribute their localScale: the
   shipped child positions only form a sane row without it (applying the 1.8
   multiplier put "Next Lesson" at x=2039 in a 1920 canvas).
 
-A `CanvasScaler` of 298.5x456 (`Expand`) also exists in `Volume Selector`; that
-is the original's portrait menu canvas and is not yet wired into the port.
+A second `CanvasScaler` of **298.5×456** (`Expand`) exists in `Volume Selector`
+on the inactive `Libri Video / Canvas video` object; it is the video canvas, not
+the menu design space. Do not use it as the menu reference.
 
 ## Verification rules
 

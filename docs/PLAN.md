@@ -37,14 +37,16 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       volumes, lessons, stems, durations, credits, UI strings.
 - [x] **Layout model** → anchor-relative layout graphs for all 65 screens; the
       browser runs Unity's RectTransform math against the live canvas, with mask
-      clipping, canvas ordering, matching CanvasScaler semantics and a reactive
-      clamp pass (verified at 720×1440, 1080×1920, 1600×900 and 2560×1080; the
-      Playwright suite now has 60 checks).
-- [ ] Wire the original's **portrait menu canvas** (`298.5×456`, `Expand`) from
-      `Volume Selector` so the menu matches the phone screenshots rather than
-      letterboxing the landscape one.
-- [x] **Stage scaling**: fixed 1920×1080 stage scaled to the viewport,
-      mirroring `CanvasScaler` (match height).
+      clipping, canvas ordering, local rotation, ContentSizeFitter labels,
+      sprite tinting and a reactive clamp pass (verified at 720×1440,
+      1080×1920, 1600×900 and 2560×1080; the Playwright suite now has 60 checks).
+- [x] Wire the original's **portrait menu canvas**. The scene's menu and lesson
+      canvases are authored in `584.69×1169.38` (1:2), matching the phone
+      screenshots; `298.5×456` / `Expand` belongs to the inactive `Libri Video`
+      canvas, not the menu. The stage now uses the authored canvas height
+      (`canvas_size` from the root RectTransform) as its match-height reference.
+- [x] **Stage scaling**: authored canvas (`584.69×1169.38` for menus/player)
+      scaled to the viewport, mirroring `CanvasScaler` match-height.
 - [x] **Screens**: opening → volume selector → toque index (Volume I) / oru seco
       index (Volume II) → lesson player → credits/links, with hash routing.
 - [x] **Mixer**: five `Slider_Volume` controls (0…1, not whole numbers), track
@@ -89,7 +91,11 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       Result: zero visible widgets outside the canvas at 720×1440, 1080×1920,
       1600×900 and 2560×1080, and the five lesson sliders stay 256 units wide
       (previously x≈-15 at 540-unit canvas width). Covered by `tests/verify.mjs`.
-- [ ] Wire the original's portrait menu canvas (`298.5×456`, `Expand`).
+- [x] Wire the original's portrait menu canvas: root canvas size, per-screen
+      camera background, nested-canvas draw order (yellow band above the white
+      panel, foreground text above the band), 90° UI rotation (the list gradient),
+      ContentSizeFitter labels and Unity sprite tinting. The `298.5×456` `Expand`
+      scaler is the inactive video canvas; see the note above.
 
 ## Next: verification
 

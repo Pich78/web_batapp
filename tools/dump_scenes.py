@@ -52,6 +52,10 @@ def as_list(value, default=(0.0, 0.0, 0.0)) -> list[float]:
     parts = [float(p) for p in parts if p is not None]
     if parts:
         return [round(v, 6) for v in parts]
+    parts = [getattr(value, name, None) for name in ("r", "g", "b", "a")]
+    parts = [float(p) for p in parts if p is not None]
+    if parts:
+        return [round(v, 6) for v in parts]
     return [round(float(v), 6) for v in default]
 
 
@@ -266,6 +270,7 @@ class SceneDumper:
                     "children": [c.m_PathID for c in transform.m_Children],
                     "local_position": as_list(transform.m_LocalPosition),
                     "local_scale": as_list(transform.m_LocalScale, (1.0, 1.0, 1.0)),
+                    "local_rotation": as_list(transform.m_LocalRotation, (0.0, 0.0, 0.0, 1.0)),
                     "type": type_name,
                 }
                 if type_name == "RectTransform":
@@ -309,13 +314,16 @@ class SceneDumper:
                     camera = reader.read()
                 except Exception:
                     continue
+                background = getattr(camera, "m_BackGroundColor", None)
+                if background is None:
+                    background = getattr(camera, "background_color", None)
                 components[path_id].append(
                     {
                         "owner": self.owner_of(reader),
                         "type": "Camera",
                         "orthographic": bool(getattr(camera, "orthographic", False)),
                         "orthographic_size": round(getattr(camera, "orthographic_size", getattr(camera, "m_OrthographicSize", 0.0)), 4),
-                        "background": as_list(getattr(camera, "background_color", None)) if getattr(camera, "background_color", None) is not None else None,
+                        "background": as_list(background) if background is not None else None,
                         "rect": as_list(getattr(camera, "rect", None)) if getattr(camera, "rect", None) is not None else None,
                     }
                 )

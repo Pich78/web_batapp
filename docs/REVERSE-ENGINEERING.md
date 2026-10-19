@@ -133,6 +133,13 @@ Findings that only came out of byte-level derivation:
   `m_MatchWidthOrHeight=1`, DPI 96/96 — i.e. a 1080p match-height canvas;
   without it every value shifts. The field is 0 everywhere; its meaning is
   unresolved (see Unknowns).
+- `Graphic` (Image/Text/RawImage) carries the same 4-byte slot **before
+  `m_Color`**, after `m_Material`. Reading the colour at the wrong offset gives
+  `[0, r, g, b]` (white becomes cyan) and still consumes the payload exactly.
+  Its two consecutive bools (`m_RaycastTarget`, `m_Maskable`) are packed into
+  one 4-byte word rather than padded individually. Both are now modelled
+  (`u8raw`); all 5,435 Graphic instances validate, and the decoded colours match
+  the store screenshots (yellow band, white panels, blue/orange buttons).
 
 ## 5. Behaviour model (read from the build)
 
@@ -181,21 +188,23 @@ nothing to play. Labels visible in
 the player: `Iya`, `Itotele`, `Okonkolo`, `Beat`, `Vox`, `Home`, `Prev`, `Next`,
 `Menu`, `CAMBIA LEZIONE`, `TORNA ALLA LEZIONE`.
 
-Canvases use `ScaleWithScreenSize` with reference `1920×1080`,
-`matchWidthOrHeight = 1` (match height), so the canvas keeps 1080 units of height
-and *widens* with the screen. The `Volume Selector` additionally ships a second
-canvas at `298.5×456` with `Expand` — the original's portrait menu layout.
+The `CanvasScaler` components use `ScaleWithScreenSize` with reference
+`1920×1080`, `matchWidthOrHeight = 1` (match height). The menu and lesson root
+canvases' own RectTransforms, however, are authored at **584.69×1169.38**
+(1:2), and that is the coordinate space their children use — the store
+screenshots are 500×1000, the same 1:2 shape. `Volume Selector` also contains a
+second canvas at `298.5×456` with `Expand`; it is the inactive
+`Libri Video / Canvas video` (a 350×350 `RawImage` fed by a `Video Book`
+RenderTexture), not the menu layout.
 
-That match-height behaviour also explains the store screenshots' framing: on a
-720×1440 phone the canvas is only **540 units wide**, while the lesson player is
-authored around x≈675–1170 — i.e. the player cannot fit a portrait canvas and
-the app rotates to landscape (its 2.1 changelog calls out landscape
-optimisation). The port keeps match-height on every window but stays reactive
-instead of rotating: `rectsAt` clamps nested nodes into their parents (shifting
-overflow and shrinking oversized boxes, with fixed-offset scroll/carousel groups
-left clipped rather than stacked). At 540 units the five sliders now sit at
-x=108 with width 256; no visible widget leaves the canvas at 720×1440,
-1080×1920, 1600×900 or 2560×1080.
+The port therefore keeps the authored 1169.38-unit canvas height, widens it with
+the window aspect and stays reactive instead of rotating: `rectsAt` clamps
+nested nodes into their parents (shifting overflow and shrinking oversized
+boxes, with fixed-offset scroll/carousel groups left clipped rather than
+stacked). On a 720×1440 phone the canvas is 584.7 units wide and the five
+sliders sit at x=165 with width 256; no visible widget leaves the canvas at
+720×1440, 1080×1920, 1600×900 or 2560×1080.
+
 Sprite/UI sorting orders observed: 0, 1, 2.
 
 Text in the shipped scenes confirms the intended UI copy, e.g.
@@ -215,8 +224,9 @@ Batà Ngoma, and an Amazon link for the album “Don't Stress”.
   five stems, animation timing and the spectrum animation are reconstructed
   from data; they are not verified against the running original.
 - **The 4-byte mystery field** (section 4) is included in the affected schemas
-  as `m_Unknown4`; all observed values are 0. If a future finding identifies it,
-  update the schema and note it here.
+  as `m_Unknown4`; all observed values are 0, including the `Graphic` slot before
+  `m_Color`. If a future finding identifies it, update the schema and note it
+  here.
 - **`SetVolume` target not yet resolved to a component instance** — the event
   points at a MonoBehaviour whose class is resolved but whose GameObject path is
   not yet reported; the five sliders are each paired with a volume component by

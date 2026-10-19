@@ -179,12 +179,19 @@ PREAMBLE = [
 
 GRAPHIC = PREAMBLE + [
     ("m_Material", "pptr"),
+    # Same 4-byte slot as the other uGUI classes (see SLOT_CLASSES); it sits
+    # before the colour, not after m_Script. Colour must start at +44 or it
+    # reads [0, r, g, b] (white becomes cyan) and still passes a length check.
+    ("m_Unknown4", "i32"),
     ("m_Color", "color"),
-    ("m_RaycastTarget", "bool"),
 ]
 
 MASKABLE_GRAPHIC = GRAPHIC + [
-    ("m_Maskable", "bool"),
+    # Consecutive bools are packed; only the next 4-byte field is aligned.
+    ("m_RaycastTarget", "u8raw"),
+    ("m_Maskable", "u8raw"),
+    ("m_Padding", "u8raw"),
+    ("m_Padding2", "u8raw"),
     ("m_OnCullStateChanged", "event"),
 ]
 
@@ -344,6 +351,9 @@ def read_value(reader: Reader, kind: str) -> Any:
             value = reader.i16()
         reader.align(4)
         return value
+    if kind == "u8raw":
+        # A byte that is packed with its neighbour (consecutive bools).
+        return reader.u8()
     if kind == "i32" or kind == "enum" or kind == "layerMask":
         return reader.i32()
     if kind == "u32":

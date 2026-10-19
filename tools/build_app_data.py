@@ -36,12 +36,15 @@ SLIDER_DIRECTION = {0: "left-to-right", 1: "right-to-left", 2: "bottom-to-top", 
 
 def layout_payload(transform: dict) -> dict:
     """Anchor-relative layout data for one RectTransform (Unity's own math runs in the browser)."""
+    rotation = transform.get("local_rotation") or [0.0, 0.0, 0.0, 1.0]
+    angle = math.degrees(2.0 * math.atan2(rotation[2], rotation[3]))
     return {
         "anchors": [*transform["anchor_min"][:2], *transform["anchor_max"][:2]],
         "pivot": transform["pivot"][:2],
         "anchored": transform["anchored_position"][:2],
         "delta": transform["size_delta"][:2],
         "scale": float(transform.get("local_scale", [1.0])[0] or 1.0),
+        "rotation": round(angle, 4),
     }
 
 
@@ -80,6 +83,10 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
         if canvas:
             entry["canvas"] = True
             entry["canvas_order"] = order
+            # Nested canvases (e.g. the yellow band inside a menu) still lay out
+            # like ordinary RectTransforms; the payload is also kept for root
+            # canvases because a later build may use their authored size.
+            entry.update(layout_payload(transform))
         elif plain:
             # A plain Transform holder (e.g. "Actions") is not a UI node. Its 1.8
             # local scale would push its anchored children far outside the canvas
@@ -102,8 +109,15 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
         canvas_component = next((c for c in node["components"] if c.get("type") == "Canvas"), None)
         current_clip = clip_id
         if canvas_component is not None:
-            node_id = add_node(transform, parent_id, canvas=True,
-                               order=int(canvas_component.get("sorting_order", 0)), owner=node)
+            raw_order = int(canvas_component.get("sorting_order", 0))
+            if parent_id >= 0 and not canvas_component.get("override_sorting"):
+                # A nested canvas without overrideSorting lives inside its
+                # parent's sorting layer and is drawn after the parent's own
+                # graphics (the yellow menu band sits above the white panel).
+                effective_order = canvas_order + 0.1
+            else:
+                effective_order = raw_order
+            node_id = add_node(transform, parent_id, canvas=True, order=effective_order, owner=node)
         elif "anchor_min" not in transform:
             # a plain Transform (e.g. an "Actions" holder) has no rect of its own; its
             # UI children still resolve against the nearest UI ancestor
@@ -115,7 +129,7 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
         if any(component.get("type") == "Mask" for component in node["components"]):
             current_clip = node_id
         if canvas_component is not None:
-            canvas_order = int(canvas_component.get("sorting_order", 0))
+            canvas_order = effective_order
 
         for component in node["components"]:
             kind = component.get("type")
@@ -160,8 +174,15 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
                 if not fields:
                     continue
                 font = fields.get("m_FontData") or {}
+                fitter = next(
+                    (c for c in node["components"] if c.get("type") == "ContentSizeFitter"),
+                    None,
+                )
+                fit_fields = (fitter or {}).get("fields") or {}
                 drawables.append({
                     "kind": "text",
+                    "fit_width": fit_fields.get("m_HorizontalFit", 0),
+                    "fit_height": fit_fields.get("m_VerticalFit", 0),
                     "node": node_id,
                     "text": fields.get("m_Text", ""),
                     "font_size": font.get("m_FontSize"),
@@ -287,7 +308,38 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
             # handler.
             drawable["hooks"] = hooks_by_element.get(drawable["path"], [])
 
+    # Foreground widgets of the outer canvas draw after nested canvases (the
+    # lesson title sits on the yellow band; the band sits above the white panel).
+    # Images keep the integer order so backgrounds stay behind both.
+    for drawable in drawables:
+        order_value = float(drawable.get("canvas_order", 0))
+        if (
+            drawable["kind"] in ("text", "button", "slider")
+            and abs(order_value - round(order_value)) < 1e-6
+        ):
+            drawable["canvas_order"] = order_value + 0.2
     drawables.sort(key=lambda d: (d.get("canvas_order", 0), d["order"]))
+    # Screen-space canvases are the roots here. Their authored RectTransform is
+    # the design space the children were laid out in (584.7x1169.4 = 1:2 for the
+    # app menus and lesson player), not the CanvasScaler's 1920x1080 reference.
+    root_canvas_sizes = [
+        [abs(float(v)) for v in node["transform"]["size_delta"][:2]]
+        for node in nodes
+        if node.get("transform")
+        and node["transform"]["parent"] not in by_transform
+        and any(c.get("type") == "Canvas" for c in node.get("components", []))
+    ]
+    root_canvas_sizes = [size for size in root_canvas_sizes if size[0] > 0 and size[1] > 0]
+    canvas_size = max(root_canvas_sizes, key=lambda size: size[0] * size[1]) if root_canvas_sizes else [1920.0, 1080.0]
+    background = next(
+        (
+            component["background"]
+            for node in nodes
+            for component in node.get("components", [])
+            if component.get("type") == "Camera" and component.get("background")
+        ),
+        [0.0, 0.0, 0.0, 1.0],
+    )
     return {
         "file": model["file"],
         "layout": layout,
@@ -298,6 +350,8 @@ def build_screen(model: dict, sprites: dict[str, list[str]]) -> dict:
         "number": model.get("number"),
         "reference_resolution": reference,
         "match_width_or_height": match,
+        "canvas_size": canvas_size,
+        "background": background,
         "canvases": canvas,
         "drawables": drawables,
         "unresolved_sprites": unresolved,
