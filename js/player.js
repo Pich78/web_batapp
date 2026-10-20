@@ -41,6 +41,10 @@
 
   var TRACK_STEM_ALIAS = { bit: "beat" };
   var LOAD_TIMEOUT = 30000;
+  // The per-media-element timeout only starts once the bytes are local. This
+  // is the outer deadline for the whole gate, so a stalled transfer cannot
+  // leave the loading screen up forever.
+  var LOAD_DEADLINE = 120000;
   var RATE_MIN = 0.5;
   var RATE_MAX = 1.5;
   var loadSequence = 0;
@@ -166,6 +170,8 @@
     this._disposed = false;
     this._loadPromise = null;
     this._controller = null;
+    this._loadTimer = 0;
+    this._timedOut = false;
     this._objectUrls = [];
     this._context = null;
     this._playToken = 0;
@@ -227,27 +233,57 @@
     var self = this;
     this._loading = true;
     this._state = "loading";
+    this._timedOut = false;
     this._onProgress = typeof onProgress === "function" ? onProgress : this.options.onProgress;
     this._controller = typeof global.AbortController === "function"
       ? new global.AbortController()
       : null;
+
+    var deadline = typeof this.options.loadTimeout === "number" &&
+      isFinite(this.options.loadTimeout)
+      ? this.options.loadTimeout
+      : LOAD_DEADLINE;
+    if (deadline > 0 && this._controller) {
+      this._loadTimer = setTimeout(function () {
+        if (self._loaded || self._disposed || self._state !== "loading") return;
+        self._timedOut = true;
+        try { self._controller.abort(); } catch (error) { /* already aborted */ }
+      }, deadline);
+    }
 
     var protocol = (global.location && global.location.protocol) || "file:";
     var served = protocol === "http:" || protocol === "https:";
     var loading = served ? this._loadHttp() : this._loadFile();
 
     this._loadPromise = loading.then(function () {
-      if (self._disposed) throw abortError();
+      self._clearLoadTimer();
+      if (self._disposed || self._timedOut) throw abortError();
       self._finalizeLoad();
       return self;
     }).catch(function (error) {
-      if (self._disposed && !isAbort(error)) error = abortError();
+      var timedOut = self._timedOut;
+      self._clearLoadTimer();
+      if (timedOut) {
+        error = loadError([], "Loading timed out. Check your connection and try again.");
+      } else if (self._disposed && !isAbort(error)) {
+        error = abortError();
+      }
       self._state = "error";
       self._releaseResources();
       self._disposed = true;
       throw error;
     });
     return this._loadPromise;
+  };
+
+  BatappPlayer.prototype._clearLoadTimer = function () {
+    if (!this._loadTimer) return;
+    clearTimeout(this._loadTimer);
+    this._loadTimer = 0;
+  };
+
+  BatappPlayer.prototype._aborted = function () {
+    return this._disposed || this._timedOut;
   };
 
   BatappPlayer.prototype._loadHttp = async function () {
@@ -296,7 +332,7 @@
       });
     }));
 
-    if (this._disposed) throw abortError();
+    if (this._aborted()) throw abortError();
     this._objectUrls = [];
     this._ensureContext();
     var canEncodeWav = !!this._context &&
@@ -306,7 +342,7 @@
     // Decode and encode one stem at a time: the finished WAV Blobs stay for
     // playback, but only one decoded AudioBuffer is alive at a time.
     for (var index = 0; index < verified.length; index += 1) {
-      if (this._disposed) throw abortError();
+      if (this._aborted()) throw abortError();
       var item = verified[index];
       var record = this.tracks[index];
       var sourceUrl = null;
@@ -317,8 +353,13 @@
         try {
           audioBuffer = await decodeAudio(this._context, item.buffer);
           item.buffer = null;
-          var wav = await global.BatappWav.encode(audioBuffer);
+          if (this._aborted()) throw abortError();
+          var wav = await global.BatappWav.encode(audioBuffer, {
+            signal: signal,
+            shouldStop: function () { return self._aborted(); }
+          });
           audioBuffer = null;
+          if (this._aborted()) throw abortError();
           sourceUrl = URL.createObjectURL(wav.blob);
           format = "wav";
           record.wavBytes = wav.bytes;
@@ -328,6 +369,9 @@
           item.sourceBlob = wav.blob;
           item.blob = null;
         } catch (error) {
+          // Cancellation (Back, or the outer load deadline) must stop the
+          // whole load; it is not a reason to silently fall back to Ogg.
+          if (isAbort(error) || this._aborted()) throw abortError();
           item.wavError = error && (error.message || String(error));
           sourceUrl = null;
         }
@@ -371,7 +415,7 @@
       });
     }));
 
-    if (this._disposed) throw abortError();
+    if (this._aborted()) throw abortError();
   };
 
   BatappPlayer.prototype._loadFile = function () {
@@ -395,7 +439,7 @@
         reportProgress(self._onProgress, readyCount, total, "prepare");
       });
     })).then(function () {
-      if (self._disposed) throw abortError();
+      if (self._aborted()) throw abortError();
     });
   };
 
@@ -564,6 +608,11 @@
         resolve();
       }
 
+      if (signal && signal.aborted) {
+        settled = true;
+        reject(abortError());
+        return;
+      }
       element.addEventListener("canplay", check);
       element.addEventListener("canplaythrough", check);
       element.addEventListener("durationchange", check);
@@ -687,10 +736,12 @@
   };
 
   BatappPlayer.prototype._mediaPosition = function () {
+    // Only a genuinely live element is evidence of the audible position.
+    // A freshly rebuilt, paused element sits at 0 and must never be mistaken
+    // for "the current position", otherwise rapid speed/pause actions restart
+    // playback from the beginning.
     var record = this.tracks.filter(function (item) {
-      return item.element && !item.element.paused;
-    })[0] || this.tracks.filter(function (item) {
-      return item.element;
+      return item.element && !item.element.paused && !item.element.ended;
     })[0];
     if (record && record.element && isFinite(record.element.currentTime)) {
       return Math.max(0, Math.min(record.element.currentTime, this.duration()));
@@ -1343,6 +1394,7 @@
   BatappPlayer.prototype._releaseResources = function () {
     this._playToken += 1;
     this._alignToken += 1;
+    this._clearLoadTimer();
     if (this._loopTimer) {
       clearTimeout(this._loopTimer);
       this._loopTimer = 0;
@@ -1364,6 +1416,7 @@
     this._clockOffset = 0;
     this._clockStartedAt = 0;
     this._needsFreshGeneration = false;
+    this._timedOut = false;
     this._onProgress = null;
   };
 

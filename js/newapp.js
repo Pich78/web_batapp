@@ -127,6 +127,14 @@
     return Math.floor(value / 60) + ":" + String(value % 60).padStart(2, "0");
   }
 
+  function safeDecode(value) {
+    try {
+      return decodeURIComponent(value);
+    } catch (error) {
+      return null;
+    }
+  }
+
   /* ----------------------------------------------------------- screen awake */
 
   function wakeLockSupported() {
@@ -541,6 +549,9 @@
     var duration = 0;
     var transportBusy = false;
     var playbackStrikes = 0;
+    // Each Play/Pause/Stop starts a new request. A watchPlayback timer from an
+    // older request must never finish against a newer one.
+    var playRequest = 0;
 
     function showStatus(message) {
       status.textContent = message;
@@ -567,6 +578,7 @@
       playbackStrikes += 1;
       if (!force && playbackStrikes < 8) return;
       playbackStrikes = 0;
+      playRequest += 1;
       audio.pause();
       state.playing = false;
       transportBusy = false;
@@ -578,9 +590,13 @@
 
     play.addEventListener("click", function () {
       if (state.playing) {
+        playRequest += 1;
         audio.pause();
         state.playing = false;
         playbackStrikes = 0;
+        // Pause must not leave a stale "starting" lock behind: a quick
+        // Pause -> Play has to be accepted immediately.
+        transportBusy = false;
         syncWakeLock();
         paintPlaying();
         return;
@@ -588,6 +604,7 @@
       if (transportBusy) return;
       transportBusy = true;
       playbackStrikes = 0;
+      var request = ++playRequest;
       if (!audio.play()) {
         transportBusy = false;
         return;
@@ -598,6 +615,7 @@
       paintPlaying();
       var attempts = 0;
       function watchPlayback() {
+        if (request !== playRequest || state.player !== audio) return;
         if (!state.playing) {
           transportBusy = false;
           return;
@@ -614,6 +632,8 @@
           return;
         }
         transportBusy = false;
+        // Never leave the engine running behind a Play button.
+        audio.pause();
         state.playing = false;
         playbackStrikes = 0;
         syncWakeLock();
@@ -624,6 +644,7 @@
     });
 
     stop.addEventListener("click", function () {
+      playRequest += 1;
       audio.stop();
       state.playing = false;
       playbackStrikes = 0;
@@ -735,7 +756,34 @@
 
   /* ----------------------------------------------------------------- router */
 
-  function route() {
+  function showFatal(error) {
+    try { teardown(); } catch (cleanupError) { /* keep rendering the recovery view */ }
+    state.view = "player";
+    state.playing = false;
+    state.loading = false;
+    state.lesson = null;
+    state.error = error && error.message ? error.message : "Unexpected error";
+    document.body.dataset.view = "player";
+    document.title = "Batá · Something went wrong";
+    if (window.console && typeof window.console.error === "function") {
+      window.console.error(error);
+    }
+    if (libraryPane) libraryPane.innerHTML = "";
+    if (!mainPane) return;
+    mainPane.innerHTML = "";
+    var view = element("div", "player-view");
+    var box = element("div", "loading error",
+      '<div class="dial"><div class="play error-mark">!</div></div>' +
+      '<p class="load-status">Something went wrong.</p>' +
+      '<button class="retry" type="button">Back to library</button>');
+    box.querySelector(".retry").addEventListener("click", function () {
+      location.hash = "#/";
+    });
+    view.appendChild(box);
+    mainPane.appendChild(view);
+  }
+
+  function routeInner() {
     teardown();
     var hash = location.hash.replace(/^#\/?/, "");
     var volume = state.volume;
@@ -751,12 +799,17 @@
     } else {
       var lessonMatch = hash.match(/^lesson\/(.+)$/);
       if (lessonMatch) {
-        lesson = lessonFor(decodeURIComponent(lessonMatch[1]));
+        var slug = safeDecode(lessonMatch[1]);
+        lesson = slug ? lessonFor(slug) : null;
         if (!lesson) {
-          location.hash = "#/";
-          return;
+          if (location.hash !== "#/") {
+            location.replace("#/");
+            return;
+          }
+          // A malformed/unknown slug must never leave the runtime blank.
+        } else {
+          volume = lesson.volume;
         }
-        volume = lesson.volume;
       }
     }
 
@@ -765,6 +818,14 @@
     setDocumentTitle(lesson, volume, explicitVolume);
     renderLibrary(volume, lesson ? lesson.slug : null);
     renderMain(lesson);
+  }
+
+  function route() {
+    try {
+      routeInner();
+    } catch (error) {
+      showFatal(error);
+    }
   }
 
   function step(delta) {

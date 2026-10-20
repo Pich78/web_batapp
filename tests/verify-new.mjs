@@ -1140,10 +1140,17 @@ await desktop.waitForTimeout(500);
 const desktopEmpty = await desktop.evaluate(() => {
   const library = document.getElementById("library-pane").getBoundingClientRect();
   const main = document.getElementById("main-pane").getBoundingClientRect();
+  const button = document.getElementById("app-info-button").getBoundingClientRect();
+  const brand = document.querySelector(".brand h1").getBoundingClientRect();
+  const overlap = !(button.right <= brand.left || button.left >= brand.right ||
+    button.bottom <= brand.top || button.top >= brand.bottom);
   return {
     library: { width: library.width, left: library.left },
     main: { width: main.width, left: main.left },
     empty: !!document.querySelector(".empty"),
+    buttonBrandOverlap: overlap,
+    button: { left: button.left, top: button.top },
+    brand: { left: brand.left, top: brand.top },
     scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
     viewport: [window.innerWidth, window.innerHeight]
   };
@@ -1153,6 +1160,9 @@ check("desktop shows the library sidebar and main pane",
   desktopEmpty.main.width > 800 && desktopEmpty.main.left >= desktopEmpty.library.width - 1,
   JSON.stringify(desktopEmpty));
 check("desktop shows the empty state before a rhythm is selected", desktopEmpty.empty);
+check("desktop app-info button does not overlap the brand",
+  !desktopEmpty.buttonBrandOverlap,
+  JSON.stringify({ button: desktopEmpty.button, brand: desktopEmpty.brand }));
 check("desktop layout has no page overflow",
   desktopEmpty.scroll[0] <= desktopEmpty.viewport[0] &&
   desktopEmpty.scroll[1] <= desktopEmpty.viewport[1],
@@ -1250,6 +1260,39 @@ check("tablet layout has no horizontal overflow", tabletState.scrollWidth <= tab
   tabletState.scrollWidth + " > " + tabletState.viewportWidth);
 await tablet.screenshot({ path: path.join(shots, "10-tablet-player.png") });
 await tablet.close();
+
+// Tablet portrait keeps the fixed app menu inside the centered app shell.
+const tabletPortrait = await browser.newPage({ viewport: { width: 768, height: 1024 } });
+await tabletPortrait.bringToFront();
+await tabletPortrait.goto(pageUrl + "#/");
+await tabletPortrait.waitForTimeout(500);
+await tabletPortrait.locator("#app-info-button").click();
+await tabletPortrait.waitForTimeout(200);
+const tabletPortraitState = await tabletPortrait.evaluate(() => {
+  const app = document.getElementById("app").getBoundingClientRect();
+  const button = document.getElementById("app-info-button").getBoundingClientRect();
+  const panel = document.getElementById("app-info-panel").getBoundingClientRect();
+  const first = document.getElementById("app").firstElementChild;
+  return {
+    app: { left: app.left, right: app.right, width: app.width },
+    button: { left: button.left, right: button.right },
+    panel: { left: panel.left, right: panel.right },
+    panelOpen: !document.getElementById("app-info-panel").hidden,
+    firstId: first ? first.id : null
+  };
+});
+check("tablet portrait keeps the app-info button and panel inside the app shell",
+  tabletPortraitState.panelOpen &&
+  tabletPortraitState.button.left >= tabletPortraitState.app.left &&
+  tabletPortraitState.button.right <= tabletPortraitState.app.right &&
+  tabletPortraitState.panel.left >= tabletPortraitState.app.left &&
+  tabletPortraitState.panel.right <= tabletPortraitState.app.right,
+  JSON.stringify(tabletPortraitState));
+check("tablet portrait app-info button is the first app control",
+  tabletPortraitState.firstId === "app-info-button",
+  tabletPortraitState.firstId);
+await tabletPortrait.screenshot({ path: path.join(shots, "11-tablet-portrait.png") });
+await tabletPortrait.close();
 
 // --- theme follows the system ---------------------------------------------
 const dark = await browser.newPage({ viewport, colorScheme: "dark" });
@@ -1980,6 +2023,125 @@ try {
   check("Retry completes the load after a failure",
     (await failing.evaluate(() => !window.__batapp_new.state().loading && window.__batapp_new.ui().playEnabled)));
   await failing.close();
+
+  // --- P0 regressions: overlapping transport actions -----------------------
+  const race = await browser.newPage({ viewport });
+  await race.bringToFront();
+  await race.goto(servedUrl + "#/lesson/volume-1/02-tani-tani-cho-bi");
+  await ready(race);
+  await race.locator("button.play").click();
+  await race.waitForTimeout(1200);
+  const raceBefore = await race.evaluate(() => window.__batapp_new.state().position);
+  const raceImmediate = await race.evaluate(() => {
+    const button = document.querySelector('.speed-step[data-delta="1"]');
+    button.click();
+    button.click();
+    const state = window.__batapp_new.state();
+    return { position: state.position, rate: state.rate, playing: state.playing };
+  });
+  check("two rapid speed steps preserve the playback position",
+    raceImmediate.playing && raceImmediate.rate === 1.02 &&
+    raceImmediate.position > raceBefore - 0.5,
+    JSON.stringify({ before: raceBefore, after: raceImmediate }));
+  await race.waitForTimeout(1200);
+  const raceSettled = await race.evaluate(() => ({
+    state: window.__batapp_new.state(),
+    active: window.__batapp_new.tracks().filter((track) => !track.paused).length
+  }));
+  check("rapid speed steps keep every stem playing",
+    raceSettled.state.playing && raceSettled.active === 5 &&
+    raceSettled.state.position > raceImmediate.position,
+    JSON.stringify(raceSettled));
+
+  const pauseAfterSpeed = await race.evaluate(() => {
+    const before = window.__batapp_new.state().position;
+    document.querySelector('.speed-step[data-delta="1"]').click();
+    document.querySelector("button.play").click();
+    return { before: before, after: window.__batapp_new.state().position,
+      playing: window.__batapp_new.state().playing };
+  });
+  check("pausing immediately after a speed step preserves the position",
+    !pauseAfterSpeed.playing && pauseAfterSpeed.after > pauseAfterSpeed.before - 0.5,
+    JSON.stringify(pauseAfterSpeed));
+
+  const quickResume = await race.evaluate(async () => {
+    const play = document.querySelector("button.play");
+    play.click();
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    play.click();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    play.click();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return {
+      playing: window.__batapp_new.state().playing,
+      active: window.__batapp_new.tracks().filter((track) => !track.paused).length
+    };
+  });
+  check("quick Pause then Play is not ignored",
+    quickResume.playing && quickResume.active === 5,
+    JSON.stringify(quickResume));
+  await race.close();
+
+  // --- P0 regressions: malformed hash and load deadline --------------------
+  const malformed = await browser.newPage({ viewport });
+  const malformedErrors = [];
+  malformed.on("pageerror", (error) => malformedErrors.push(error.message));
+  await malformed.goto(servedUrl + "#/lesson/%E0%A4%A");
+  await malformed.waitForFunction(
+    () => window.__batapp_new && window.__batapp_new.state().view === "library",
+    null,
+    { timeout: 10000 }
+  );
+  const malformedState = await malformed.evaluate(() => ({
+    rows: document.querySelectorAll(".row").length,
+    url: location.hash,
+    view: window.__batapp_new.state().view
+  }));
+  check("malformed lesson hash recovers to the library",
+    malformedState.view === "library" && malformedState.rows > 0 &&
+    malformedState.url === "#/" && malformedErrors.length === 0,
+    JSON.stringify({ state: malformedState, errors: malformedErrors }));
+  await malformed.close();
+
+  const stalled = await browser.newPage({ viewport });
+  await stalled.bringToFront();
+  await stalled.route("**/assets/audio/**", () => {});
+  await stalled.goto(servedUrl + "#/");
+  const stalledState = await stalled.evaluate(async () => {
+    const player = new window.BatappPlayer(window.BATAPP.lessons[0], { loadTimeout: 500 });
+    try {
+      await player.load();
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        name: error.name,
+        message: error.message,
+        disposed: player.isDisposed()
+      };
+    }
+  });
+  check("stalled HTTP load times out and releases the player",
+    !stalledState.ok && stalledState.name === "BatappLoadError" &&
+    stalledState.message.indexOf("timed out") >= 0 && stalledState.disposed,
+    JSON.stringify(stalledState));
+
+  const abortedEncoding = await stalled.evaluate(async () => {
+    const context = new AudioContext();
+    const buffer = context.createBuffer(2, 44100, 44100);
+    try {
+      await window.BatappWav.encode(buffer, { shouldStop: () => true });
+      return { aborted: false };
+    } catch (error) {
+      return { aborted: true, name: error.name };
+    } finally {
+      context.close();
+    }
+  }).catch((error) => ({ aborted: false, error: error.message }));
+  check("WAV encoding stops when the load is cancelled",
+    abortedEncoding.aborted && abortedEncoding.name === "AbortError",
+    JSON.stringify(abortedEncoding));
+  await stalled.close();
 } finally {
   server.kill("SIGTERM");
 }

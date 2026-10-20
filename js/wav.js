@@ -45,7 +45,28 @@
     });
   }
 
-  async function encode(audioBuffer) {
+  function abortError() {
+    try {
+      return new DOMException("The operation was aborted.", "AbortError");
+    } catch (error) {
+      var fallback = new Error("The operation was aborted.");
+      fallback.name = "AbortError";
+      return fallback;
+    }
+  }
+
+  async function encode(audioBuffer, options) {
+    options = options || {};
+    var signal = options.signal;
+    var shouldStop = options.shouldStop;
+
+    function stopped() {
+      if (signal && signal.aborted) return true;
+      if (typeof shouldStop !== "function") return false;
+      try { return !!shouldStop(); } catch (error) { return false; }
+    }
+
+    if (stopped()) throw abortError();
     if (!audioBuffer || !audioBuffer.length) {
       throw new Error("Cannot encode an empty audio buffer.");
     }
@@ -62,6 +83,10 @@
     }
 
     for (var start = 0; start < frames; start += CHUNK_FRAMES) {
+      if (stopped()) {
+        parts.length = 0;
+        throw abortError();
+      }
       var end = Math.min(start + CHUNK_FRAMES, frames);
       var chunk = new ArrayBuffer((end - start) * blockAlign);
       var view = new DataView(chunk);
@@ -77,10 +102,20 @@
       }
       parts.push(chunk);
       // Keep the loading UI responsive while encoding long clips.
-      if (parts.length % 8 === 0) await nextTask();
+      if (parts.length % 8 === 0) {
+        await nextTask();
+        if (stopped()) {
+          parts.length = 0;
+          throw abortError();
+        }
+      }
     }
 
     await nextTask();
+    if (stopped()) {
+      parts.length = 0;
+      throw abortError();
+    }
     var blob = new Blob(parts, { type: "audio/wav" });
     parts.length = 0;
     return {

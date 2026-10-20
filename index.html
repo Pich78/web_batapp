@@ -50,16 +50,16 @@
 </head>
 <body>
 <div id="app">
+  <button id="app-info-button" class="app-info-button" type="button"
+          aria-label="App information" aria-expanded="false" aria-controls="app-info-panel">
+    <span></span><span></span><span></span>
+  </button>
+  <div id="app-info-panel" class="app-info-panel" role="dialog" aria-label="App information" hidden>
+    <p class="app-info-title">Batá</p>
+    <div id="app-info-rows" class="app-info-rows"></div>
+  </div>
   <aside id="library-pane" class="library-pane" aria-label="Rhythm library"></aside>
   <main id="main-pane" class="main-pane"></main>
-</div>
-<button id="app-info-button" class="app-info-button" type="button"
-        aria-label="App information" aria-expanded="false" aria-controls="app-info-panel">
-  <span></span><span></span><span></span>
-</button>
-<div id="app-info-panel" class="app-info-panel" role="dialog" aria-label="App information" hidden>
-  <p class="app-info-title">Batá</p>
-  <div id="app-info-rows" class="app-info-rows"></div>
 </div>
 <script src="js/lessons.js?v=v1.2.2"></script>
 <script src="js/wav.js?v=v1.2.2"></script>
