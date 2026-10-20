@@ -500,10 +500,11 @@
     });
   };
 
-  BatappPlayer.prototype._waitForElement = function (record, signal, onReady) {
+  BatappPlayer.prototype._waitForElement = function (record, signal, onReady, expected) {
     var self = this;
     return new Promise(function (resolve, reject) {
-      var element = record.element;
+      var element = expected || record.element;
+      var ownsElement = !!expected;
       var settled = false;
       var timer = 0;
 
@@ -516,6 +517,16 @@
         if (signal) signal.removeEventListener("abort", aborted);
         if (timer) clearTimeout(timer);
       }
+      function releasedGeneration() {
+        if (settled) return true;
+        if (ownsElement && record.element !== element) {
+          settled = true;
+          cleanup();
+          reject(abortError());
+          return true;
+        }
+        return false;
+      }
       function fail(message) {
         if (settled) return;
         settled = true;
@@ -523,6 +534,7 @@
         reject(loadError([record.stem], message));
       }
       function failed() {
+        if (releasedGeneration()) return;
         fail(element.error ? "Audio error " + element.error.code + "." : "Audio failed to load.");
       }
       function aborted() {
@@ -532,7 +544,7 @@
         reject(abortError());
       }
       function check() {
-        if (settled) return;
+        if (settled || releasedGeneration()) return;
         if (element.readyState < 3) return;
         var duration = element.duration;
         // Duration is advisory: some mobile browsers estimate Blob/Ogg
@@ -637,11 +649,28 @@
   };
 
   BatappPlayer.prototype._resumeContext = function () {
-    if (!this._context || this._context.state !== "suspended") return;
+    if (!this._context || this._context.state === "running" ||
+        this._context.state === "closed") {
+      return Promise.resolve();
+    }
     try {
       var promise = this._context.resume();
-      if (promise && promise.catch) promise.catch(function () {});
-    } catch (error) { /* the browser reports it through play() */ }
+      return promise && typeof promise.then === "function"
+        ? promise.catch(function () {})
+        : Promise.resolve();
+    } catch (error) {
+      // The browser reports a refused resume through the next play() attempt.
+      return Promise.resolve();
+    }
+  };
+
+  BatappPlayer.prototype.resumeContext = function () {
+    return this._resumeContext();
+  };
+
+  BatappPlayer.prototype.contextRunning = function () {
+    if (!this._context) return true;
+    return this._context.state === "running";
   };
 
   BatappPlayer.prototype._liveTracks = function () {
@@ -713,7 +742,7 @@
     this._objectUrls = [];
   };
 
-  BatappPlayer.prototype._rebuildPlayback = function (offset) {
+  BatappPlayer.prototype._rebuildPlayback = function () {
     var self = this;
     this._disposeGeneration();
     var items = this.tracks.map(function (record) {
@@ -734,13 +763,60 @@
       };
     });
     this._createElements(items);
-    this.tracks.forEach(function (record) {
-      record.ready = true;
-      record.duration = record.wavDuration || record.seconds || 0;
-      if (!record.element) return;
-      try { record.element.currentTime = offset; } catch (error) { /* not seekable yet */ }
-    });
     this._needsFreshGeneration = false;
+  };
+
+  BatappPlayer.prototype._failStart = function (offset, error) {
+    if (this._disposed) return;
+    this._state = "paused";
+    this._offset = offset;
+    this._clockOffset = offset;
+    this._clockStartedAt = performance.now();
+    this._needsFreshGeneration = true;
+    if (this._loopTimer) {
+      clearTimeout(this._loopTimer);
+      this._loopTimer = 0;
+    }
+    this._pauseAll();
+    if (typeof this.options.onError === "function") {
+      this.options.onError(null, error);
+    }
+  };
+
+  BatappPlayer.prototype._prepareFreshGeneration = function (offset, token) {
+    var self = this;
+    var signal = this._controller ? this._controller.signal : undefined;
+    try {
+      this._rebuildPlayback();
+    } catch (error) {
+      this._failStart(offset, error);
+      return;
+    }
+
+    var waits = this.tracks.map(function (record) {
+      return self._waitForElement(record, signal, null, record.element);
+    });
+    Promise.all(waits).then(function () {
+      if (self._disposed || token !== self._playToken || self._state !== "playing") {
+        return null;
+      }
+      return self._alignAll(offset);
+    }).then(function (aligned) {
+      if (aligned === null) return;
+      if (self._disposed || token !== self._playToken || self._state !== "playing") return;
+      if (!aligned) {
+        self._failStart(offset, new Error("Could not align the stems."));
+        return;
+      }
+      self._clockOffset = offset;
+      self._clockStartedAt = performance.now();
+      self._startElements(token);
+      self._scheduleLoop(token);
+    }).catch(function (error) {
+      if (self._disposed || token !== self._playToken || self._state !== "playing") return;
+      if (error && error.name === "AbortError") return;
+      self._failStart(offset, error);
+    });
   };
 
   BatappPlayer.prototype._alignAll = function (seconds) {
@@ -1019,20 +1095,7 @@
     // source instead of seeking the old pipeline. This discards buffered audio
     // and guarantees the audible start position.
     if (this._needsFreshGeneration) {
-      try {
-        this._rebuildPlayback(offset);
-      } catch (error) {
-        this._state = "paused";
-        this._needsFreshGeneration = true;
-        if (typeof this.options.onError === "function") {
-          this.options.onError(null, error);
-        }
-        return true;
-      }
-      this._clockOffset = offset;
-      this._clockStartedAt = performance.now();
-      this._startElements(token);
-      this._scheduleLoop(token);
+      this._prepareFreshGeneration(offset, token);
       return true;
     }
 
@@ -1188,6 +1251,13 @@
 
   BatappPlayer.prototype.playing = function () {
     return !this._disposed && this._state === "playing" && this._liveTracks().length > 0;
+  };
+
+  BatappPlayer.prototype.allTracksPlaying = function () {
+    return !this._disposed && this._state === "playing" && this.tracks.length > 0 &&
+      this.tracks.every(function (record) {
+        return !!record.element && !record.element.paused && !record.element.ended;
+      });
   };
 
   BatappPlayer.prototype.isLoaded = function () {

@@ -48,7 +48,8 @@
     timer: 0,
     loadToken: 0,
     rate: 1,
-    wakeLock: "off"
+    wakeLock: "off",
+    reconcile: null
   };
 
   var wakeLock = null;
@@ -200,9 +201,28 @@
     else releaseWakeLock();
   }
 
+  function resumeAfterVisibility() {
+    if (document.visibilityState !== "visible" || !state.player) return;
+    syncWakeLock();
+    var settled = false;
+    function reconcileOnce() {
+      if (settled) return;
+      settled = true;
+      if (state.reconcile) state.reconcile(true);
+    }
+    var resume = state.player.resumeContext();
+    if (resume && typeof resume.then === "function") {
+      resume.then(reconcileOnce, reconcileOnce);
+    }
+    setTimeout(reconcileOnce, 500);
+  }
+
   document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "visible") syncWakeLock();
+    if (document.visibilityState === "visible") resumeAfterVisibility();
     else releaseWakeLock();
+  });
+  window.addEventListener("pageshow", function (event) {
+    if (event.persisted) resumeAfterVisibility();
   });
   window.addEventListener("pagehide", releaseWakeLock);
 
@@ -224,6 +244,7 @@
 
   function teardown() {
     state.loadToken += 1;
+    state.reconcile = null;
     releaseWakeLock();
     if (state.timer) clearInterval(state.timer);
     state.timer = 0;
@@ -519,6 +540,7 @@
     var seeking = false;
     var duration = 0;
     var transportBusy = false;
+    var playbackStrikes = 0;
 
     function showStatus(message) {
       status.textContent = message;
@@ -533,16 +555,39 @@
       play.setAttribute("aria-label", state.playing ? "Pause" : "Play");
     }
 
+    function reconcilePlayback(force) {
+      if (!state.playing) {
+        playbackStrikes = 0;
+        return;
+      }
+      if (audio.allTracksPlaying() && audio.contextRunning()) {
+        playbackStrikes = 0;
+        return;
+      }
+      playbackStrikes += 1;
+      if (!force && playbackStrikes < 8) return;
+      playbackStrikes = 0;
+      audio.pause();
+      state.playing = false;
+      transportBusy = false;
+      syncWakeLock();
+      paintPlaying();
+      showStatus("Playback paused. Tap Play to resume.");
+    }
+    state.reconcile = reconcilePlayback;
+
     play.addEventListener("click", function () {
       if (state.playing) {
         audio.pause();
         state.playing = false;
+        playbackStrikes = 0;
         syncWakeLock();
         paintPlaying();
         return;
       }
       if (transportBusy) return;
       transportBusy = true;
+      playbackStrikes = 0;
       if (!audio.play()) {
         transportBusy = false;
         return;
@@ -557,7 +602,7 @@
           transportBusy = false;
           return;
         }
-        if (audio.playing()) {
+        if (audio.allTracksPlaying()) {
           transportBusy = false;
           hideStatus();
           return;
@@ -570,6 +615,7 @@
         }
         transportBusy = false;
         state.playing = false;
+        playbackStrikes = 0;
         syncWakeLock();
         paintPlaying();
         showStatus("Playback was blocked. Tap Play again.");
@@ -580,6 +626,7 @@
     stop.addEventListener("click", function () {
       audio.stop();
       state.playing = false;
+      playbackStrikes = 0;
       syncWakeLock();
       transportBusy = false;
       paintPlaying();
@@ -633,6 +680,7 @@
       }
       var ratio = duration > 0 ? Math.min(1, progress.current / duration) : 0;
       ring.setAttribute("stroke-dashoffset", (RING_LENGTH * (1 - ratio)).toFixed(2));
+      reconcilePlayback(false);
     }, 250);
 
     return player;
@@ -765,16 +813,6 @@
     return meta ? meta.content : "unknown";
   }
 
-  function scriptVersion(name) {
-    var script = Array.prototype.filter.call(document.scripts, function (node) {
-      var src = node.getAttribute("src") || "";
-      return src.split("?")[0].split("/").pop() === name;
-    })[0];
-    if (!script) return "missing";
-    var match = /[?&]v=([^&]+)/.exec(script.getAttribute("src") || "");
-    return match ? decodeURIComponent(match[1]) : "unversioned";
-  }
-
   function currentSource() {
     if (!state.player || !state.player.tracks.length) return "none";
     var counts = {};
@@ -799,15 +837,8 @@
     if (!infoRows) return;
     infoRows.innerHTML = "";
     var build = loadedBuild();
-    addInfoRow("Loaded build", build);
-    addInfoRow("Manifest", manifestState === "ready" ? manifestVersion
-      : (manifestState === "local" ? "local file"
-        : (manifestState === "error" ? "offline / unknown" : "checking…")),
+    addInfoRow("Version", build,
       manifestState === "ready" && manifestVersion !== build);
-    addInfoRow("Lessons data", scriptVersion("lessons.js"));
-    addInfoRow("Player", scriptVersion("player.js"));
-    addInfoRow("WAV encoder", scriptVersion("wav.js"));
-    addInfoRow("New app runtime", scriptVersion("newapp.js"));
     addInfoRow("Current lesson", state.lesson
       ? state.lesson.number + " · " + state.lesson.title : "none");
     addInfoRow("Audio source", currentSource());
@@ -819,7 +850,7 @@
     if (manifestState === "ready" && manifestVersion && manifestVersion !== build) {
       var update = element("div", "app-info-update");
       var text = element("span");
-      text.textContent = "Update available: " + manifestVersion;
+      text.textContent = "A newer version is available";
       var reload = element("button", "app-info-reload", "Reload latest");
       reload.type = "button";
       reload.addEventListener("click", function () {
@@ -909,6 +940,7 @@
         position: state.player ? state.player.position() : 0,
         duration: state.player ? state.player.duration() : 0,
         rate: state.player ? state.player.rate() : state.rate,
+        contextRunning: state.player ? state.player.contextRunning() : null,
         wakeLock: state.wakeLock,
         stems: state.player ? state.player.tracks.map(function (record) { return record.stem; }) : []
       };

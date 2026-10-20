@@ -209,9 +209,10 @@ legacy `js/mixer.js` transport.
   value. Every stem, including Vox, starts at 100%.
 - Mixer order is Beat, Vox, Iya, Itotele, Okonkolo for Toques and Beat, Iya,
   Itotele, Okonkolo for Oru Seco (Vox is omitted when the stem is absent).
-- A fixed top-left hamburger opens the app-info panel: loaded build, deployed
-  manifest version, loaded script versions, current lesson and audio format,
-  plus a manual Reload latest action when the manifest is newer.
+- A fixed top-left hamburger opens the app-info panel with exactly one
+  **Version** row equal to the repository tag, plus the current lesson, audio
+  format and wake-lock state. A newer manifest highlights that row and offers a
+  manual Reload latest action without printing a second version number.
 - Opening a lesson runs a load gate: on HTTP(S) every stem is fetched into a
   Blob with `cache: "no-store"` and a fresh per-load URL and checked against the
   byte count and SHA-256/CRC-32 manifest in `js/lessons.js`. The verified Ogg is
@@ -228,9 +229,10 @@ legacy `js/mixer.js` transport.
   fresh media generation from the same Blob with a new object URL, clearing any
   queued old-position audio. Dragging the seek bar leaves playback running; on
   release the same fresh-generation rebuild starts at the new position, so
-  buffered old-position audio cannot replay. Mute and volume only change
-  per-stem gain. Back disposes the player, revokes Blob URLs and closes the
-  AudioContext.
+  buffered old-position audio cannot replay. A rebuilt generation waits for
+  every element to become ready and aligns the shared position before starting,
+  which also covers near-end seeks. Mute and volume only change per-stem gain.
+  Back disposes the player, revokes Blob URLs and closes the AudioContext.
 - The speed −/+ buttons below Play change every stem's `playbackRate` together
   (50–150% in 1% steps, pitch preserved) and carry the selected rate across
   rhythm navigation in the same session. Pressing keeps the current audio
@@ -244,6 +246,11 @@ legacy `js/mixer.js` transport.
   Pause, Stop, Back and page hide; it reacquires on `visibilitychange` when
   playback is still active. Unsupported, insecure or refused requests are
   explicit states in the app-info panel and fall back to normal screen timeout.
+- Returning to the foreground resumes an interrupted AudioContext and then
+  reconciles the UI with the real media state. A suspended/interrupted context
+  or paused media returns the player to Play with a short message; the next tap
+  rebuilds a fresh generation and resumes inside the gesture. Live background
+  audio is left untouched.
 - Three responsive modes built from one DOM:
   - portrait phones: fixed app shell, one pane at a time; the player fits with
     no page or internal scroll (short screens use a compact single-line mixer),
@@ -298,9 +305,11 @@ legacy `js/mixer.js` transport.
   converting completely, fresh media generations on Pause/Stop → Play with no
   extra audio requests, seek-drag continuation and seek-release fresh generation,
   loop restart to zero, speed-button hold/release, rate/clock/pitch and
-  rate-adjusted loop checks, mocked screen-wake-lock request/release, volume/mute
-  leaving the transport untouched, Back unloading every resource and reopening
-  downloading fresh stems). Chromium runs all 61 lessons; `BROWSER=firefox|webkit` runs
+  rate-adjusted loop checks, near-end seek stress, background suspension →
+  Play rebuild/resume, mocked screen-wake-lock request/release, a single
+  tag-shaped Version row, volume/mute leaving the transport untouched, Back
+  unloading every resource and reopening downloading fresh stems). Chromium runs
+  all 61 lessons; `BROWSER=firefox|webkit` runs
   representative lessons (and the HTTP gate/error paths). Its Chromium summary
   is written to `docs/verification/new-ui-sweep-summary.json`;
   `tests/verify-browsers.mjs` records all engines in
@@ -316,9 +325,14 @@ legacy `js/mixer.js` transport.
 
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`), breaking changes
   marked with `!`.
-- Bump the `?v=` query on `app.css`/`app-new.css` and every shipped JS file in
-  both HTML pages for each release, so a cached old script cannot be mixed with
-  new HTML on GitHub Pages.
+- The repository tag is the single version number. Run
+  `python3 tools/set_version.py set vX.Y.Z` and commit before tagging; never edit
+  the meta/build/manifest/query versions by hand. `set_version.py check` must
+  pass on the tagged commit. The tool keeps the `?v=` query on
+  `app.css`/`app-new.css` and every shipped JS file in both HTML pages equal to
+  the tag, so a cached old script cannot be mixed with new HTML on GitHub Pages.
+- The app-info panel must show exactly one Version row. Do not reintroduce
+  per-script or duplicate manifest version rows.
 - Keep the binary payload intentional: `assets/audio/**` is ~88 MB and is
   regenerable; if it grows past GitHub's comfort zone, revisit rather than add
   LFS (Pages does not serve LFS objects).

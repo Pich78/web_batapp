@@ -47,11 +47,11 @@ behind the reconstruction.
   desktop layout with a persistent library sidebar. While playing, the page
   requests a screen wake lock so the phone does not dim or sleep where the
   browser supports it.
-- **App info** — the hamburger button in the top-left shows the loaded build,
-  the deployed manifest version, the versions of every loaded script, the
-  current lesson, whether audio is WAV or Ogg and whether the screen wake lock is
-  active, off, blocked or unsupported. If the manifest is newer it offers a
-  manual “Reload latest” action.
+- **App info** — the hamburger button in the top-left shows one **Version** row
+  equal to the repository tag (for example `v1.2.2`), the current lesson,
+  whether audio is WAV or Ogg and whether the screen wake lock is active, off,
+  blocked or unsupported. If the manifest is newer it highlights the version and
+  offers a manual “Reload latest” action without printing a second number.
 - **Home-screen / PWA updates** — there is no service worker. The page compares
   its own version with `site.webmanifest` through a `no-store` request and, when
   a newer version is deployed, reloads once with a versioned URL. The manifest
@@ -89,6 +89,21 @@ node lesson-sweep.mjs           # all 61 lessons on the shipped-layout page
 The real-device pass is manual; use
 [docs/verification/device-pass.md](docs/verification/device-pass.md) for the
 iPhone Safari (iOS 18.4+), Android Chrome and Windows Chrome/Edge checklist.
+
+## Versioning
+
+The repository tag is the single version number. The app displays exactly that
+tag, and the internal `?v=` cache-busting strings use it so a PWA cannot mix old
+and new files:
+
+```bash
+python3 tools/set_version.py set v1.2.3   # rewrite all shipped version values
+python3 tools/set_version.py check        # after tagging HEAD: must match
+python3 tools/set_version.py show
+```
+
+Release in this order: finish the change, run `set` with the intended tag,
+commit, tag that commit, then run `check` before pushing `master` and the tag.
 
 ## Playback
 
@@ -130,6 +145,14 @@ the original scene-reconstruction transport in `js/mixer.js`.
   elements unloaded) and rebuilt at the new position, then playback resumes.
   Paused seeks stay paused at the new point and rebuild on the next Play. This
   prevents buffered audio from the old position replaying after a seek.
+- A rebuilt generation waits until every stem is ready and seeks to the shared
+  position before starting the elements. Near-end seeks therefore start and
+  enter the normal loop boundary instead of racing a not-yet-seekable element.
+- Returning from another app is reconciled with the real audio state. If the
+  browser suspended/interrupted the `AudioContext` or paused the media, the UI
+  returns to **Play** and shows “Playback paused. Tap Play to resume.”; the next
+  tap rebuilds a fresh generation and resumes the context inside the gesture. If
+  audio kept playing in the background, it is left untouched.
 - The Speed **−** and **+** buttons change every stem's playback rate together
   from 50% to 150% in 1% steps while preserving the recorded pitch. Pressing a
   button leaves playback running; releasing it rebuilds the media generation at

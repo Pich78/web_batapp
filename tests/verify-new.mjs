@@ -122,11 +122,13 @@ check("legacy page keeps the full data.js and old mixer",
   !legacyHtml.includes("js/lessons.js"));
 
 const versionMatch = modernHtml.match(/<meta name="batapp-version" content="([^"]+)">/);
+const appVersion = versionMatch ? versionMatch[1] : "";
 const manifestVersion = JSON.parse(fs.readFileSync(path.join(root, "site.webmanifest"), "utf8"));
+check("the single app version is tag-shaped", /^v\d+\.\d+\.\d+$/.test(appVersion), appVersion);
 check("PWA manifest carries the same version and a versioned start_url",
-  !!versionMatch && manifestVersion.version === versionMatch[1] &&
-  manifestVersion.start_url === "./?v=" + versionMatch[1],
-  JSON.stringify({ page: versionMatch && versionMatch[1], manifest: manifestVersion.version, start_url: manifestVersion.start_url }));
+  !!versionMatch && manifestVersion.version === appVersion &&
+  manifestVersion.start_url === "./?v=" + appVersion,
+  JSON.stringify({ page: appVersion, manifest: manifestVersion.version, start_url: manifestVersion.start_url }));
 check("both pages use one release query",
   modernHtml.includes("js/player.js?v=" + (versionMatch ? versionMatch[1] : "")) &&
   legacyHtml.includes("js/mixer.js?v=" + (versionMatch ? versionMatch[1] : "")) &&
@@ -209,7 +211,9 @@ function installMediaProbe() {
   if (NativeContext) {
     const CountingContext = function () {
       window.__mediaProbe.contexts += 1;
-      return new NativeContext();
+      const context = new NativeContext();
+      window.__mediaProbe.context = context;
+      return context;
     };
     CountingContext.prototype = NativeContext.prototype;
     window.AudioContext = CountingContext;
@@ -306,11 +310,17 @@ const infoPanel = await page.evaluate(() => ({
   expanded: document.getElementById("app-info-button").getAttribute("aria-expanded"),
   build: window.__batapp_new.state().build
 }));
-check("app menu shows the loaded build and script versions",
+check("app menu shows exactly one version and no script-version rows",
   !infoPanel.hidden && infoPanel.expanded === "true" &&
-  infoPanel.build === "1.2.1" && infoPanel.text.indexOf("Loaded build") >= 0 &&
-  infoPanel.text.indexOf("Player") >= 0 && infoPanel.text.indexOf("WAV encoder") >= 0 &&
-  infoPanel.text.indexOf("Screen awake") >= 0 && infoPanel.text.indexOf("1.2.1") >= 0,
+  infoPanel.build === appVersion &&
+  infoPanel.text.split(appVersion).length - 1 === 1 &&
+  infoPanel.text.indexOf("Version") >= 0 &&
+  infoPanel.text.indexOf("Screen awake") >= 0 &&
+  infoPanel.text.indexOf("Loaded build") < 0 &&
+  infoPanel.text.indexOf("Manifest") < 0 &&
+  infoPanel.text.indexOf("Lessons data") < 0 &&
+  infoPanel.text.indexOf("WAV encoder") < 0 &&
+  infoPanel.text.indexOf("New app runtime") < 0,
   JSON.stringify(infoPanel));
 await page.keyboard.press("Escape");
 await page.waitForTimeout(100);
@@ -463,6 +473,27 @@ check("releasing the seek bar restarts at the new point",
   Math.max(...dragAfter.map((track) => track.currentTime)) -
     Math.min(...dragAfter.map((track) => track.currentTime)) < 0.12,
   JSON.stringify(dragAfter.map((track) => +track.currentTime.toFixed(2))));
+
+// Near-end starts must rebuild, align and play every stem every time.
+const nearEndDuration = await page.evaluate(() => window.__batapp_new.state().duration);
+for (let round = 1; round <= 2; round += 1) {
+  for (const offset of [0.01, 0.1, 0.5, 1]) {
+    await page.locator(".seek-input").evaluate((input, value) => {
+      input.value = String(value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }, nearEndDuration - offset);
+    await page.waitForTimeout(700);
+    const nearEnd = await page.evaluate(() => ({
+      state: window.__batapp_new.state(),
+      tracks: window.__batapp_new.tracks()
+    }));
+    check(`file:// near-end seek ${round}:${offset}s starts every stem`,
+      nearEnd.state.playing && nearEnd.state.mixerPlaying &&
+      nearEnd.tracks.every((track) => !track.paused && !track.ended),
+      JSON.stringify({ offset, state: nearEnd.state, tracks: nearEnd.tracks.map((track) => ({ stem: track.stem, t: +track.currentTime.toFixed(2), paused: track.paused })) }));
+  }
+}
 
 // Volume slider + fill
 await page.locator(".stem[data-stem='iya'] input").evaluate((input) => {
@@ -1387,7 +1418,8 @@ try {
   }));
   await infoUpdate.locator("#app-info-button").click();
   await infoUpdate.waitForFunction(() => {
-    return document.getElementById("app-info-panel").innerText.indexOf("Update available: 9.9.9") >= 0;
+    return document.getElementById("app-info-panel").innerText
+      .indexOf("A newer version is available") >= 0;
   }, null, { timeout: 10000 });
   check("app menu exposes a newer deployed manifest and a reload action",
     await infoUpdate.locator(".app-info-reload").isVisible());
@@ -1449,16 +1481,21 @@ try {
     JSON.stringify({ wav: wavInfo.duration, transport: wavInfo.transportDuration, wavBytes: wavInfo.wavBytes, file: wavInfo.bytes }));
 
   await served.locator("#app-info-button").click();
-  await served.waitForFunction(() => window.__batapp_new.state().manifest === "1.2.1", null, { timeout: 10000 });
+  await served.waitForFunction(
+    (expected) => window.__batapp_new.state().manifest === expected,
+    appVersion,
+    { timeout: 10000 }
+  );
   const servedInfo = await served.evaluate(() => ({
     text: document.getElementById("app-info-panel").innerText,
     hidden: document.getElementById("app-info-panel").hidden,
     build: window.__batapp_new.state().build,
     manifest: window.__batapp_new.state().manifest
   }));
-  check("HTTP app menu reports the loaded build, manifest and WAV source",
-    !servedInfo.hidden && servedInfo.build === "1.2.1" &&
-    servedInfo.manifest === "1.2.1" &&
+  check("HTTP app menu reports the single version and WAV source",
+    !servedInfo.hidden && servedInfo.build === appVersion &&
+    servedInfo.manifest === appVersion &&
+    servedInfo.text.split(appVersion).length - 1 === 1 &&
     servedInfo.text.indexOf("Current lesson") >= 0 &&
     servedInfo.text.indexOf("Alubanche") >= 0 &&
     servedInfo.text.indexOf("WAV ×5") >= 0,
@@ -1592,6 +1629,83 @@ try {
     JSON.stringify({ media: afterSpeed.media, rate: afterSpeed.state.rate, before: beforeSpeed.position, after: afterSpeed.state.position, requests: servedAudioRequests.length }));
   await served.locator('.speed-step[data-delta="-1"]').click();
   await served.waitForTimeout(500);
+
+  // Near-end starts must work on the served/PWA path as well.
+  const servedDuration = await served.evaluate(() => window.__batapp_new.state().duration);
+  for (const offset of [0.01, 0.1, 0.5, 1]) {
+    await served.locator(".seek-input").evaluate((input, value) => {
+      input.value = String(value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }, servedDuration - offset);
+    await served.waitForTimeout(1200);
+    const servedNearEnd = await served.evaluate(() => ({
+      state: window.__batapp_new.state(),
+      tracks: window.__batapp_new.tracks()
+    }));
+    check(`HTTP near-end seek ${offset}s starts every stem`,
+      servedNearEnd.state.playing && servedNearEnd.state.mixerPlaying &&
+      servedNearEnd.tracks.every((track) => !track.paused && !track.ended),
+      JSON.stringify({ offset, state: servedNearEnd.state, tracks: servedNearEnd.tracks.map((track) => ({ stem: track.stem, t: +track.currentTime.toFixed(2), paused: track.paused })) }));
+  }
+
+  // Returning from the background with a suspended AudioContext must not
+  // leave a moving silent timeline: the UI returns to Play, and the next tap
+  // rebuilds/resumes the context inside the gesture.
+  const backgroundBefore = await served.evaluate(() => ({
+    state: window.__batapp_new.state(),
+    hasContext: !!window.__mediaProbe.context,
+    label: document.querySelector("button.play").getAttribute("aria-label")
+  }));
+  check("HTTP player has a running AudioContext before backgrounding",
+    backgroundBefore.hasContext && backgroundBefore.state.contextRunning === true &&
+    backgroundBefore.state.playing === true && backgroundBefore.label === "Pause",
+    JSON.stringify(backgroundBefore));
+  await served.evaluate(async () => {
+    const context = window.__mediaProbe.context;
+    window.__batappSavedResume = context.resume.bind(context);
+    await context.suspend();
+    context.resume = () => Promise.reject(new Error("blocked"));
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "hidden"
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await served.waitForTimeout(200);
+  await served.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "visible"
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await served.waitForTimeout(900);
+  const backgroundAfter = await served.evaluate(() => ({
+    state: window.__batapp_new.state(),
+    label: document.querySelector("button.play").getAttribute("aria-label"),
+    status: (document.querySelector(".player-status") || {}).textContent || ""
+  }));
+  check("returning with a suspended AudioContext shows Play, not a silent clock",
+    backgroundAfter.state.playing === false &&
+    backgroundAfter.state.contextRunning === false &&
+    backgroundAfter.label === "Play" &&
+    backgroundAfter.status.indexOf("Playback paused") >= 0,
+    JSON.stringify(backgroundAfter));
+  await served.evaluate(() => {
+    window.__mediaProbe.context.resume = window.__batappSavedResume;
+  });
+  await served.locator("button.play").click();
+  await served.waitForTimeout(1200);
+  const backgroundResumed = await served.evaluate(() => ({
+    state: window.__batapp_new.state(),
+    tracks: window.__batapp_new.tracks()
+  }));
+  check("Play after background rebuilds and resumes every stem",
+    backgroundResumed.state.playing && backgroundResumed.state.mixerPlaying &&
+    backgroundResumed.state.contextRunning === true &&
+    backgroundResumed.tracks.every((track) => !track.paused),
+    JSON.stringify({ state: backgroundResumed.state, tracks: backgroundResumed.tracks.map((track) => ({ stem: track.stem, paused: track.paused })) }));
 
   // Stop -> Play must create another fresh generation at zero, without
   // downloading any audio again.

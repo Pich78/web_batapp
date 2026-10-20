@@ -41,7 +41,13 @@ Android Chrome and Windows browsers must be checked by a person.
    phone untouched for at least 30 seconds while playing: the screen must not
    dim or sleep where the browser supports the Screen Wake Lock API. Pause and
    Stop must release it; the app-info panel reports the state. This needs HTTPS,
-   and power-saving modes or browser policy may refuse the lock.
+   and power-saving modes or browser policy may refuse the lock. Then switch to
+   another app for at least 10 seconds while playing and return. The UI must
+   match reality: if audio kept playing, leave it alone; if the browser paused
+   the media or suspended the AudioContext, the button must show **Play** with
+   “Playback paused. Tap Play to resume.”, and the next tap must rebuild and
+   resume every stem from the same position. A moving slider with no sound is a
+   failure.
 6. While playing, mute a stem and move another slider. Only the level changes:
    the timeline keeps advancing and no stem pauses, seeks or reloads. Unmute and
    confirm the previous slider value is restored. Then pause → mute a track →
@@ -57,7 +63,9 @@ Android Chrome and Windows browsers must be checked by a person.
    All five stems must restart together, with Beat still present; no rapid
    repeated loop, doubled voice or end-of-loop noise. Repeat at 50% and 150%:
    the shared rewind must happen after the rate-adjusted duration, not early or
-   late.
+   late. Also drag from near the start to the last fraction of a second several
+   times in a row: every stem must start and loop, never leaving a silent
+   running clock.
 9. Move the sliders in the order Beat, Vox, Iya, Itotele, Okonkolo; mute one,
    confirm its slider value is preserved, then unmute.
 10. Prev/Next moves through the volume; at the ends the button is disabled.
@@ -76,10 +84,12 @@ Android Chrome and Windows browsers must be checked by a person.
 16. Home-screen app only: after a new release is deployed, reopen the app. The
     version check must replace the old build once (the first update may need
     clearing the site data or removing/re-adding the icon).
-17. Open the top-left hamburger. Confirm the loaded build, manifest version,
-    script versions, current lesson, WAV/OGG source and screen-awake state are
-    shown. If the manifest is newer, verify the “Reload latest” action. Confirm
-    the panel closes with Escape/outside tap and never scrolls the page.
+17. Open the top-left hamburger. Confirm there is exactly **one Version row**
+    equal to the repository tag (for example `v1.2.2`), plus the current lesson,
+    WAV/OGG source and screen-awake state. If the manifest is newer, verify the
+    version row is highlighted and the “Reload latest” action appears without a
+    second version number. Confirm the panel closes with Escape/outside tap and
+    never scrolls the page.
 
 ## Results
 

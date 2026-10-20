@@ -99,6 +99,13 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       unsupported or refused requests fall back to the normal screen timeout and
       are reported in the app-info panel. Dragging the seek bar also keeps
       playback running; releasing it rebuilds at the new position.
+- [x] **Resume and near-end hardening** (app additions): fresh media generations
+      wait for every stem to be ready and align the shared position before
+      starting, so close-to-end seeks start and enter the loop boundary
+      reliably. Returning from another app resumes an interrupted AudioContext
+      and reconciles the UI with the real media state; a suspended context or
+      paused media returns to Play, and the next tap rebuilds and resumes. A
+      moving silent timeline is no longer possible.
 - [x] **Keyboard affordances**: Space toggles playback, arrows step lessons and
       Escape returns to the list on the modern page; `Esc` keeps the original
       pause layer on the shipped-layout page.
@@ -113,11 +120,12 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       landscape use a fixed app shell: the player fits without page or internal
       scrolling (short portrait uses a compact single-line mixer), Stop sits
       beside Next inside the transport, and the library list is the only scroll
-      container. A fixed top-left hamburger shows the loaded build, manifest,
-      script versions, current lesson, audio format and wake-lock state, with a
-      manual reload when the deployed manifest is newer. The generated
+      container. A fixed top-left hamburger shows one Version row equal to the
+      repository tag, the current lesson, audio format and wake-lock state, with
+      a manual reload when the deployed manifest is newer. The generated
       `js/lessons.js` is a compact lessons-only payload for this page; the scene
-      page keeps `js/data.js`.
+      page keeps `js/data.js`. `tools/set_version.py` keeps the app version,
+      manifest and every `?v=` query synchronized with the tag.
       Vox starts at 100% in the modern model. All stems are loaded and verified
       (fetch-to-Blob with checksums and runtime WAV expansion on HTTP, local Ogg
       elements on file://) before the playing screen appears, with named errors
