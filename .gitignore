@@ -14,3 +14,5 @@ Thumbs.db
 
 # development-only browser verification
 tests/node_modules/
+# Playwright MCP default snapshot directory (the wrapper writes under .work/)
+.playwright-mcp/

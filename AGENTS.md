@@ -44,6 +44,8 @@ assets/audio/<slug>/<stem>.ogg   281 lesson stems (iya, ito, oko, vox, beat)
 assets/img/...               sprites and background art exported from the APK
 tools/                       extraction and export tools (development only)
 tools/data/fsb_setups.json   original Vorbis setup packets needed for remuxing
+tests/                       Playwright verification + Playwright MCP wrapper (dev only)
+opencode.json                project OpenCode config (Playwright MCP, dev only)
 docs/                        findings, plan, verification records
 .work/                       scratch: extracted APK/OBB, dumps, reports (git-ignored)
 ```
@@ -68,6 +70,26 @@ uv venv .venv --python 3.10
 uv pip install --python .venv/bin/python UnityPy fsb5 numpy     # UnityPy 1.25.4
 # ffmpeg (with libvorbis/libogg/libvorbisenc) must be on PATH
 ```
+
+## Playwright MCP (development only)
+
+The repository-level `opencode.json` registers `batapp-playwright` under
+`mcp.servers` (OpenCode V2). The command is `tests/playwright-mcp.mjs`, which
+resolves the Chromium used by `tests/node_modules/playwright`, enables
+`--allow-unrestricted-file-access` for local `file://` URLs, and writes
+generated artifacts under `.work/playwright-mcp/`.
+
+```bash
+cd tests
+npm run mcp:check     # config + browser path + required flags
+npm run mcp:smoke     # opt-in MCP handshake and file:// navigation
+```
+
+`opencode mcp list` should show `batapp-playwright` connected. The MCP is for
+exploratory and visual checks; `tests/verify-new.mjs` remains the deterministic
+regression gate, and audible/device behaviour remains the manual device pass.
+Do not commit MCP screenshots or copy the stale `.playwright-mcp/` snapshots
+from another checkout.
 
 ## Regenerating everything
 
@@ -219,8 +241,9 @@ legacy `js/mixer.js` transport.
   decoded with `decodeAudioData` and re-encoded as 16-bit PCM WAV by `js/wav.js`
   before the player is shown; duration is advisory because some mobile browsers
   estimate it. If decoding fails, the stem falls back to direct Ogg. On
-  `file://` the local Ogg elements are awaited directly. Failures are named and
-  Retry restarts the whole load.
+  `file://` the local Ogg elements are awaited directly. The gate has a 120 s
+  overall deadline (stalled transfers fail closed), and Back cancels WAV
+  encoding between chunks. Failures are named and Retry restarts the whole load.
 - Transport: every stem loops (the scene object `Bit` maps to the exported
   `beat` stem). The transport resets all stems to 0 together at the loop
   boundary, so a browser that recalculates one stem's duration after a near-end

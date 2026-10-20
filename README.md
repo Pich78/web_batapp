@@ -84,7 +84,14 @@ node verify-new.mjs             # modern page, Chromium full sweep
 BROWSER=firefox node verify-new.mjs
 BROWSER=webkit node verify-new.mjs   # needs: sudo npx playwright install-deps webkit
 node lesson-sweep.mjs           # all 61 lessons on the shipped-layout page
+npm run mcp:check               # validate the repo Playwright MCP wiring
+npm run mcp:smoke               # opt-in MCP handshake + file:// navigation
 ```
+
+The repository-level `opencode.json` starts the Playwright MCP from
+`tests/playwright-mcp.mjs` as `batapp-playwright`. It reuses the test Chromium,
+writes generated artifacts under `.work/playwright-mcp/`, and is development
+tooling only; see [tests/mcp/README.md](tests/mcp/README.md).
 
 The real-device pass is manual; use
 [docs/verification/device-pass.md](docs/verification/device-pass.md) for the
@@ -114,7 +121,10 @@ the original scene-reconstruction transport in `js/mixer.js`.
   request. Audio loading begins only after a rhythm is chosen.
 - The modern player fetches every stem with `cache: "no-store"` and a fresh
   per-load URL, then checks the byte count and SHA-256 (CRC-32 on origins
-  without Web Crypto) against the manifest in `js/lessons.js`.
+  without Web Crypto) against the manifest in `js/lessons.js`. The whole gate
+  has a 120 s deadline, so a stalled transfer fails with an error instead of
+  leaving the loader up; Back during a load also stops WAV encoding between
+  chunks.
 - On HTTP/PWA the verified Ogg is decoded with `decodeAudioData` and re-encoded
   as 16-bit PCM WAV by `js/wav.js`; the player waits until all five WAV Blobs
   can play through. WAV headers make the duration exact on mobile browsers.

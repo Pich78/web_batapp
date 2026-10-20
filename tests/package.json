@@ -7,7 +7,10 @@
     "verify": "node verify.mjs",
     "verify-new": "node verify-new.mjs",
     "verify-browsers": "node verify-browsers.mjs",
-    "lesson-sweep": "node lesson-sweep.mjs"
+    "lesson-sweep": "node lesson-sweep.mjs",
+    "mcp": "node playwright-mcp.mjs",
+    "mcp:check": "node mcp/config-check.mjs",
+    "mcp:smoke": "node mcp/smoke.mjs"
   },
   "keywords": [],
   "author": "",
