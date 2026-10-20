@@ -9,7 +9,7 @@
  */
 "use strict";
 
-var SHELL_VERSION = "v1.3.1";
+var SHELL_VERSION = "v1.4.0";
 var SHELL_CACHE = "batapp-shell-" + SHELL_VERSION;
 var SHELL_ASSETS = [
   "./",

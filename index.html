@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <title>Batá · Toques &amp; Oru Seco</title>
@@ -8,12 +8,12 @@
 <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Batá">
-<meta name="batapp-version" content="v1.3.1">
-<link rel="icon" href="assets/icon.svg?v=v1.3.1" type="image/svg+xml">
-<link rel="icon" href="assets/icon-32.png?v=v1.3.1" sizes="32x32" type="image/png">
-<link rel="apple-touch-icon" href="assets/icon-180.png?v=v1.3.1">
-<link rel="manifest" href="site.webmanifest?v=v1.3.1">
-<link rel="stylesheet" href="app-new.css?v=v1.3.1">
+<meta name="batapp-version" content="v1.4.0">
+<link rel="icon" href="assets/icon.svg?v=v1.4.0" type="image/svg+xml">
+<link rel="icon" href="assets/icon-32.png?v=v1.4.0" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/icon-180.png?v=v1.4.0">
+<link rel="manifest" href="site.webmanifest?v=v1.4.0">
+<link rel="stylesheet" href="app-new.css?v=v1.4.0">
 <script>
 /* No service worker: ask the deployed manifest for its version with a
    no-store request. When it differs from this document, load the current
@@ -21,7 +21,7 @@
    installed PWA without clearing its cache by hand. */
 (function () {
   "use strict";
-  var build = "v1.3.1";
+  var build = "v1.4.0";
   if (location.protocol !== "http:" && location.protocol !== "https:") return;
   var guard = "batapp-version-" + build;
   function check() {
@@ -56,17 +56,19 @@
           aria-label="App information" aria-expanded="false" aria-controls="app-info-panel">
     <span></span><span></span><span></span>
   </button>
-  <div id="app-info-panel" class="app-info-panel" role="dialog" aria-label="App information" hidden>
+  <div id="app-info-panel" class="app-info-panel" role="dialog" aria-label="App information"
+       tabindex="-1" hidden>
     <p class="app-info-title">Batá</p>
     <div id="app-info-rows" class="app-info-rows"></div>
   </div>
   <aside id="library-pane" class="library-pane" aria-label="Rhythm library"></aside>
   <main id="main-pane" class="main-pane"></main>
+  <p id="route-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
 </div>
-<script src="js/lessons.js?v=v1.3.1"></script>
-<script src="js/offline.js?v=v1.3.1"></script>
-<script src="js/wav.js?v=v1.3.1"></script>
-<script src="js/player.js?v=v1.3.1"></script>
-<script src="js/newapp.js?v=v1.3.1"></script>
+<script src="js/lessons.js?v=v1.4.0"></script>
+<script src="js/offline.js?v=v1.4.0"></script>
+<script src="js/wav.js?v=v1.4.0"></script>
+<script src="js/player.js?v=v1.4.0"></script>
+<script src="js/newapp.js?v=v1.4.0"></script>
 </body>
 </html>

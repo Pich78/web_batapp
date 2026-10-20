@@ -139,9 +139,33 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       Chromium/representative Firefox+WebKit); summary in
       `docs/verification/new-ui-sweep-summary.json` and
       `docs/verification/cross-browser-summary.json`.
+- [x] **Service-worker lifecycle tests** (`tests/verify-sw.mjs`,
+      `npm run verify-sw`): shell-cache contents and scope, root/index offline
+      starts, `index_old.html` isolation, new shell install with old-cache
+      deletion and Ogg retention, Clear offline audio (audio removed, shell
+      kept), an evicted stem offline, failed install recovery, and read paths
+      that never recreate a cleared cache. Summary in
+      `docs/verification/service-worker-summary.json`; Chromium and Firefox
+      both pass 22/22.
+- [x] **Short desktop and tablet layout**: the narrow-desktop grid top-aligns
+      items so a tall mixer cannot centre into the speed controls; a compact
+      short-desktop rule fits five mixer rows at 900×600 and above; tablets at
+      600–899 px use a 640 px one-pane shell. `tests/verify-new.mjs` covers
+      900×600, 1024×600, 1200×600, 1440×600 and 768×1024 with no page, pane or
+      player scroll.
+- [x] **Accessibility pass**: modern page `lang="en"`; app-info focus moves into
+      the dialog and Escape restores its button; route changes focus the player
+      heading, active library row or invoked Prev/Next control; a hidden route
+      status and `.player-status` are polite live regions; ARIA tab keyboard
+      support; light-theme text contrast at least 4.5:1; 44 px hamburger and at
+      least 24 px controls in every mode. Covered by `tests/verify-new.mjs`.
 - [ ] **Real-device pass**: follow `docs/verification/device-pass.md` on
       iPhone Safari (iOS 18.4+), Android Chrome and Windows Chrome/Edge. The
       automated suite cannot establish real-device audio behaviour.
+- [ ] **Transport state-machine refactor**: replace the 250 ms polling and
+      reconciliation with one explicit idle/loading/ready/starting/playing/
+      paused/stopped/error lifecycle and a cancellable media generation. Defer
+      until after the real-device pass.
 - [x] **Video area**: removed with the rest of the credit/book content; the port
       ships the practice player only.
 - [ ] **Self-test page** (`selftest.html`): every lesson resolves its stems and
@@ -199,6 +223,9 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       restart to zero, volume-only changes, Back unloading and fresh reloads.
       Summary in `docs/verification/new-ui-sweep-summary.json`; cross-browser
       record in `docs/verification/cross-browser-summary.json`.
+- [x] Service-worker lifecycle suite (`tests/verify-sw.mjs`): Chromium and
+      Firefox 22/22; summary in
+      `docs/verification/service-worker-summary.json`.
 - [ ] Re-run `tools/unity_schema.py` and `tools/export_audio.py --verify` in CI
       fashion and store the summaries under `docs/verification/`.
 - [ ] Compare the port's rendered screens against the shipped scene data

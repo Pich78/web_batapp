@@ -298,7 +298,8 @@ legacy `js/mixer.js` transport.
   - portrait phones: fixed app shell, one pane at a time; the player fits with
     no page or internal scroll (short screens use a compact single-line mixer),
     while the library list is the only scroll container; Stop sits beside Next
-    inside the transport;
+    inside the transport. Tablets at 600–899 px keep the one-pane flow but use
+    a 640 px shell instead of the 440 px phone column;
   - landscape phones (`orientation: landscape` and `max-height: 559px`):
     full-bleed two-column player that fits the viewport without page or player
     scrolling (the transport, speed controls and Stop-beside-Next stay visible),
@@ -306,7 +307,10 @@ legacy `js/mixer.js` transport.
     fit;
   - desktop (`min-width: 900px` and `min-height: 600px`): full-bleed persistent
     library sidebar + player/empty main pane, with a narrower stacked player
-    below 1200 px.
+    below 1200 px. At the 600 px minimum height the header, transport, speed
+    controls and five mixer rows use the compact short-desktop rule and fit
+    without page, pane or player scrolling; stacked grid items are top-aligned
+    so a tall mixer cannot centre upward into the speed controls.
 - Home-screen/PWA update check: the page reads `site.webmanifest`
   (`cache: "no-store"`), compares `version` with its own
   `<meta name="batapp-version">`, and reloads once with `?v=` when a newer
@@ -316,7 +320,17 @@ legacy `js/mixer.js` transport.
   retained across app releases.
 - `prefers-color-scheme` selects the theme; there is no toggle and no external
   resource (inline SVG icons, generated two-colour three-drum icon set, system
-  font stack).
+  font stack). The light theme's muted and accent tokens keep at least 4.5:1
+  text contrast, and every interactive control stays at least 24×24 CSS px
+  (the hamburger is 44×44).
+- The modern page declares `lang="en"` (the legacy scene page keeps `it` for
+  its Italian scene labels). The app-info button opens a non-modal dialog: the
+  panel takes focus, Escape/toggle close restores the button, and outside clicks
+  do not steal focus back. Route changes move focus to the player heading, the
+  active library row or the invoked Prev/Next control, and a visually hidden
+  route-status live region announces the new document title. `.player-status`
+  is a polite status live region. The library tabs implement the ARIA tab
+  pattern with roving tabindex and Arrow/Home/End keys.
 - iOS/Safari 18.4+ is required for Ogg Vorbis playback; older iOS cannot decode
   the lesson audio.
 - Playback never autoplays on navigation; the user's first Play tap starts all
@@ -337,6 +351,15 @@ legacy `js/mixer.js` transport.
 - `tests/lesson-sweep.mjs` walks all 61 lesson routes in a real browser and
   checks stems/durations, the five sliders, the title, canvas bounds and
   console/network errors; record its summary under `docs/verification/`.
+- `tests/verify-sw.mjs` runs the service-worker lifecycle against a local
+  static server with a mutable release version and failure injection:
+  shell-cache contents and scope, root/index offline starts, `index_old.html`
+  isolation, new shell install with old-cache deletion and Ogg retention,
+  Clear offline audio (audio removed, shell kept), an evicted stem while
+  offline, failed install recovery, and the read paths never recreating a
+  cleared cache. `npm run verify-sw` writes
+  `docs/verification/service-worker-summary.json` for Chromium and a per-engine
+  report under `.work/verification/`.
 - `tests/verify-new.mjs` covers the modern layout (`index.html`) over
   `file://` and over HTTP: fixed portrait and landscape shells at five sizes
   each, desktop, load gate, seek, titles, mixer order, mute semantics,

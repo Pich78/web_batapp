@@ -49,7 +49,10 @@
     loadToken: 0,
     rate: 1,
     wakeLock: "off",
-    reconcile: null
+    reconcile: null,
+    routeIntent: null,
+    routeStarted: false,
+    pendingFocus: null
   };
 
   var wakeLock = null;
@@ -253,6 +256,7 @@
   function teardown() {
     state.loadToken += 1;
     state.reconcile = null;
+    state.pendingFocus = null;
     releaseWakeLock();
     if (state.timer) clearInterval(state.timer);
     state.timer = 0;
@@ -279,18 +283,40 @@
 
       var tabs = element("div", "tabs");
       tabs.setAttribute("role", "tablist");
-      Object.keys(VOLUMES).forEach(function (id) {
+      tabs.setAttribute("aria-label", "Volumes");
+      var volumeIds = Object.keys(VOLUMES);
+      volumeIds.forEach(function (id) {
         var button = element("button", "tab" + (id === volume ? " active" : ""), VOLUMES[id].tab);
+        button.id = "tab-" + id;
+        button.tabIndex = id === volume ? 0 : -1;
         button.setAttribute("role", "tab");
         button.setAttribute("aria-selected", id === volume ? "true" : "false");
+        button.setAttribute("aria-controls", "library-list");
         button.addEventListener("click", function () {
+          if (id === state.volume) return;
+          state.routeIntent = "tab";
           location.hash = hashForLibrary(id);
+        });
+        button.addEventListener("keydown", function (event) {
+          var index = volumeIds.indexOf(id);
+          var nextIndex = index;
+          if (event.key === "ArrowRight") nextIndex = (index + 1) % volumeIds.length;
+          else if (event.key === "ArrowLeft") nextIndex = (index - 1 + volumeIds.length) % volumeIds.length;
+          else if (event.key === "Home") nextIndex = 0;
+          else if (event.key === "End") nextIndex = volumeIds.length - 1;
+          else return;
+          event.preventDefault();
+          var nextId = volumeIds[nextIndex];
+          if (nextId === state.volume) return;
+          state.routeIntent = "tab";
+          location.hash = hashForLibrary(nextId);
         });
         tabs.appendChild(button);
       });
       view.appendChild(tabs);
 
       var list = element("div", "list");
+      list.id = "library-list";
       lessonsFor(volume).forEach(function (lesson) {
         var row = element("button", "row",
           '<span class="num">' + lesson.number + '</span>' +
@@ -299,6 +325,7 @@
         row.querySelector(".name").textContent = lesson.title;
         row.setAttribute("aria-label", VOLUMES[volume].kicker + ", " + lesson.number + " " + lesson.title);
         row.addEventListener("click", function () {
+          state.routeIntent = "open";
           location.hash = "#/lesson/" + lesson.slug;
         });
         list.appendChild(row);
@@ -335,6 +362,7 @@
     var back = element("button", "icon-btn", ICONS.back);
     back.setAttribute("aria-label", "Back to the rhythm list");
     back.addEventListener("click", function () {
+      state.routeIntent = "back";
       location.hash = hashForLibrary(lesson.volume);
     });
     top.appendChild(back);
@@ -396,6 +424,7 @@
       '<p class="load-status">' + message + "</p>" +
       (error && error.message ? '<p class="load-detail"></p>' : "") +
       '<button class="retry" type="button">Retry</button>');
+    box.setAttribute("role", "alert");
     if (error && error.message) box.querySelector(".load-detail").textContent = error.message;
     box.querySelector(".retry").addEventListener("click", function () {
       renderMain(lesson);
@@ -466,6 +495,9 @@
 
     var status = element("p", "player-status");
     status.hidden = true;
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("aria-atomic", "true");
     player.appendChild(status);
 
     var body = element("div", "player-body");
@@ -473,9 +505,11 @@
 
     var transport = element("div", "transport");
     var prev = element("button", "ghost", ICONS.prev);
+    prev.dataset.step = "prev";
     prev.setAttribute("aria-label", "Previous rhythm");
     prev.disabled = index <= 0;
     var next = element("button", "ghost", ICONS.next);
+    next.dataset.step = "next";
     next.setAttribute("aria-label", "Next rhythm");
     next.disabled = index >= pool.length - 1;
 
@@ -660,10 +694,16 @@
     });
 
     prev.addEventListener("click", function () {
-      if (index > 0) location.hash = "#/lesson/" + pool[index - 1].slug;
+      if (index > 0) {
+        state.routeIntent = "prev";
+        location.hash = "#/lesson/" + pool[index - 1].slug;
+      }
     });
     next.addEventListener("click", function () {
-      if (index < pool.length - 1) location.hash = "#/lesson/" + pool[index + 1].slug;
+      if (index < pool.length - 1) {
+        state.routeIntent = "next";
+        location.hash = "#/lesson/" + pool[index + 1].slug;
+      }
     });
 
     seekInput.addEventListener("input", function () {
@@ -742,6 +782,16 @@
       state.lesson = lesson;
       mainPane.innerHTML = "";
       mainPane.appendChild(playerView(lesson, audio));
+      if (state.pendingFocus === "heading") {
+        state.pendingFocus = null;
+        var heading = document.querySelector(".player-title h2");
+        if (heading) heading.setAttribute("tabindex", "-1");
+        focusTarget(heading);
+      } else if (state.pendingFocus) {
+        var pending = state.pendingFocus;
+        state.pendingFocus = null;
+        focusTarget(document.querySelector('.transport .ghost[data-step="' + pending + '"]'));
+      }
     }).catch(function (error) {
       if (token !== state.loadToken || (error && error.name === "AbortError")) return;
       audio.dispose();
@@ -749,8 +799,10 @@
       state.loading = false;
       state.lesson = lesson;
       state.error = (error && error.message) || "Load failed";
+      state.pendingFocus = null;
       mainPane.innerHTML = "";
       mainPane.appendChild(errorView(lesson, error));
+      focusTarget(document.querySelector(".loading.error .retry"));
     });
   }
 
@@ -776,6 +828,7 @@
       '<div class="dial"><div class="play error-mark">!</div></div>' +
       '<p class="load-status">Something went wrong.</p>' +
       '<button class="retry" type="button">Back to library</button>');
+    box.setAttribute("role", "alert");
     box.querySelector(".retry").addEventListener("click", function () {
       location.hash = "#/";
     });
@@ -783,7 +836,62 @@
     mainPane.appendChild(view);
   }
 
+  function focusTarget(node) {
+    if (!node) return null;
+    try {
+      node.focus({ preventScroll: true });
+    } catch (error) {
+      node.focus();
+    }
+    return node;
+  }
+
+  function focusAfterRoute(previous, lesson) {
+    var routeStatus = document.getElementById("route-status");
+    var intent = state.routeIntent;
+    state.routeIntent = null;
+    if (!state.routeStarted) {
+      state.routeStarted = true;
+      if (routeStatus) routeStatus.textContent = document.title;
+      return;
+    }
+    if (routeStatus) routeStatus.textContent = document.title;
+
+    if (lesson) {
+      if (intent === "next" || intent === "prev") {
+        var stepButton = document.querySelector('.transport .ghost[data-step="' + intent + '"]');
+        if (stepButton) focusTarget(stepButton);
+        else state.pendingFocus = intent;
+      } else {
+        var heading = document.querySelector(".player-title h2");
+        if (heading) heading.setAttribute("tabindex", "-1");
+        focusTarget(heading);
+        // The loading view is replaced by the ready player; keep focus on the
+        // final heading instead of letting it fall back to <body>.
+        state.pendingFocus = "heading";
+      }
+      return;
+    }
+    if (intent === "tab") {
+      focusTarget(document.querySelector(".tab.active"));
+      return;
+    }
+    if (previous.lesson) {
+      var rows = document.querySelectorAll(".row");
+      for (var index = 0; index < rows.length; index += 1) {
+        if (rows[index].dataset.slug === previous.lesson.slug) {
+          focusTarget(rows[index]);
+          return;
+        }
+      }
+    }
+    var brand = document.querySelector(".brand h1");
+    if (brand) brand.setAttribute("tabindex", "-1");
+    focusTarget(brand);
+  }
+
   function routeInner() {
+    var previous = { lesson: state.lesson, volume: state.volume };
     teardown();
     var hash = location.hash.replace(/^#\/?/, "");
     var volume = state.volume;
@@ -818,6 +926,7 @@
     setDocumentTitle(lesson, volume, explicitVolume);
     renderLibrary(volume, lesson ? lesson.slug : null);
     renderMain(lesson);
+    focusAfterRoute(previous, lesson);
   }
 
   function route() {
@@ -833,12 +942,16 @@
     var pool = lessonsFor(state.lesson.volume);
     var index = pool.indexOf(state.lesson);
     var target = pool[index + delta];
-    if (target) location.hash = "#/lesson/" + target.slug;
+    if (target) {
+      state.routeIntent = delta > 0 ? "next" : "prev";
+      location.hash = "#/lesson/" + target.slug;
+    }
   }
 
   document.addEventListener("keydown", function (event) {
     if (infoPanel && !infoPanel.hidden) return;
     if (event.key === "Escape" && state.view === "player") {
+      state.routeIntent = "back";
       location.hash = hashForLibrary(state.volume);
       return;
     }
@@ -872,6 +985,7 @@
   var manifestState = "idle";
   var manifestVersion = null;
   var infoRenderToken = 0;
+  var infoReturnFocus = null;
 
   function loadedBuild() {
     var meta = document.querySelector('meta[name="batapp-version"]');
@@ -938,6 +1052,7 @@
           clear.addEventListener("click", function () {
             window.BatappOffline.clearAudio().then(function () {
               renderInfo();
+              focusTarget(infoPanel);
             });
           });
           action.appendChild(text);
@@ -995,31 +1110,38 @@
 
   function openInfo() {
     if (!infoPanel || !infoButton) return;
+    infoReturnFocus = document.activeElement;
     infoPanel.hidden = false;
     infoButton.setAttribute("aria-expanded", "true");
     renderInfo();
     checkManifest();
+    focusTarget(infoPanel);
   }
 
-  function closeInfo() {
+  function closeInfo(restoreFocus) {
     if (!infoPanel || !infoButton) return;
     infoPanel.hidden = true;
     infoButton.setAttribute("aria-expanded", "false");
+    var target = infoReturnFocus;
+    infoReturnFocus = null;
+    if (restoreFocus) focusTarget(target);
   }
 
   if (infoButton && infoPanel && infoRows) {
     infoButton.addEventListener("click", function (event) {
       event.stopPropagation();
       if (infoPanel.hidden) openInfo();
-      else closeInfo();
+      else closeInfo(true);
     });
     document.addEventListener("click", function (event) {
       if (infoPanel.hidden) return;
       if (infoPanel.contains(event.target) || infoButton.contains(event.target)) return;
-      closeInfo();
+      closeInfo(false);
     });
     document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape" && !infoPanel.hidden) closeInfo();
+      if (event.key !== "Escape" || infoPanel.hidden) return;
+      event.preventDefault();
+      closeInfo(true);
     });
   }
 

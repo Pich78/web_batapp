@@ -112,6 +112,10 @@ deterministic regression gate.
 - Open an unvisited rhythm offline: it must fail with “This rhythm is not
   available offline.”
 - App-info must show cached-rhythm count, storage use and Clear offline audio.
+- The deterministic lifecycle checks live in `node verify-sw.mjs` (or
+  `npm run verify-sw`): shell replacement across releases, old-cache deletion,
+  Ogg retention, clearing audio, an evicted stem offline, failed install
+  recovery, and `index_old.html` isolation.
 
 ### Error and edge cases
 

@@ -49,7 +49,7 @@ behind the reconstruction.
   requests a screen wake lock so the phone does not dim or sleep where the
   browser supports it.
 - **App info** — the hamburger button in the top-left shows one **Version** row
-  equal to the repository tag (for example `v1.3.1`), the current lesson,
+  equal to the repository tag (for example `v1.4.0`), the current lesson,
   whether audio is WAV or Ogg, whether the screen wake lock is active, off,
   blocked or unsupported, and the offline cache state (cached rhythms, storage
   use and a Clear offline audio action). If the manifest is newer it highlights
@@ -59,9 +59,10 @@ behind the reconstruction.
   rhythm is downloaded lazily the first time it is opened; its verified Ogg
   source is stored in Cache Storage, while WAV is rebuilt in RAM on every open
   and never persisted. Previously opened rhythms work offline; unopened ones
-  report that they are not available offline. There is no bulk precache. On
-  `file://`, the local folder itself is the offline copy and no service worker
-  is registered.
+  report that they are not available offline. There is no bulk precache. Read
+  paths never create the audio cache, so Clear offline audio cannot be undone
+  by a status refresh. On `file://`, the local folder itself is the offline copy
+  and no service worker is registered.
 - **Home-screen / PWA updates** — the page compares its own version with
   `site.webmanifest` through a `no-store` request and, when a newer version is
   deployed, reloads once with a versioned URL. The manifest uses standalone
@@ -95,6 +96,7 @@ BROWSER=firefox node verify-new.mjs
 BROWSER=webkit node verify-new.mjs   # needs: sudo npx playwright install-deps webkit
 npm run verify-webkit:docker    # no sudo; official Playwright image with WebKit
 node verify-browsers.mjs        # WebKit automatically falls back to Docker
+node verify-sw.mjs              # service-worker lifecycle and offline cache
 node lesson-sweep.mjs           # all 61 lessons on the shipped-layout page
 npm run mcp:check               # validate the repo Playwright MCP wiring
 npm run mcp:smoke               # opt-in MCP handshake + file:// navigation
@@ -116,7 +118,7 @@ tag, and the internal `?v=` cache-busting strings use it so a PWA cannot mix old
 and new files:
 
 ```bash
-python3 tools/set_version.py set v1.3.1   # rewrite all shipped version values
+python3 tools/set_version.py set v1.4.0   # rewrite all shipped version values
 python3 tools/set_version.py check        # after tagging HEAD: must match
 python3 tools/set_version.py show
 ```

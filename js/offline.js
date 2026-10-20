@@ -53,6 +53,17 @@
     return global.caches.open(AUDIO_CACHE);
   }
 
+  // Reading must not recreate a cache that Clear offline audio just deleted.
+  // `caches.open()` creates the cache in some browsers, so read paths check
+  // for it first and only open an existing one.
+  function openExisting() {
+    return global.caches.keys().then(function (names) {
+      return names.indexOf(AUDIO_CACHE) >= 0 ? openCache() : null;
+    }).catch(function () {
+      return null;
+    });
+  }
+
   function settle(promise, fallback, milliseconds) {
     return Promise.race([
       Promise.resolve(promise).catch(function () { return fallback; }),
@@ -64,8 +75,8 @@
 
   function get(url) {
     if (!cacheSupported()) return Promise.resolve(null);
-    return openCache().then(function (cache) {
-      return cache.match(absolute(url));
+    return openExisting().then(function (cache) {
+      return cache ? cache.match(absolute(url)) : null;
     }).then(function (response) {
       return response ? response.arrayBuffer() : null;
     }).catch(function () {
@@ -93,8 +104,8 @@
 
   function remove(url) {
     if (!cacheSupported()) return Promise.resolve(false);
-    return openCache().then(function (cache) {
-      return cache.delete(absolute(url));
+    return openExisting().then(function (cache) {
+      return cache ? cache.delete(absolute(url)) : false;
     }).catch(function () {
       return false;
     });
@@ -129,11 +140,22 @@
         persisted: false
       });
     }
-    return settle(openCache().then(function (cache) {
-      return cache.keys();
-    }), [], 3000).then(function (keys) {
+    // Cache keys and storage estimates are independent; run them together so
+    // the app-info panel is not held up by a slow storage implementation.
+    var keysPromise = settle(openExisting().then(function (cache) {
+      return cache ? cache.keys() : [];
+    }), [], 2000);
+    var estimate = global.navigator && global.navigator.storage &&
+      typeof global.navigator.storage.estimate === "function"
+      ? settle(global.navigator.storage.estimate(), null, 1000)
+      : Promise.resolve(null);
+    var persisted = global.navigator && global.navigator.storage &&
+      typeof global.navigator.storage.persisted === "function"
+      ? settle(global.navigator.storage.persisted(), false, 1000)
+      : Promise.resolve(false);
+    return Promise.all([keysPromise, estimate, persisted]).then(function (values) {
       var urls = {};
-      keys.forEach(function (key) { urls[key.url] = true; });
+      values[0].forEach(function (key) { urls[key.url] = true; });
       var cachedLessons = 0;
       var cachedStems = 0;
       lessons.forEach(function (lesson) {
@@ -145,25 +167,15 @@
         });
         if (all) cachedLessons += 1;
       });
-      var estimate = global.navigator && global.navigator.storage &&
-        typeof global.navigator.storage.estimate === "function"
-        ? settle(global.navigator.storage.estimate(), null, 1500)
-        : Promise.resolve(null);
-      var persisted = global.navigator && global.navigator.storage &&
-        typeof global.navigator.storage.persisted === "function"
-        ? settle(global.navigator.storage.persisted(), false, 1500)
-        : Promise.resolve(false);
-      return Promise.all([estimate, persisted]).then(function (values) {
-        return {
-          supported: true,
-          online: !!(global.navigator && global.navigator.onLine !== false),
-          cachedLessons: cachedLessons,
-          cachedStems: cachedStems,
-          totalLessons: lessons.length,
-          usage: values[0] && typeof values[0].usage === "number" ? values[0].usage : null,
-          persisted: !!values[1]
-        };
-      });
+      return {
+        supported: true,
+        online: !!(global.navigator && global.navigator.onLine !== false),
+        cachedLessons: cachedLessons,
+        cachedStems: cachedStems,
+        totalLessons: lessons.length,
+        usage: values[1] && typeof values[1].usage === "number" ? values[1].usage : null,
+        persisted: !!values[2]
+      };
     }).catch(function () {
       return {
         supported: true,

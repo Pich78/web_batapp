@@ -120,6 +120,10 @@ check("modern assets are cache-versioned",
 check("legacy page keeps the full data.js and old mixer",
   legacyHtml.includes("js/data.js") && legacyHtml.includes("js/mixer.js") &&
   !legacyHtml.includes("js/lessons.js"));
+check("modern page declares its English UI language", modernHtml.includes('<html lang="en">'),
+  (modernHtml.match(/<html[^>]*>/) || [])[0]);
+check("legacy page keeps its Italian scene language", legacyHtml.includes('<html lang="it">'),
+  (legacyHtml.match(/<html[^>]*>/) || [])[0]);
 
 const versionMatch = modernHtml.match(/<meta name="batapp-version" content="([^"]+)">/);
 const appVersion = versionMatch ? versionMatch[1] : "";
@@ -221,6 +225,26 @@ async function ready(scope = page) {
     { timeout: 25000 }
   );
 }
+function touchTargetReport(scope) {
+  return scope.evaluate(() => {
+    const controls = Array.from(document.querySelectorAll('button:not(:disabled), input[type="range"]:not(:disabled)'));
+    const small = [];
+    controls.forEach((control) => {
+      const rect = control.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      if (getComputedStyle(control).visibility === "hidden") return;
+      if (rect.width < 24 || rect.height < 24) {
+        small.push({
+          name: control.getAttribute("aria-label") || control.textContent.trim().slice(0, 30) || control.type,
+          width: +rect.width.toFixed(1),
+          height: +rect.height.toFixed(1)
+        });
+      }
+    });
+    return { count: controls.length, small };
+  });
+}
+
 async function stepSpeed(scope, delta, times = 1) {
   await scope.evaluate(({ delta, times }) => {
     const button = document.querySelector('.speed-step[data-delta="' + delta + '"]');
@@ -340,10 +364,12 @@ const infoPanel = await page.evaluate(() => ({
   hidden: document.getElementById("app-info-panel").hidden,
   text: document.getElementById("app-info-panel").innerText,
   expanded: document.getElementById("app-info-button").getAttribute("aria-expanded"),
+  activeId: document.activeElement ? document.activeElement.id : null,
   build: window.__batapp_new.state().build
 }));
 check("app menu shows exactly one version and no script-version rows",
   !infoPanel.hidden && infoPanel.expanded === "true" &&
+  infoPanel.activeId === "app-info-panel" &&
   infoPanel.build === appVersion &&
   infoPanel.text.split(appVersion).length - 1 === 1 &&
   infoPanel.text.indexOf("Version") >= 0 &&
@@ -356,8 +382,15 @@ check("app menu shows exactly one version and no script-version rows",
   JSON.stringify(infoPanel));
 await page.keyboard.press("Escape");
 await page.waitForTimeout(100);
-check("Escape closes the app menu",
-  await page.evaluate(() => document.getElementById("app-info-panel").hidden));
+const infoClosed = await page.evaluate(() => ({
+  hidden: document.getElementById("app-info-panel").hidden,
+  expanded: document.getElementById("app-info-button").getAttribute("aria-expanded"),
+  activeId: document.activeElement ? document.activeElement.id : null
+}));
+check("Escape closes the app menu and restores focus to its button",
+  infoClosed.hidden && infoClosed.expanded === "false" &&
+  infoClosed.activeId === "app-info-button",
+  JSON.stringify(infoClosed));
 
 await page.locator(".tab").nth(1).click();
 await page.waitForTimeout(300);
@@ -370,6 +403,117 @@ check("Oru Seco follows natural lesson order 1, 2, … 20A, 20B, 21, 22",
   oruOrder.join(",") === "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20A,20B,21,22",
   oruOrder.join(","));
 await shot("02-library-oru-seco");
+
+const tabA11y = await page.evaluate(() => ({
+  listId: document.querySelector(".list").id,
+  tabs: Array.from(document.querySelectorAll(".tab"), (tab) => ({
+    id: tab.id,
+    role: tab.getAttribute("role"),
+    selected: tab.getAttribute("aria-selected"),
+    tabIndex: tab.tabIndex,
+    controls: tab.getAttribute("aria-controls"),
+    target: !!document.getElementById(tab.getAttribute("aria-controls"))
+  }))
+}));
+check("tabs expose the ARIA tab pattern and roving tabindex",
+  tabA11y.listId === "library-list" &&
+  tabA11y.tabs.length === 2 &&
+  tabA11y.tabs.every((tab) => tab.role === "tab" && tab.controls === "library-list" && tab.target) &&
+  tabA11y.tabs.filter((tab) => tab.selected === "true").length === 1 &&
+  tabA11y.tabs.filter((tab) => tab.tabIndex === 0).length === 1 &&
+  tabA11y.tabs.filter((tab) => tab.tabIndex === -1).length === 1,
+  JSON.stringify(tabA11y));
+
+// Route focus, tab keyboard and player live status.
+const focusPage = await newPage({ viewport });
+await focusPage.bringToFront();
+await focusPage.goto(pageUrl + "#/");
+await focusPage.waitForTimeout(500);
+await focusPage.locator("#tab-volume-1").focus();
+await focusPage.keyboard.press("ArrowRight");
+await focusPage.waitForTimeout(500);
+const tabArrow = await focusPage.evaluate(() => ({
+  activeId: document.activeElement ? document.activeElement.id : null,
+  title: document.title,
+  volume: window.__batapp_new.state().volume
+}));
+check("ArrowRight switches tabs and focuses the active tab",
+  tabArrow.activeId === "tab-volume-2" && tabArrow.title === "Oru Seco · Batá" &&
+  tabArrow.volume === "volume-2",
+  JSON.stringify(tabArrow));
+await focusPage.keyboard.press("ArrowLeft");
+await focusPage.waitForTimeout(500);
+const tabArrowBack = await focusPage.evaluate(() => ({
+  activeId: document.activeElement ? document.activeElement.id : null,
+  title: document.title,
+  volume: window.__batapp_new.state().volume
+}));
+check("ArrowLeft switches back and keeps focus on the active tab",
+  tabArrowBack.activeId === "tab-volume-1" && tabArrowBack.title === "Toques · Batá" &&
+  tabArrowBack.volume === "volume-1",
+  JSON.stringify(tabArrowBack));
+
+await focusPage.locator(".row").first().focus();
+await focusPage.keyboard.press("Enter");
+await ready(focusPage);
+const openedFocus = await focusPage.evaluate(() => ({
+  tag: document.activeElement ? document.activeElement.tagName : null,
+  text: document.activeElement ? document.activeElement.textContent : null,
+  routeStatus: document.getElementById("route-status").textContent,
+  documentTitle: document.title,
+  statusRole: (document.querySelector(".player-status") || {}).getAttribute
+    ? document.querySelector(".player-status").getAttribute("role") : null,
+  statusLive: (document.querySelector(".player-status") || {}).getAttribute
+    ? document.querySelector(".player-status").getAttribute("aria-live") : null,
+  statusAtomic: (document.querySelector(".player-status") || {}).getAttribute
+    ? document.querySelector(".player-status").getAttribute("aria-atomic") : null
+}));
+check("opening a lesson focuses its heading and announces the route",
+  openedFocus.tag === "H2" && openedFocus.text === "Alubanche" &&
+  openedFocus.routeStatus === openedFocus.documentTitle &&
+  openedFocus.routeStatus === "Alubanche · Toque 01 · Batá",
+  JSON.stringify(openedFocus));
+check("player status is a polite live region",
+  openedFocus.statusRole === "status" && openedFocus.statusLive === "polite" &&
+  openedFocus.statusAtomic === "true",
+  JSON.stringify(openedFocus));
+
+await focusPage.keyboard.press("Escape");
+await focusPage.waitForTimeout(500);
+const backFocus = await focusPage.evaluate(() => ({
+  view: window.__batapp_new.state().view,
+  slug: document.activeElement && document.activeElement.dataset
+    ? document.activeElement.dataset.slug : null,
+  routeStatus: document.getElementById("route-status").textContent
+}));
+check("Escape returns focus to the active lesson row",
+  backFocus.view === "library" && backFocus.slug === "volume-1/01-alubanche",
+  JSON.stringify(backFocus));
+
+await focusPage.locator(".row[data-slug='volume-1/01-alubanche']").click();
+await ready(focusPage);
+await focusPage.locator('.transport .ghost[data-step="next"]').focus();
+await focusPage.keyboard.press("Enter");
+await focusPage.waitForFunction(
+  () => window.__batapp_new.state().lesson === "volume-1/02-tani-tani-cho-bi",
+  null,
+  { timeout: 10000 }
+);
+await ready(focusPage);
+await focusPage.waitForFunction(
+  () => document.activeElement && document.activeElement.dataset.step === "next",
+  null,
+  { timeout: 5000 }
+).catch(() => {});
+const nextFocus = await focusPage.evaluate(() => ({
+  step: document.activeElement && document.activeElement.dataset
+    ? document.activeElement.dataset.step : null,
+  lesson: window.__batapp_new.state().lesson
+}));
+check("Next keeps focus on the Next control after the lesson changes",
+  nextFocus.step === "next" && nextFocus.lesson === "volume-1/02-tani-tani-cho-bi",
+  JSON.stringify(nextFocus));
+await focusPage.close();
 
 // --- player ----------------------------------------------------------------
 await go("#/lesson/volume-1/01-alubanche", 600);
@@ -981,7 +1125,10 @@ for (const [width, height] of portraitSizes) {
   const snap = await page.evaluate(() => {
     const box = (node) => {
       const rect = node.getBoundingClientRect();
-      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+      return {
+        left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom,
+        width: rect.width, height: rect.height
+      };
     };
     const main = document.getElementById("main-pane");
     const playerView = document.querySelector(".player-view");
@@ -1031,6 +1178,13 @@ for (const [width, height] of portraitSizes) {
     snap.menu.left >= 0 && snap.menu.top >= 0 &&
     snap.menu.right <= 52 && snap.menu.bottom <= 52,
     JSON.stringify(snap.menu));
+  check(label + " portrait app menu is a 44px touch target",
+    snap.menu.width >= 44 && snap.menu.height >= 44,
+    JSON.stringify(snap.menu));
+  const portraitTargets = await touchTargetReport(page);
+  check(label + " portrait controls meet the 24px touch floor",
+    portraitTargets.count > 0 && portraitTargets.small.length === 0,
+    JSON.stringify(portraitTargets));
   if (label === "320x568") {
     await page.screenshot({ path: path.join(shots, "07-portrait-small.png") });
   }
@@ -1080,6 +1234,7 @@ function landscapeSnapshot(page) {
       beforeMixer: !!(speed.compareDocumentPosition(mixer) & Node.DOCUMENT_POSITION_FOLLOWING),
       rows: Array.from(document.querySelectorAll(".stem")).map(box),
       app: box(document.getElementById("app")),
+      menu: box(document.getElementById("app-info-button")),
       viewport: [window.innerWidth, window.innerHeight],
       scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
       mainScroll: [main.scrollWidth, main.scrollHeight, main.clientWidth, main.clientHeight],
@@ -1123,6 +1278,13 @@ for (const [width, height] of landscapeSizes) {
     snap.stop.top >= 0 && snap.stop.bottom <= snap.viewport[1] &&
     snap.hero.right <= snap.mixer.left + 2,
     JSON.stringify({ transport: snap.transport, next: snap.next, stop: snap.stop, hero: snap.hero, mixer: snap.mixer }));
+  check(label + " landscape app menu is a 44px touch target",
+    snap.menu.width >= 44 && snap.menu.height >= 44,
+    JSON.stringify(snap.menu));
+  const landscapeTargets = await touchTargetReport(page);
+  check(label + " landscape controls meet the 24px touch floor",
+    landscapeTargets.count > 0 && landscapeTargets.small.length === 0,
+    JSON.stringify(landscapeTargets));
   if (label === "844x390") {
     await page.locator("button.play").click();
     await page.waitForTimeout(2200);
@@ -1257,6 +1419,63 @@ check("desktop next updates the lesson and the active row",
   JSON.stringify(desktopNext));
 await desktop.close();
 
+// Short desktop: the 600px minimum height must fit the whole five-row player.
+for (const [width, height] of [[900, 600], [1024, 600], [1200, 600], [1440, 600]]) {
+  const shortDesktop = await newPage({ viewport: { width, height } });
+  await shortDesktop.bringToFront();
+  await shortDesktop.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
+  await ready(shortDesktop);
+  await shortDesktop.waitForTimeout(400);
+  const short = await shortDesktop.evaluate(() => {
+    const box = (element) => {
+      const rect = element.getBoundingClientRect();
+      return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
+    };
+    const main = document.querySelector(".main-pane");
+    const player = document.querySelector(".player-view");
+    return {
+      viewport: [window.innerWidth, window.innerHeight],
+      documentScroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+      main: { box: box(main), scroll: [main.scrollHeight, main.clientHeight] },
+      player: { scroll: [player.scrollHeight, player.clientHeight] },
+      speed: box(document.querySelector(".speed-controls")),
+      seek: box(document.querySelector(".seek")),
+      stop: box(document.querySelector(".stop")),
+      mixer: box(document.querySelector(".mixer")),
+      rows: Array.from(document.querySelectorAll(".stem"), (row) => box(row)),
+      libraryWidth: document.getElementById("library-pane").getBoundingClientRect().width
+    };
+  });
+  const label = "short desktop " + width + "x" + height;
+  check(label + " fits without page, pane or player scrolling",
+    short.documentScroll[0] <= short.viewport[0] &&
+    short.documentScroll[1] <= short.viewport[1] + 1 &&
+    short.main.scroll[0] <= short.main.scroll[1] + 1 &&
+    short.player.scroll[0] <= short.player.scroll[1] + 1,
+    JSON.stringify({ document: short.documentScroll, viewport: short.viewport, main: short.main.scroll, player: short.player.scroll }));
+  check(label + " keeps the speed controls clear of the mixer",
+    short.speed.bottom <= short.mixer.top + 1 ||
+    short.speed.right <= short.mixer.left + 1,
+    JSON.stringify({ speed: short.speed, mixer: short.mixer }));
+  check(label + " keeps all five mixer rows, seek and Stop visible",
+    short.rows.length === 5 &&
+    short.rows.every((row) => row.top >= -1 && row.bottom <= short.viewport[1] + 1) &&
+    short.seek.top >= 0 && short.seek.bottom <= short.viewport[1] &&
+    short.stop.top >= 0 && short.stop.bottom <= short.viewport[1],
+    JSON.stringify({ rows: short.rows, seek: short.seek, stop: short.stop }));
+  check(label + " keeps the sidebar and mixer inside the main pane",
+    short.libraryWidth >= 340 &&
+    short.mixer.left >= short.main.box.left - 1 &&
+    short.mixer.right <= short.main.box.right + 1,
+    JSON.stringify({ libraryWidth: short.libraryWidth, main: short.main.box, mixer: short.mixer }));
+  const shortTargets = await touchTargetReport(shortDesktop);
+  check(label + " controls meet the 24px touch floor",
+    shortTargets.count > 0 && shortTargets.small.length === 0,
+    JSON.stringify(shortTargets));
+  await shortDesktop.screenshot({ path: path.join(shots, "10-short-desktop-" + width + "x" + height + ".png") });
+  await shortDesktop.close();
+}
+
 // Narrow desktop/tablet: both panes must remain, player stacks vertically.
 const tablet = await newPage({ viewport: { width: 1024, height: 768 } });
 await tablet.bringToFront();
@@ -1326,6 +1545,47 @@ check("tablet portrait app-info button is the first app control",
 await tabletPortrait.screenshot({ path: path.join(shots, "11-tablet-portrait.png") });
 await tabletPortrait.close();
 
+// Tablet portrait uses the wider one-pane shell and still fits the player.
+const tabletPortraitPlayer = await newPage({ viewport: { width: 768, height: 1024 } });
+await tabletPortraitPlayer.bringToFront();
+await tabletPortraitPlayer.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
+await ready(tabletPortraitPlayer);
+await tabletPortraitPlayer.waitForTimeout(400);
+const tabletPortraitPlayerState = await tabletPortraitPlayer.evaluate(() => {
+  const box = (selector) => {
+    const rect = document.querySelector(selector).getBoundingClientRect();
+    return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
+  };
+  const main = document.querySelector(".main-pane");
+  return {
+    app: box("#app"),
+    viewport: [window.innerWidth, window.innerHeight],
+    documentScroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+    mainScroll: [main.scrollHeight, main.clientHeight],
+    speed: box(".speed-controls"),
+    mixer: box(".mixer"),
+    rows: Array.from(document.querySelectorAll(".stem"), (row) => {
+      const rect = row.getBoundingClientRect();
+      return { top: rect.top, bottom: rect.bottom };
+    })
+  };
+});
+check("tablet portrait uses the 640px shell", tabletPortraitPlayerState.app.right - tabletPortraitPlayerState.app.left === 640,
+  JSON.stringify(tabletPortraitPlayerState.app));
+check("tablet portrait player fits without page or pane scrolling",
+  tabletPortraitPlayerState.documentScroll[0] <= tabletPortraitPlayerState.viewport[0] &&
+  tabletPortraitPlayerState.documentScroll[1] <= tabletPortraitPlayerState.viewport[1] + 1 &&
+  tabletPortraitPlayerState.mainScroll[0] <= tabletPortraitPlayerState.mainScroll[1] + 1,
+  JSON.stringify({ document: tabletPortraitPlayerState.documentScroll, main: tabletPortraitPlayerState.mainScroll }));
+check("tablet portrait keeps the speed controls above all five mixer rows",
+  tabletPortraitPlayerState.speed.bottom <= tabletPortraitPlayerState.mixer.top + 1 &&
+  tabletPortraitPlayerState.rows.length === 5 &&
+  tabletPortraitPlayerState.rows.every((row) =>
+    row.top >= -1 && row.bottom <= tabletPortraitPlayerState.viewport[1] + 1),
+  JSON.stringify({ speed: tabletPortraitPlayerState.speed, mixer: tabletPortraitPlayerState.mixer, rows: tabletPortraitPlayerState.rows }));
+await tabletPortraitPlayer.screenshot({ path: path.join(shots, "11-tablet-portrait-player.png") });
+await tabletPortraitPlayer.close();
+
 // --- theme follows the system ---------------------------------------------
 const dark = await newPage({ viewport, colorScheme: "dark" });
 await dark.bringToFront();
@@ -1341,6 +1601,76 @@ check("dark theme follows prefers-color-scheme",
   JSON.stringify(darkState));
 await dark.screenshot({ path: path.join(shots, "11-dark-player.png") });
 await dark.close();
+
+// Light theme text tokens must stay above the WCAG AA 4.5:1 threshold.
+const light = await newPage({ viewport, colorScheme: "light" });
+await light.bringToFront();
+await light.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
+await ready(light);
+await light.waitForTimeout(400);
+const lightContrast = await light.evaluate(() => {
+  function parse(value) {
+    value = value.trim();
+    if (value[0] === "#") {
+      const hex = value.slice(1);
+      return {
+        r: parseInt(hex.slice(0, 2), 16),
+        g: parseInt(hex.slice(2, 4), 16),
+        b: parseInt(hex.slice(4, 6), 16),
+        a: hex.length > 6 ? parseInt(hex.slice(6, 8), 16) / 255 : 1
+      };
+    }
+    const parts = value.match(/[\d.]+/g).map(Number);
+    return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 };
+  }
+  function over(foreground, background) {
+    const alpha = foreground.a;
+    return {
+      r: foreground.r * alpha + background.r * (1 - alpha),
+      g: foreground.g * alpha + background.g * (1 - alpha),
+      b: foreground.b * alpha + background.b * (1 - alpha),
+      a: 1
+    };
+  }
+  function luminance(color) {
+    const channel = (value) => {
+      const normalized = value / 255;
+      return normalized <= 0.04045
+        ? normalized / 12.92
+        : Math.pow((normalized + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
+  }
+  function ratio(first, second) {
+    const a = luminance(first);
+    const b = luminance(second);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  }
+  const root = getComputedStyle(document.documentElement);
+  const token = (name) => parse(root.getPropertyValue(name));
+  const surface = token("--surface");
+  const surface2 = token("--surface-2");
+  const accent = token("--accent");
+  const accentInk = token("--accent-ink");
+  const muted = token("--muted");
+  return {
+    scheme: root.colorScheme,
+    accentOnSurface: +ratio(accent, surface).toFixed(2),
+    accentInkOnAccent: +ratio(accentInk, accent).toFixed(2),
+    mutedOnSurface2: +ratio(muted, surface2).toFixed(2),
+    statusOnSoftAccent: +ratio(accent, over(token("--accent-soft"), surface)).toFixed(2)
+  };
+});
+check("light theme follows prefers-color-scheme", lightContrast.scheme === "light",
+  lightContrast.scheme);
+check("light theme text keeps at least 4.5:1 contrast",
+  lightContrast.accentOnSurface >= 4.5 &&
+  lightContrast.accentInkOnAccent >= 4.5 &&
+  lightContrast.mutedOnSurface2 >= 4.5 &&
+  lightContrast.statusOnSoftAccent >= 4.5,
+  JSON.stringify(lightContrast));
+await light.screenshot({ path: path.join(shots, "13-light-player.png") });
+await light.close();
 
 const darkDesktop = await newPage({ viewport: { width: 1440, height: 900 }, colorScheme: "dark" });
 await darkDesktop.bringToFront();
@@ -1961,13 +2291,17 @@ try {
   const corruptState = await corrupt.evaluate(() => ({
     text: (document.querySelector(".load-status") || {}).textContent || "",
     detail: (document.querySelector(".load-detail") || {}).textContent || "",
+    role: (document.querySelector(".loading.error") || {}).getAttribute
+      ? document.querySelector(".loading.error").getAttribute("role") : null,
+    focused: document.activeElement ? document.activeElement.className : null,
     mixer: !!document.querySelector(".mixer"),
     play: !!document.querySelector("button.play"),
     state: window.__batapp_new.state()
   }));
   check("corrupted stem fails the integrity gate and names the stem",
     corruptState.text.indexOf("Vox") >= 0 && !corruptState.mixer && !corruptState.play &&
-    corruptState.state.loading === false && !!corruptState.state.error,
+    corruptState.state.loading === false && !!corruptState.state.error &&
+    corruptState.role === "alert" && corruptState.focused === "retry",
     JSON.stringify(corruptState));
   await corrupt.screenshot({ path: path.join(shots, "14-http-checksum-error.png") });
   await corrupt.unroute("**/vox.ogg*");
@@ -2259,7 +2593,7 @@ try {
   await offlinePage.waitForFunction(
     () => document.getElementById("app-info-panel").innerText.includes("1/61 rhythms cached"),
     null,
-    { timeout: 5000 }
+    { timeout: 10000 }
   );
   const offlineInfo = await offlinePage.locator("#app-info-panel").innerText();
   check("app info reports offline cache state and clear action",

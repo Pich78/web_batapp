@@ -6,6 +6,7 @@
   "scripts": {
     "verify": "node verify.mjs",
     "verify-new": "node verify-new.mjs",
+    "verify-sw": "node verify-sw.mjs",
     "verify-browsers": "node verify-browsers.mjs",
     "verify-webkit:docker": "node verify-webkit-docker.mjs",
     "lesson-sweep": "node lesson-sweep.mjs",
