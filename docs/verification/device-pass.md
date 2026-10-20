@@ -85,7 +85,7 @@ Android Chrome and Windows browsers must be checked by a person.
     version check must replace the old build once (the first update may need
     clearing the site data or removing/re-adding the icon).
 17. Open the top-left hamburger. Confirm there is exactly **one Version row**
-    equal to the repository tag (for example `v1.2.2`), plus the current lesson,
+    equal to the repository tag (for example `v1.2.3`), plus the current lesson,
     WAV/OGG source and screen-awake state. If the manifest is newer, verify the
     version row is highlighted and the “Reload latest” action appears without a
     second version number. Confirm the panel closes with Escape/outside tap and

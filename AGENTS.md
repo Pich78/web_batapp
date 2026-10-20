@@ -348,12 +348,24 @@ legacy `js/mixer.js` transport.
 
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`), breaking changes
   marked with `!`.
-- The repository tag is the single version number. Run
-  `python3 tools/set_version.py set vX.Y.Z` and commit before tagging; never edit
-  the meta/build/manifest/query versions by hand. `set_version.py check` must
-  pass on the tagged commit. The tool keeps the `?v=` query on
-  `app.css`/`app-new.css` and every shipped JS file in both HTML pages equal to
-  the tag, so a cached old script cannot be mixed with new HTML on GitHub Pages.
+- **Every shipped feature or bug fix bumps the repository version.** Use SemVer:
+  a fix is a patch (`v1.2.2` → `v1.2.3`), a feature is a minor bump
+  (`v1.2.3` → `v1.3.0`), and a breaking change is a major bump.
+  Development-only docs, test or tooling changes that do not alter the shipped
+  app may ride along in the next release without their own bump.
+  - Before committing, run `python3 tools/set_version.py set vX.Y.Z` so the
+    meta, inline build value, manifest and every `?v=` query carry the new
+    version. Do not edit those values by hand.
+  - Commit and **push the code first**. Then create and push the tag on that
+    exact pushed commit: `git tag vX.Y.Z` (lightweight, matching `v1.2.1` /
+    `v1.2.2`) and `git push origin vX.Y.Z`.
+  - Run `python3 tools/set_version.py check --tag vX.Y.Z`; it must pass on the
+    tagged commit. Without `--tag`, `check` uses HEAD's exact tag.
+  - Never reuse or move a version tag. If a release is wrong, bump again.
+- The repository tag is the single version number. `set_version.py` keeps the
+  `?v=` query on `app.css`/`app-new.css` and every shipped JS file in both HTML
+  pages equal to the tag, so a cached old script cannot be mixed with new HTML
+  on GitHub Pages.
 - The app-info panel must show exactly one Version row. Do not reintroduce
   per-script or duplicate manifest version rows.
 - Keep the binary payload intentional: `assets/audio/**` is ~88 MB and is

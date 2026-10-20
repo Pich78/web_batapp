@@ -6,9 +6,9 @@ version so an installed PWA cannot mix an old cached script with new markup.
 This tool makes the Git tag the single source of truth for that value.
 
 Usage:
-    .venv/bin/python tools/set_version.py set v1.2.2
+    .venv/bin/python tools/set_version.py set v1.2.3
     .venv/bin/python tools/set_version.py check
-    .venv/bin/python tools/set_version.py check --tag v1.2.2
+    .venv/bin/python tools/set_version.py check --tag v1.2.3
     .venv/bin/python tools/set_version.py show
 """
 from __future__ import annotations

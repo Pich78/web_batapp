@@ -48,7 +48,7 @@ behind the reconstruction.
   requests a screen wake lock so the phone does not dim or sleep where the
   browser supports it.
 - **App info** — the hamburger button in the top-left shows one **Version** row
-  equal to the repository tag (for example `v1.2.2`), the current lesson,
+  equal to the repository tag (for example `v1.2.3`), the current lesson,
   whether audio is WAV or Ogg and whether the screen wake lock is active, off,
   blocked or unsupported. If the manifest is newer it highlights the version and
   offers a manual “Reload latest” action without printing a second number.
