@@ -88,23 +88,34 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
         and closes the AudioContext; reopening downloads all stems again.
 - [x] **Pause/resume semantics** matching `AudioSource.Pause`/`Stop` for all five
       stems, plus per-track mute without losing the slider value.
+- [x] **Tempo and screen wake lock** (app additions, not recovered behaviour):
+      a 50–150% speed bar under the seek bar drives every stem's playback rate
+      together with pitch preservation; the shared clock, progress ring and loop
+      boundary scale with the rate, and the chosen rate survives rhythm
+      navigation. While playing, the page holds a Screen Wake Lock and releases
+      it on Pause, Stop, Back or page hide; unsupported or refused requests fall
+      back to the normal screen timeout and are reported in the app-info panel.
+      Dragging the seek bar keeps playback running; releasing it discards the
+      current media generation and rebuilds at the new position, matching the
+      Pause/Stop cache-clearing rule.
 - [x] **Keyboard affordances**: Space toggles playback, arrows step lessons and
       Escape returns to the list on the modern page; `Esc` keeps the original
       pause layer on the shipped-layout page.
 - [x] **Modern layout** (`index.html` + `app-new.css` + `js/newapp.js`):
       responsive player with portrait-phone, landscape-phone and desktop modes
       (persistent sidebar on desktop), progress ring, draggable seek bar,
+      50–150% pitch-preserving speed slider, screen wake lock while playing,
       per-lesson titles, per-stem volume and mute, natural lesson order
       (1, 2, … 20A, 20B, 21, 22), system light/dark theme, generated
       two-colour three-drum icon set, no external resources. Portrait and
       landscape use a fixed app shell: the player fits without page or internal
-      scrolling (short portrait uses a compact single-line mixer), landscape
-      places Stop beside the transport, and the library list is the only scroll
+      scrolling (short portrait uses a compact single-line mixer), Stop sits
+      beside Next inside the transport, and the library list is the only scroll
       container. A fixed top-left hamburger shows the loaded build, manifest,
-      script versions, current lesson and audio format, with a manual reload
-      when the deployed manifest is newer. The generated `js/lessons.js` is a
-      compact lessons-only payload for this page; the scene page keeps
-      `js/data.js`.
+      script versions, current lesson, audio format and wake-lock state, with a
+      manual reload when the deployed manifest is newer. The generated
+      `js/lessons.js` is a compact lessons-only payload for this page; the scene
+      page keeps `js/data.js`.
       Vox starts at 100% in the modern model. All stems are loaded and verified
       (fetch-to-Blob with checksums and runtime WAV expansion on HTTP, local Ogg
       elements on file://) before the playing screen appears, with named errors

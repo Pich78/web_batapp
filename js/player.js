@@ -23,7 +23,14 @@
  *     This also covers browsers that recalculate one stem's duration after a
  *     near-end seek.
  *   - Pause/Stop/Seek write one shared position to every stem. Pause and Stop
- *     keep the loaded buffers; only Back releases them.
+ *     keep the loaded buffers; only Back releases them. Dragging the seek bar
+ *     leaves playback running; on release the player rebuilds the media
+ *     generation at the new position so buffered old-position audio cannot
+ *     replay.
+ *   - setRate() changes every stem's playback rate together (pitch preserved).
+ *     The shared clock and the loop timer scale with the rate, so seeking,
+ *     progress and the shared loop rewind stay aligned while practising slower
+ *     or faster.
  *
  * Exposes window.BatappPlayer as a classic script. No modules, no build step.
  */
@@ -32,6 +39,8 @@
 
   var TRACK_STEM_ALIAS = { bit: "beat" };
   var LOAD_TIMEOUT = 30000;
+  var RATE_MIN = 0.5;
+  var RATE_MAX = 1.5;
   var loadSequence = 0;
   // A fresh page session must not reuse an audio URL from an earlier session.
   var loadNonce = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
@@ -40,6 +49,12 @@
     var number = typeof value === "number" ? value : parseFloat(value);
     if (!(number >= 0)) number = 0;
     return Math.min(1, number);
+  }
+
+  function clampRate(value) {
+    var number = typeof value === "number" ? value : parseFloat(value);
+    if (!(number > 0) || !isFinite(number)) return 1;
+    return Math.min(RATE_MAX, Math.max(RATE_MIN, number));
   }
 
   function abortError() {
@@ -141,6 +156,7 @@
     this._offset = 0;
     this._clockOffset = 0;
     this._clockStartedAt = 0;
+    this._rate = 1;
     this._loopDuration = 0;
     this._loopTimer = 0;
     this._loaded = false;
@@ -478,6 +494,7 @@
         }
       });
       element.src = item.url;
+      self._applyRate(item.record);
     });
   };
 
@@ -603,6 +620,18 @@
       record.element.muted = false;
       record.element.volume = record.muted ? 0.00001 : record.volume;
     }
+  };
+
+  BatappPlayer.prototype._applyRate = function (record) {
+    var element = record.element;
+    if (!element) return;
+    // Keep the drums at their recorded pitch while the tempo changes. Older
+    // engines exposed vendor-prefixed flags before the standard property.
+    try { element.preservesPitch = true; } catch (error) { /* unsupported */ }
+    try { element.webkitPreservesPitch = true; } catch (error) { /* unsupported */ }
+    try { element.mozPreservesPitch = true; } catch (error) { /* unsupported */ }
+    element.defaultPlaybackRate = this._rate;
+    element.playbackRate = this._rate;
   };
 
   BatappPlayer.prototype._resumeContext = function () {
@@ -863,8 +892,7 @@
     }
     var duration = this.duration();
     if (!duration || this._state !== "playing") return;
-    var elapsed = (performance.now() - this._clockStartedAt) / 1000;
-    var position = (this._clockOffset + elapsed) % duration;
+    var position = (this._clockOffset + this._elapsedSinceClock()) % duration;
     var remaining = duration - position;
     if (remaining <= 0.02) remaining = 0.02;
     // Reset just before the native loop point so a stem whose browser-reported
@@ -873,7 +901,7 @@
       self._loopTimer = 0;
       if (self._disposed || token !== self._playToken || self._state !== "playing") return;
       self._wrapLoop(token);
-    }, Math.max(10, remaining * 1000 - 10));
+    }, Math.max(10, remaining * 1000 / this._rate - 10));
   };
 
   BatappPlayer.prototype._wrapLoop = function (token) {
@@ -891,22 +919,25 @@
   BatappPlayer.prototype._startElements = function (token) {
     var self = this;
     var attempts = this.tracks.map(function (record) {
-      if (!record.element) return Promise.resolve(null);
+      var element = record.element;
+      if (!element) return Promise.resolve(null);
       var attempt;
       try {
-        attempt = record.element.play();
+        attempt = element.play();
       } catch (error) {
         return Promise.resolve({ record: record, error: error });
       }
       if (!attempt || !attempt.then) {
         if (self._disposed || token !== self._playToken || self._state !== "playing") {
-          try { record.element.pause(); } catch (error) { /* released */ }
+          try { element.pause(); } catch (error) { /* released */ }
         }
         return Promise.resolve(null);
       }
       return attempt.then(function () {
         if (self._disposed || token !== self._playToken || self._state !== "playing") {
-          try { record.element.pause(); } catch (error) { /* released */ }
+          // Pause this exact generation, never record.element: a seek may have
+          // replaced it with the fresh generation in the meantime.
+          try { element.pause(); } catch (error) { /* released */ }
         }
         return null;
       }, function (error) {
@@ -949,11 +980,14 @@
     return 0;
   };
 
+  BatappPlayer.prototype._elapsedSinceClock = function () {
+    return (performance.now() - this._clockStartedAt) / 1000 * this._rate;
+  };
+
   BatappPlayer.prototype.position = function () {
     var duration = this.duration();
     if (this._state === "playing" && duration > 0) {
-      var elapsed = (performance.now() - this._clockStartedAt) / 1000;
-      var position = (this._clockOffset + elapsed) % duration;
+      var position = (this._clockOffset + this._elapsedSinceClock()) % duration;
       return position < 0 ? position + duration : position;
     }
     return this._offset;
@@ -979,15 +1013,15 @@
     this._offset = offset;
     this._state = "playing";
 
-    // After Pause or Stop on HTTP, build a fresh media generation from the
-    // same Blob instead of seeking the old pipeline. This discards buffered
-    // audio and guarantees the audible start position.
+    // After Pause, Stop or Seek, build a fresh media generation from the
+    // source instead of seeking the old pipeline. This discards buffered audio
+    // and guarantees the audible start position.
     if (this._needsFreshGeneration) {
       try {
         this._rebuildPlayback(offset);
       } catch (error) {
         this._state = "paused";
-        this._needsFreshGeneration = this._hasBlobSources();
+        this._needsFreshGeneration = true;
         if (typeof this.options.onError === "function") {
           this.options.onError(null, error);
         }
@@ -1082,14 +1116,46 @@
     this._offset = target;
     this._clockOffset = target;
     this._clockStartedAt = performance.now();
+    // A seek must not reuse the buffered pipeline from the previous position.
+    // Rebuild the media generation on release (the same rule as Pause/Stop), so
+    // the browser cannot replay audio queued before the slider moved.
+    this._needsFreshGeneration = true;
     if (wasPlaying) {
       this._state = "paused";
       this.play();
     } else {
-      if (!this._needsFreshGeneration) this._alignAll(target);
+      // Keep the paused elements at the requested point for inspection; the
+      // next Play still rebuilds them before starting.
+      this._alignAll(target);
       if (this._state !== "ready") this._state = "paused";
     }
     return target;
+  };
+
+  BatappPlayer.prototype.setRate = function (rate) {
+    if (this._disposed) return this._rate;
+    var next = clampRate(rate);
+    var wasPlaying = this._state === "playing";
+    var position = wasPlaying ? this._mediaPosition() : this._offset;
+    this._rate = next;
+    this.tracks.forEach(this._applyRate, this);
+    if (!wasPlaying) return next;
+
+    // Re-anchor the shared clock at the audible position so changing tempo
+    // never makes the seek bar or the progress ring jump.
+    this._offset = position;
+    this._clockOffset = position;
+    this._clockStartedAt = performance.now();
+    if (this._loopTimer) {
+      clearTimeout(this._loopTimer);
+      this._loopTimer = 0;
+    }
+    this._scheduleLoop(this._playToken);
+    return next;
+  };
+
+  BatappPlayer.prototype.rate = function () {
+    return this._rate;
   };
 
   BatappPlayer.prototype.playing = function () {

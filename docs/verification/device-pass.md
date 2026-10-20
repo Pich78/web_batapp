@@ -31,39 +31,52 @@ Android Chrome and Windows browsers must be checked by a person.
    stems stay loaded and resume from the exact same point without replaying old
    audio. Stop: the stems stay loaded and the next Play starts all of them from
    the beginning, again without queued audio from the previous position.
-5. While playing, mute a stem and move another slider. Only the level changes:
+5. Move the **Speed** slider to 50%, then 150%, while playing. Every stem must
+   slow down or speed up together without a position jump, and the drums must
+   keep their recorded pitch. The timeline and progress ring must follow the
+   audible position. Stop, set 75%, then step to the next rhythm: the new rhythm
+   must start at 75%. Leave the phone untouched for at least 30 seconds while
+   playing: the screen must not dim or sleep where the browser supports the
+   Screen Wake Lock API. Pause and Stop must release it; the app-info panel
+   reports the state. This needs HTTPS, and power-saving modes or browser
+   policy may refuse the lock.
+6. While playing, mute a stem and move another slider. Only the level changes:
    the timeline keeps advancing and no stem pauses, seeks or reloads. Unmute and
    confirm the previous slider value is restored. Then pause → mute a track →
    play.
-6. Drag the seek bar to roughly the middle while still playing. All stems jump
-   together and stay in sync (listen for flams between the drums). Then drag it
-   **backwards** to an earlier point; the stems must stay synchronized and no
-   second/overlapping stream may start.
-7. Seek near the end (last second) and let the lesson cross the loop boundary.
+7. Drag the seek bar to roughly the middle while still playing. Audio must keep
+   playing during the drag; on release it may stop for a moment while the media
+   generation is rebuilt, then all stems restart together at the new position
+   in sync (listen for flams between the drums). Drag it **backwards** to an
+   earlier point and repeat: no buffered audio from the old position may replay
+   and no second/overlapping stream may start. Repeat while paused: the player
+   stays paused and Play starts at the chosen point.
+8. Seek near the end (last second) and let the lesson cross the loop boundary.
    All five stems must restart together, with Beat still present; no rapid
-   repeated loop, doubled voice or end-of-loop noise.
-8. Move the sliders in the order Beat, Vox, Iya, Itotele, Okonkolo; mute one,
+   repeated loop, doubled voice or end-of-loop noise. Repeat at 50% and 150%:
+   the shared rewind must happen after the rate-adjusted duration, not early or
+   late.
+9. Move the sliders in the order Beat, Vox, Iya, Itotele, Okonkolo; mute one,
    confirm its slider value is preserved, then unmute.
-9. Prev/Next moves through the volume; at the ends the button is disabled.
-10. Open an Oru Seco lesson including **19 Egbi pami**. The order must be Beat,
+10. Prev/Next moves through the volume; at the ends the button is disabled.
+11. Open an Oru Seco lesson including **19 Egbi pami**. The order must be Beat,
     Iya, Itotele, Okonkolo; there is no Vox row.
-11. Rotate the phone (portrait and landscape). Neither view may scroll the page
-    or the player. Portrait and landscape must show the seek bar, transport,
-    Stop and every mixer row inside the viewport; landscape keeps Stop beside
-    the transport.
-12. Check the browser tab title: e.g. `Alubanche · Toque 01 · Batá`.
-13. Press Back to the rhythm list. The player must stop and release every stem;
+12. Rotate the phone (portrait and landscape). Neither view may scroll the page
+    or the player. Portrait and landscape must show the speed bar, seek bar, the
+    transport with Stop beside Next, and every mixer row inside the viewport.
+13. Check the browser tab title: e.g. `Alubanche · Toque 01 · Batá`.
+14. Press Back to the rhythm list. The player must stop and release every stem;
     the network panel must show no retained audio response. Open the same
     rhythm again: all five stems are downloaded again from scratch.
-14. Reload the page directly on a lesson URL; the lesson loads and the title is
+15. Reload the page directly on a lesson URL; the lesson loads and the title is
     correct.
-15. Home-screen app only: after a new release is deployed, reopen the app. The
+16. Home-screen app only: after a new release is deployed, reopen the app. The
     version check must replace the old build once (the first update may need
     clearing the site data or removing/re-adding the icon).
-16. Open the top-left hamburger. Confirm the loaded build, manifest version,
-    script versions, current lesson and WAV/OGG source are shown. If the
-    manifest is newer, verify the “Reload latest” action. Confirm the panel
-    closes with Escape/outside tap and never scrolls the page.
+17. Open the top-left hamburger. Confirm the loaded build, manifest version,
+    script versions, current lesson, WAV/OGG source and screen-awake state are
+    shown. If the manifest is newer, verify the “Reload latest” action. Confirm
+    the panel closes with Escape/outside tap and never scrolls the page.
 
 ## Results
 

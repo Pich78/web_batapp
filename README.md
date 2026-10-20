@@ -36,18 +36,22 @@ behind the reconstruction.
   works from a subpath.
 - **Double-click `index.html`** — the modern layout. No server, no build:
   library with the two volumes, lesson player with Play/Pause/Stop, Prev/Next,
-  a draggable seek bar, loop progress, per-lesson browser titles and a five-stem
-  mixer (volume + mute per stem). Every stem starts at 100%, including Vox. The
-  player loads all stems first and only enables Play when they are local. The
-  mixer order is Beat, Vox, Iya, Itotele, Okonkolo for Toques and Beat, Iya,
-  Itotele, Okonkolo for Oru Seco. It adapts from a fixed one-pane portrait phone
-  shell (no page or player scrolling) to a two-column landscape phone view
-  (Stop beside the transport) and a full desktop layout with a persistent
-  library sidebar.
+  a draggable seek bar, a 50–150% rhythm-speed slider (pitch preserved), loop
+  progress, per-lesson browser titles and a five-stem mixer (volume + mute per
+  stem). Every stem starts at 100%, including Vox. The player loads all stems
+  first and only enables Play when they are local. The mixer order is Beat, Vox,
+  Iya, Itotele, Okonkolo for Toques and Beat, Iya, Itotele, Okonkolo for Oru
+  Seco. Stop sits beside Next in the transport, and the speed bar sits directly
+  under the time bar. It adapts from a fixed one-pane portrait phone shell (no
+  page or player scrolling) to a two-column landscape phone view and a full
+  desktop layout with a persistent library sidebar. While playing, the page
+  requests a screen wake lock so the phone does not dim or sleep where the
+  browser supports it.
 - **App info** — the hamburger button in the top-left shows the loaded build,
   the deployed manifest version, the versions of every loaded script, the
-  current lesson and whether audio is WAV or Ogg. If the manifest is newer it
-  offers a manual “Reload latest” action.
+  current lesson, whether audio is WAV or Ogg and whether the screen wake lock is
+  active, off, blocked or unsupported. If the manifest is newer it offers a
+  manual “Reload latest” action.
 - **Home-screen / PWA updates** — there is no service worker. The page compares
   its own version with `site.webmanifest` through a `no-store` request and, when
   a newer version is deployed, reloads once with a versioned URL. The manifest
@@ -121,7 +125,24 @@ the original scene-reconstruction transport in `js/mixer.js`.
   media generation from the same Blob URL data, so queued audio from the old
   position cannot replay. A pending `play()` from a quick tap cannot undo
   Pause or Stop.
-- Seeking moves every stem to the same position before playback continues.
+- Dragging the seek bar leaves playback running. On release, every stem is
+  stopped, the current media generation is discarded (object URLs revoked,
+  elements unloaded) and rebuilt at the new position, then playback resumes.
+  Paused seeks stay paused at the new point and rebuild on the next Play. This
+  prevents buffered audio from the old position replaying after a seek.
+- The Speed slider changes every stem's playback rate together from 50% to
+  150% while preserving the recorded pitch. The seek bar, progress ring and loop
+  boundary follow the selected rate. Changing speed during playback re-anchors
+  the shared clock at the audible position, and a new media generation after
+  Pause, Stop or Seek keeps the selected speed. The speed carries over when
+  stepping to another rhythm in the same session.
+- While a rhythm is playing, the modern page requests the Screen Wake Lock API
+  so the screen does not dim or sleep. It releases the lock on Pause, Stop, Back
+  and page hide, and requests it again when the page becomes visible if playback
+  is still running. Browsers without the API, insecure origins and power-saving
+  modes that refuse the request keep the normal screen timeout; the app-info
+  panel reports the state. This prevents idle dimming and sleep only while the
+  page is visible and playing.
 
 **iPhone/iPad:** iOS/Safari 18.4+ is required for Ogg Vorbis playback. On older
 iOS versions the browser cannot decode the lesson audio.

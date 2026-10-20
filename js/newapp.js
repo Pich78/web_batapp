@@ -46,8 +46,13 @@
     loading: false,
     error: null,
     timer: 0,
-    loadToken: 0
+    loadToken: 0,
+    rate: 1,
+    wakeLock: "off"
   };
+
+  var wakeLock = null;
+  var wakeLockPending = false;
 
   /* ------------------------------------------------------------------ icons */
 
@@ -64,7 +69,7 @@
     back: icon('<path d="M14.5 6l-6 6 6 6"/>', true),
     play: icon('<path d="M8 5.5v13l11-6.5z"/>'),
     pause: icon('<path d="M8 5.5h3.2v13H8zM12.8 5.5H16v13h-3.2z"/>'),
-    stop: icon('<rect x="7" y="7" width="10" height="10" rx="1.6"/>'),
+    stop: icon('<rect x="5.5" y="5.5" width="13" height="13" rx="2"/>'),
     prev: icon('<path d="M7 5.5h2v13H7zM19 5.5l-9 6.5 9 6.5z"/>'),
     next: icon('<path d="M15 5.5h2v13h-2zM5 5.5l9 6.5-9 6.5z"/>'),
     speaker: icon('<path d="M4 9.5v5h3.4L12 18.4V5.6L7.4 9.5H4z"/><path d="M15 9.2a4 4 0 0 1 0 5.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>'),
@@ -121,6 +126,86 @@
     return Math.floor(value / 60) + ":" + String(value % 60).padStart(2, "0");
   }
 
+  /* ----------------------------------------------------------- screen awake */
+
+  function wakeLockSupported() {
+    try {
+      return !!(navigator.wakeLock && typeof navigator.wakeLock.request === "function");
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function releaseWakeLock() {
+    var sentinel = wakeLock;
+    wakeLock = null;
+    if (sentinel) {
+      try {
+        var result = sentinel.release();
+        if (result && typeof result.catch === "function") result.catch(function () {});
+      } catch (error) { /* already released */ }
+    }
+    if (state.wakeLock !== "unsupported") state.wakeLock = "off";
+  }
+
+  function requestWakeLock() {
+    if (!wakeLockSupported()) {
+      state.wakeLock = "unsupported";
+      return;
+    }
+    if (!state.playing || document.visibilityState !== "visible") {
+      releaseWakeLock();
+      return;
+    }
+    if (wakeLock && !wakeLock.released) {
+      state.wakeLock = "active";
+      return;
+    }
+    if (wakeLockPending) return;
+    wakeLock = null;
+    wakeLockPending = true;
+    state.wakeLock = "requesting";
+    try {
+      navigator.wakeLock.request("screen").then(function (sentinel) {
+        wakeLockPending = false;
+        if (!state.playing || document.visibilityState !== "visible") {
+          try { sentinel.release(); } catch (error) { /* released */ }
+          state.wakeLock = "off";
+          return;
+        }
+        wakeLock = sentinel;
+        state.wakeLock = "active";
+        sentinel.addEventListener("release", function () {
+          if (wakeLock === sentinel) wakeLock = null;
+          if (state.wakeLock === "active") state.wakeLock = "off";
+        });
+      }).catch(function () {
+        wakeLockPending = false;
+        wakeLock = null;
+        state.wakeLock = state.playing ? "blocked" : "off";
+      });
+    } catch (error) {
+      wakeLockPending = false;
+      wakeLock = null;
+      state.wakeLock = state.playing ? "blocked" : "off";
+    }
+  }
+
+  function syncWakeLock() {
+    if (!wakeLockSupported()) {
+      state.wakeLock = "unsupported";
+      return;
+    }
+    if (state.playing && document.visibilityState === "visible") requestWakeLock();
+    else releaseWakeLock();
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") syncWakeLock();
+    else releaseWakeLock();
+  });
+  window.addEventListener("pagehide", releaseWakeLock);
+
   function titleSuffix(lesson) {
     return lesson.volume === "volume-1" ? "Toque" : "Oru Seco";
   }
@@ -139,6 +224,7 @@
 
   function teardown() {
     state.loadToken += 1;
+    releaseWakeLock();
     if (state.timer) clearInterval(state.timer);
     state.timer = 0;
     if (state.player) {
@@ -349,6 +435,19 @@
     seekInput.disabled = true;
     player.appendChild(seek);
 
+    var tempoPercent = Math.round(state.rate * 100);
+    var tempo = element("div", "tempo",
+      '<label class="tempo-label" for="tempo-input">Speed</label>' +
+      '<input id="tempo-input" class="tempo-input" type="range" min="50" max="150" step="1" value="' +
+      tempoPercent + '" aria-label="Rhythm speed">' +
+      '<output class="tempo-value" for="tempo-input">' + tempoPercent + "%</output>");
+    var tempoInput = tempo.querySelector("input");
+    var tempoValue = tempo.querySelector("output");
+    setFill(tempoInput, (tempoPercent - 50) / 100);
+    tempoInput.setAttribute("aria-valuetext", tempoPercent + "%");
+    audio.setRate(state.rate);
+    player.appendChild(tempo);
+
     var status = element("p", "player-status");
     status.hidden = true;
     player.appendChild(status);
@@ -375,14 +474,11 @@
     play.setAttribute("aria-label", "Play");
     dial.appendChild(play);
 
-    [prev, dial, next].forEach(function (node) { transport.appendChild(node); });
-    hero.appendChild(transport);
-
-    var stopRow = element("div", "stop-row");
-    var stop = element("button", "stop", ICONS.stop + "<span>Stop</span>");
+    var stop = element("button", "ghost stop", ICONS.stop);
     stop.setAttribute("aria-label", "Stop");
-    stopRow.appendChild(stop);
-    hero.appendChild(stopRow);
+
+    [prev, dial, next, stop].forEach(function (node) { transport.appendChild(node); });
+    hero.appendChild(transport);
     body.appendChild(hero);
 
     var mixerBox = element("div", "mixer");
@@ -406,6 +502,18 @@
       status.hidden = true;
     }
 
+    function applyTempo() {
+      var percent = Number(tempoInput.value);
+      var next = percent / 100;
+      state.rate = next;
+      tempoValue.textContent = percent + "%";
+      tempoInput.setAttribute("aria-valuetext", percent + "%");
+      setFill(tempoInput, (percent - 50) / 100);
+      if (audio.rate() !== next) audio.setRate(next);
+    }
+
+    tempoInput.addEventListener("input", applyTempo);
+
     function paintPlaying() {
       play.innerHTML = state.playing ? ICONS.pause : ICONS.play;
       play.setAttribute("aria-label", state.playing ? "Pause" : "Play");
@@ -415,6 +523,7 @@
       if (state.playing) {
         audio.pause();
         state.playing = false;
+        syncWakeLock();
         paintPlaying();
         return;
       }
@@ -425,6 +534,7 @@
         return;
       }
       state.playing = true;
+      syncWakeLock();
       hideStatus();
       paintPlaying();
       var attempts = 0;
@@ -446,6 +556,7 @@
         }
         transportBusy = false;
         state.playing = false;
+        syncWakeLock();
         paintPlaying();
         showStatus("Playback was blocked. Tap Play again.");
       }
@@ -455,6 +566,7 @@
     stop.addEventListener("click", function () {
       audio.stop();
       state.playing = false;
+      syncWakeLock();
       transportBusy = false;
       paintPlaying();
       hideStatus();
@@ -473,6 +585,8 @@
     });
 
     seekInput.addEventListener("input", function () {
+      // The thumb follows the finger while the current audio keeps playing.
+      // Only `change` (release) stops it and rebuilds at the new position.
       seeking = true;
       var value = Number(seekInput.value);
       currentTime.textContent = formatTime(value);
@@ -683,6 +797,10 @@
     addInfoRow("Current lesson", state.lesson
       ? state.lesson.number + " · " + state.lesson.title : "none");
     addInfoRow("Audio source", currentSource());
+    addInfoRow("Screen awake", !wakeLockSupported() ? "unsupported"
+      : (state.wakeLock === "active" ? "on while playing"
+        : (state.wakeLock === "requesting" ? "requesting…"
+          : (state.wakeLock === "blocked" ? "blocked by browser" : "off"))));
 
     if (manifestState === "ready" && manifestVersion && manifestVersion !== build) {
       var update = element("div", "app-info-update");
@@ -776,6 +894,8 @@
         integrity: state.player ? state.player.integritySummary() : null,
         position: state.player ? state.player.position() : 0,
         duration: state.player ? state.player.duration() : 0,
+        rate: state.player ? state.player.rate() : state.rate,
+        wakeLock: state.wakeLock,
         stems: state.player ? state.player.tracks.map(function (record) { return record.stem; }) : []
       };
     },
@@ -794,6 +914,10 @@
           duration: element && isFinite(element.duration) ? element.duration : (record.seconds || null),
           paused: element ? element.paused : true,
           loop: element ? element.loop : false,
+          rate: element ? element.playbackRate : null,
+          preservesPitch: element
+            ? !!(element.preservesPitch || element.webkitPreservesPitch || element.mozPreservesPitch)
+            : null,
           ended: element ? element.ended : false,
           error: element && element.error ? element.error.code : null,
           ready: !!record.ready,
@@ -823,6 +947,8 @@
         loadStatus: (document.querySelector(".load-status") || {}).textContent || null,
         playEnabled: !!(play && !play.disabled),
         seekValue: (document.querySelector(".seek-input") || {}).value || null,
+        tempoValue: (document.querySelector(".tempo-input") || {}).value || null,
+        tempoText: (document.querySelector(".tempo-value") || {}).textContent || null,
         active: active ? active.querySelector(".name").textContent : null,
         libraryVisible: !!(libraryPane.getClientRects().length),
         mainVisible: !!(mainPane.getClientRects().length)

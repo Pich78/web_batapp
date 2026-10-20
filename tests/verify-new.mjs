@@ -302,9 +302,9 @@ const infoPanel = await page.evaluate(() => ({
 }));
 check("app menu shows the loaded build and script versions",
   !infoPanel.hidden && infoPanel.expanded === "true" &&
-  infoPanel.build === "1.1.7" && infoPanel.text.indexOf("Loaded build") >= 0 &&
+  infoPanel.build === "1.2.0" && infoPanel.text.indexOf("Loaded build") >= 0 &&
   infoPanel.text.indexOf("Player") >= 0 && infoPanel.text.indexOf("WAV encoder") >= 0 &&
-  infoPanel.text.indexOf("1.1.7") >= 0,
+  infoPanel.text.indexOf("Screen awake") >= 0 && infoPanel.text.indexOf("1.2.0") >= 0,
   JSON.stringify(infoPanel));
 await page.keyboard.press("Escape");
 await page.waitForTimeout(100);
@@ -332,13 +332,37 @@ check("player shows the lesson title", ui.title === "Alubanche", ui.title);
 check("lesson page title", ui.documentTitle === "Alubanche · Toque 01 · Batá", ui.documentTitle);
 check("voiced toque gets five mixer rows", ui.rows === 5, ui.rows + " rows");
 check("loading gate is gone and Play is enabled", !ui.loader && ui.playEnabled, JSON.stringify(ui));
-const stopBox = await page.locator(".stop").evaluate((node) => {
-  const box = node.getBoundingClientRect();
-  return { width: box.width, height: box.height, font: parseFloat(getComputedStyle(node).fontSize) };
+check("speed bar defaults to 100%",
+  ui.tempoValue === "100" && ui.tempoText === "100%", JSON.stringify(ui));
+const barPlacement = await page.evaluate(() => {
+  const box = (selector) => {
+    const rect = document.querySelector(selector).getBoundingClientRect();
+    return { top: rect.top, bottom: rect.bottom };
+  };
+  return { seek: box(".seek"), tempo: box(".tempo") };
 });
-check("Stop button is visibly larger",
-  stopBox.height >= 35 && stopBox.width >= 78 && stopBox.font >= 14,
-  JSON.stringify(stopBox));
+check("speed bar sits under the time bar",
+  barPlacement.tempo.top >= barPlacement.seek.bottom - 1 &&
+  barPlacement.tempo.top <= barPlacement.seek.bottom + 8,
+  JSON.stringify(barPlacement));
+const stopPlacement = await page.locator(".stop").evaluate((node) => {
+  const box = node.getBoundingClientRect();
+  const next = node.previousElementSibling.getBoundingClientRect();
+  const transport = node.closest(".transport").getBoundingClientRect();
+  return {
+    width: box.width,
+    height: box.height,
+    afterNext: box.left >= next.right - 1,
+    sameRow: Math.abs((box.top + box.bottom) / 2 - (next.top + next.bottom) / 2) < 2,
+    insideTransport: box.left >= transport.left && box.right <= transport.right,
+    stopRows: document.querySelectorAll(".stop-row").length
+  };
+});
+check("Stop is a compact icon beside Next in the transport",
+  stopPlacement.width >= 40 && stopPlacement.height >= 40 &&
+  stopPlacement.afterNext && stopPlacement.sameRow &&
+  stopPlacement.insideTransport && stopPlacement.stopRows === 0,
+  JSON.stringify(stopPlacement));
 const initial = await page.evaluate(() => window.__batapp_new.tracks());
 check("Vox starts at 100%",
   initial.find((track) => track.stem === "vox").volume === 1,
@@ -391,6 +415,38 @@ await page.waitForTimeout(500);
 const resumed = await page.evaluate(() => window.__batapp_new.tracks().map((track) => track.currentTime));
 check("Play resumes from the seek point", resumed.every((time) => time > 9.5), JSON.stringify(resumed.map((time) => +time.toFixed(2))));
 
+// Dragging the seek bar keeps the current audio running; release rebuilds the
+// media generation at the new position (file:// path).
+const dragStart = await page.evaluate(() => ({
+  times: window.__batapp_new.tracks().map((track) => track.currentTime),
+  playing: window.__batapp_new.state().playing
+}));
+await page.locator(".seek-input").evaluate((input) => {
+  input.value = "20";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+});
+await page.waitForTimeout(500);
+const dragDuring = await page.evaluate(() => ({
+  times: window.__batapp_new.tracks().map((track) => track.currentTime),
+  tracks: window.__batapp_new.tracks(),
+  playing: window.__batapp_new.state().playing
+}));
+check("dragging the seek bar keeps file playback running",
+  dragStart.playing && dragDuring.playing &&
+  dragDuring.tracks.every((track) => !track.paused) &&
+  dragDuring.times.every((time, index) => time > dragStart.times[index] + 0.2),
+  JSON.stringify({ start: dragStart.times.map((time) => +time.toFixed(2)), during: dragDuring.times.map((time) => +time.toFixed(2)) }));
+await page.locator(".seek-input").evaluate((input) => {
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+});
+await page.waitForTimeout(700);
+const dragAfter = await page.evaluate(() => window.__batapp_new.tracks());
+check("releasing the seek bar restarts at the new point",
+  dragAfter.every((track) => !track.paused && track.currentTime >= 19.9 && track.currentTime < 22) &&
+  Math.max(...dragAfter.map((track) => track.currentTime)) -
+    Math.min(...dragAfter.map((track) => track.currentTime)) < 0.12,
+  JSON.stringify(dragAfter.map((track) => +track.currentTime.toFixed(2))));
+
 // Volume slider + fill
 await page.locator(".stem[data-stem='iya'] input").evaluate((input) => {
   input.value = "30";
@@ -418,19 +474,113 @@ await page.waitForTimeout(400);
 check("Stop rewinds every stem", await page.evaluate(() => window.__batapp_new.tracks().every((track) => track.currentTime < 0.25)));
 check("Stop resets the seek label", (await page.locator(".time.current").textContent()).trim() === "0:00");
 
-// Prev / Next (DOM order: prev, next among the ghost buttons)
-const ghosts = page.locator(".transport .ghost");
+// Tempo: every stem follows the selected rate, and the shared clock stays
+// aligned with the audible position when the rate changes mid-play.
+await page.locator(".tempo-input").evaluate((input) => {
+  input.value = "50";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+});
+const slowTracks = await page.evaluate(() => window.__batapp_new.tracks());
+check("50% tempo applies to every stem",
+  slowTracks.every((track) => Math.abs(track.rate - 0.5) < 0.001),
+  JSON.stringify(slowTracks.map((track) => track.stem + "=" + track.rate)));
+check("tempo changes preserve the recorded pitch",
+  slowTracks.every((track) => track.preservesPitch === true),
+  JSON.stringify(slowTracks.map((track) => track.stem + "=" + track.preservesPitch)));
+await page.locator("button.play").click();
+await page.waitForTimeout(1600);
+const slow = await page.evaluate(() => ({
+  state: window.__batapp_new.state(),
+  media: window.__batapp_new.tracks().reduce((sum, track) => sum + track.currentTime, 0) /
+    window.__batapp_new.tracks().length
+}));
+check("50% advances the media clock at half speed",
+  slow.media > 0.45 && slow.media < 1.05 &&
+  Math.abs(slow.state.position - slow.media) < 0.25,
+  JSON.stringify({ position: slow.state.position, media: slow.media }));
+
+const beforeFast = await page.evaluate(() => window.__batapp_new.state());
+await page.locator(".tempo-input").evaluate((input) => {
+  input.value = "150";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+});
+await page.waitForTimeout(80);
+const reanchored = await page.evaluate(() => window.__batapp_new.state());
+check("changing tempo while playing does not jump the position",
+  Math.abs(reanchored.position - beforeFast.position) < 0.35,
+  JSON.stringify({ before: beforeFast.position, after: reanchored.position }));
+await page.waitForTimeout(800);
+const fast = await page.evaluate(() => window.__batapp_new.state());
+check("150% advances the shared clock at 1.5x",
+  fast.rate === 1.5 && fast.position - reanchored.position > 0.9 &&
+  fast.position - reanchored.position < 1.5,
+  JSON.stringify({ rate: fast.rate, before: reanchored.position, after: fast.position }));
+
+// The loop timer follows the tempo too: at 50%, one second of media takes two
+// seconds of wall time, so the shared rewind must not fire early.
+await page.locator(".stop").click();
+await page.waitForTimeout(300);
+await page.locator(".tempo-input").evaluate((input) => {
+  input.value = "50";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+});
+const loopDuration = await page.evaluate(() => window.__batapp_new.state().duration);
+await page.locator(".seek-input").evaluate((input, value) => {
+  input.value = String(value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}, loopDuration - 1);
+await page.waitForTimeout(350);
+await page.locator("button.play").click();
+await page.waitForTimeout(1200);
+const slowLoopEarly = await page.evaluate(() => window.__batapp_new.tracks().map((track) => track.currentTime));
+check("50% loop does not rewind before the media reaches the end",
+  slowLoopEarly.every((time) => time > loopDuration - 0.7),
+  JSON.stringify({ duration: loopDuration, times: slowLoopEarly.map((time) => +time.toFixed(2)) }));
+await page.waitForTimeout(1200);
+const slowLoopWrapped = await page.evaluate(() => window.__batapp_new.tracks().map((track) => track.currentTime));
+check("50% loop rewinds together after the rate-adjusted boundary",
+  slowLoopWrapped.every((time) => time < 1) &&
+  Math.max(...slowLoopWrapped) - Math.min(...slowLoopWrapped) < 0.12,
+  JSON.stringify(slowLoopWrapped.map((time) => +time.toFixed(2))));
+
+await page.locator(".stop").click();
+await page.waitForTimeout(300);
+await page.locator(".tempo-input").evaluate((input) => {
+  input.value = "100";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+});
+check("100% restores the original tempo",
+  (await page.evaluate(() => window.__batapp_new.state().rate)) === 1);
+
+// Prev / Next (Stop is the third ghost; navigation is the first two)
+await page.locator(".tempo-input").evaluate((input) => {
+  input.value = "75";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+});
+const ghosts = page.locator(".transport .ghost:not(.stop)");
 check("Prev is disabled on the first lesson", await ghosts.nth(0).isDisabled());
 await ghosts.nth(1).click();
 await page.waitForTimeout(700);
 await ready();
 check("Next opens the next rhythm", (await page.evaluate(() => window.__batapp_new.state().lesson)) === "volume-1/02-tani-tani-cho-bi",
   await page.evaluate(() => window.__batapp_new.state().lesson));
-await page.locator(".transport .ghost").nth(0).click();
+check("selected tempo follows the next rhythm",
+  (await page.evaluate(() => window.__batapp_new.state().rate)) === 0.75 &&
+  (await page.evaluate(() => window.__batapp_new.ui().tempoValue)) === "75",
+  await page.evaluate(() => JSON.stringify(window.__batapp_new.ui())));
+await page.locator(".transport .ghost:not(.stop)").nth(0).click();
 await page.waitForTimeout(700);
 await ready();
 check("Prev steps back", (await page.evaluate(() => window.__batapp_new.state().lesson)) === "volume-1/01-alubanche",
   await page.evaluate(() => window.__batapp_new.state().lesson));
+check("selected tempo survives stepping back",
+  (await page.evaluate(() => window.__batapp_new.state().rate)) === 0.75,
+  await page.evaluate(() => window.__batapp_new.state().rate));
+await page.locator(".tempo-input").evaluate((input) => {
+  input.value = "100";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+});
 
 // Keyboard
 await page.evaluate(() => document.activeElement && document.activeElement.blur());
@@ -444,6 +594,71 @@ await page.keyboard.press("Escape");
 await page.waitForTimeout(400);
 check("Escape returns to the library", (await page.evaluate(() => window.__batapp_new.state().view)) === "library");
 
+// --- screen wake lock while playing ----------------------------------------
+const wake = await browser.newPage({ viewport });
+await wake.bringToFront();
+await wake.addInitScript(() => {
+  window.__wakeLog = { requests: 0, releases: 0, active: 0 };
+  const fakeWakeLock = {
+    request: function () {
+      window.__wakeLog.requests += 1;
+      window.__wakeLog.active += 1;
+      const sentinel = new EventTarget();
+      sentinel.released = false;
+      sentinel.release = function () {
+        if (sentinel.released) return Promise.resolve();
+        sentinel.released = true;
+        window.__wakeLog.releases += 1;
+        window.__wakeLog.active -= 1;
+        sentinel.dispatchEvent(new Event("release"));
+        return Promise.resolve();
+      };
+      return Promise.resolve(sentinel);
+    }
+  };
+  try {
+    Object.defineProperty(navigator, "wakeLock", { configurable: true, value: fakeWakeLock });
+  } catch (error) {
+    Object.defineProperty(Object.getPrototypeOf(navigator), "wakeLock",
+      { configurable: true, value: fakeWakeLock });
+  }
+});
+await wake.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
+await ready(wake);
+await wake.locator("button.play").click();
+await wake.waitForTimeout(700);
+let wakeState = await wake.evaluate(() => ({
+  log: window.__wakeLog,
+  app: window.__batapp_new.state()
+}));
+check("playing requests a screen wake lock",
+  wakeState.log.requests === 1 && wakeState.log.active === 1 &&
+  wakeState.app.wakeLock === "active",
+  JSON.stringify(wakeState));
+await wake.locator("button.play").click();
+await wake.waitForTimeout(300);
+wakeState = await wake.evaluate(() => ({
+  log: window.__wakeLog,
+  app: window.__batapp_new.state()
+}));
+check("pausing releases the screen wake lock",
+  wakeState.log.requests === 1 && wakeState.log.releases === 1 &&
+  wakeState.log.active === 0 && wakeState.app.wakeLock === "off",
+  JSON.stringify(wakeState));
+await wake.locator("button.play").click();
+await wake.waitForTimeout(400);
+await wake.locator(".stop").click();
+await wake.waitForTimeout(300);
+wakeState = await wake.evaluate(() => ({
+  log: window.__wakeLog,
+  app: window.__batapp_new.state()
+}));
+check("Stop releases the screen wake lock",
+  wakeState.log.requests === 2 && wakeState.log.releases === 2 &&
+  wakeState.log.active === 0 && wakeState.app.wakeLock === "off",
+  JSON.stringify(wakeState));
+await wake.close();
+
 // --- transport regression: pause → mute → play → backward seek ------------
 const transport = await browser.newPage({ viewport });
 await transport.bringToFront();
@@ -456,6 +671,7 @@ await transport.waitForFunction(
   { timeout: 25000 }
 );
 let media = await transport.evaluate(() => window.__mediaProbeSummary());
+let generations = media.created;
 check("one media element per stem", media.created === 5 && media.active === 0, JSON.stringify(media));
 check("all five media elements loop", media.loops.length === 5 && media.loops.every(Boolean), JSON.stringify(media.loops));
 
@@ -478,13 +694,14 @@ await transport.locator(".seek-input").evaluate((input) => {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 });
 await transport.waitForTimeout(500);
+generations += 5; // seek release rebuilds the media generation
 const sequence = await transport.evaluate(() => ({
   media: window.__mediaProbeSummary(),
   tracks: window.__batapp_new.tracks(),
   state: window.__batapp_new.state()
 }));
 check("pause + mute + play + backward seek keeps five active stems",
-  sequence.media.created === 5 && sequence.media.active === 5 &&
+  sequence.media.created === generations && sequence.media.active === 5 &&
   sequence.media.rates.length === 1 && sequence.media.rates[0] === 1 &&
   sequence.state.mixerPlaying === true,
   JSON.stringify(sequence.media));
@@ -503,6 +720,7 @@ await transport.locator(".seek-input").evaluate((input, value) => {
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }, duration - 0.7);
+generations += 5; // seek release rebuilds the media generation
 await transport.waitForTimeout(300);
 await transport.evaluate(() => { window.__mediaProbe.seeks = []; });
 let wrappedConverged = true;
@@ -523,7 +741,7 @@ const wrapTimes = wrapped.tracks.map((track) => track.currentTime);
 const wrapSeeks = wrapped.media.seeks.slice(-5);
 check("loop boundary keeps all five stems together",
   wrappedConverged &&
-  wrapped.media.created === 5 && wrapped.media.active === 5 && wrapped.media.loops.every(Boolean) &&
+  wrapped.media.created === generations && wrapped.media.active === 5 && wrapped.media.loops.every(Boolean) &&
   wrapTimes.every((time) => time < 2.5) &&
   Math.max(...wrapTimes) - Math.min(...wrapTimes) < 0.12,
   JSON.stringify({ media: { created: wrapped.media.created, active: wrapped.media.active, loops: wrapped.media.loops }, times: wrapTimes.map((time) => +time.toFixed(2)) }));
@@ -543,13 +761,14 @@ await transport.locator(".seek-input").evaluate((input) => {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 });
 await transport.waitForTimeout(500);
+generations += 5; // seek release rebuilds the media generation
 const afterWrap = await transport.evaluate(() => ({
   media: window.__mediaProbeSummary(),
   tracks: window.__batapp_new.tracks()
 }));
 const afterTimes = afterWrap.tracks.map((track) => track.currentTime);
 check("pause + mute + backward seek after the loop keeps Beat playing",
-  afterWrap.media.created === 5 && afterWrap.media.active === 5 &&
+  afterWrap.media.created === generations && afterWrap.media.active === 5 &&
   afterWrap.tracks.find((track) => track.stem === "beat").paused === false &&
   afterTimes.every((time) => time >= 2.9) &&
   Math.max(...afterTimes) - Math.min(...afterTimes) < 0.12,
@@ -565,7 +784,7 @@ const stopped = await transport.evaluate(() => ({
   ui: window.__batapp_new.ui()
 }));
 check("Stop pauses and rewinds every stem to 0",
-  stopped.media.created === 5 && stopped.media.active === 0 &&
+  stopped.media.created === generations && stopped.media.active === 0 &&
   stopped.tracks.every((track) => track.paused === true && track.currentTime < 0.1) &&
   stopped.state.playing === false && stopped.state.mixerPlaying === false &&
   stopped.ui.seekValue === "0",
@@ -666,6 +885,9 @@ for (const [width, height] of portraitSizes) {
       app: box(document.getElementById("app")),
       menu: box(document.getElementById("app-info-button")),
       seek: box(document.querySelector(".seek")),
+      tempo: box(document.querySelector(".tempo")),
+      transport: box(document.querySelector(".transport")),
+      next: box(document.querySelectorAll(".transport .ghost")[1]),
       stop: box(document.querySelector(".stop")),
       rows: Array.from(document.querySelectorAll(".stem")).map(box),
       viewport: [window.innerWidth, window.innerHeight],
@@ -685,10 +907,17 @@ for (const [width, height] of portraitSizes) {
     snap.mixerScroll[1] <= snap.mixerScroll[3] + 1 &&
     snap.mainScroll[1] <= snap.mainScroll[3] + 1 &&
     snap.seek.top >= 0 && snap.seek.bottom <= snap.viewport[1] &&
+    snap.tempo.top >= snap.seek.bottom - 1 &&
+    snap.tempo.top >= 0 && snap.tempo.bottom <= snap.viewport[1] &&
     snap.stop.top >= 0 && snap.stop.bottom <= snap.viewport[1] &&
     snap.rows.length === 5 && snap.rows.every((row) =>
       row.top >= -1 && row.bottom <= snap.viewport[1] + 1),
-    JSON.stringify({ player: snap.playerScroll, mixer: snap.mixerScroll, main: snap.mainScroll, seek: snap.seek, stop: snap.stop, rows: snap.rows }));
+    JSON.stringify({ player: snap.playerScroll, mixer: snap.mixerScroll, main: snap.mainScroll, seek: snap.seek, tempo: snap.tempo, stop: snap.stop, rows: snap.rows }));
+  check(label + " portrait places Stop beside Next",
+    snap.stop.left >= snap.next.right - 1 &&
+    Math.abs((snap.stop.top + snap.stop.bottom) / 2 - (snap.next.top + snap.next.bottom) / 2) < 2 &&
+    snap.stop.right <= snap.viewport[0],
+    JSON.stringify({ transport: snap.transport, next: snap.next, stop: snap.stop }));
   check(label + " portrait keeps the app menu in the top-left safe area",
     snap.menu.left >= 0 && snap.menu.top >= 0 &&
     snap.menu.right <= 52 && snap.menu.bottom <= 52,
@@ -733,9 +962,11 @@ function landscapeSnapshot(page) {
     return {
       hero: box(document.querySelector(".hero")),
       transport: box(document.querySelector(".transport")),
+      next: box(document.querySelectorAll(".transport .ghost")[1]),
       stop: box(document.querySelector(".stop")),
       mixer: box(mixer),
       seek: box(document.querySelector(".seek")),
+      tempo: box(document.querySelector(".tempo")),
       rows: Array.from(document.querySelectorAll(".stem")).map(box),
       app: box(document.getElementById("app")),
       viewport: [window.innerWidth, window.innerHeight],
@@ -765,18 +996,21 @@ for (const [width, height] of landscapeSizes) {
     snap.mixerScroll[1] <= snap.mixerScroll[3] + 1 &&
     snap.mainScroll[1] <= snap.mainScroll[3] + 1,
     JSON.stringify({ player: snap.playerScroll, mixer: snap.mixerScroll, main: snap.mainScroll }));
-  check(label + " landscape shows the seek bar and all mixer rows",
+  check(label + " landscape shows the speed bar, seek bar and all mixer rows",
     snap.seek.top >= 0 && snap.seek.bottom <= snap.viewport[1] &&
+    snap.tempo.top >= snap.seek.bottom - 1 &&
+    snap.tempo.top >= 0 && snap.tempo.bottom <= snap.viewport[1] &&
     snap.rows.length === 5 && snap.rows.every((row) =>
       row.top >= -1 && row.bottom <= snap.viewport[1] + 1 &&
       row.left >= -1 && row.right <= snap.viewport[0] + 1),
-    JSON.stringify({ seek: snap.seek, rows: snap.rows }));
-  check(label + " landscape places Stop beside the transport",
+    JSON.stringify({ seek: snap.seek, tempo: snap.tempo, rows: snap.rows }));
+  check(label + " landscape places Stop beside Next in the transport",
+    snap.stop.left >= snap.next.right - 1 &&
+    Math.abs((snap.stop.top + snap.stop.bottom) / 2 - (snap.next.top + snap.next.bottom) / 2) < 2 &&
     snap.stop.left >= 0 && snap.stop.right <= snap.viewport[0] &&
     snap.stop.top >= 0 && snap.stop.bottom <= snap.viewport[1] &&
-    Math.abs((snap.stop.top + snap.stop.bottom) / 2 - (snap.transport.top + snap.transport.bottom) / 2) < 12 &&
     snap.hero.right <= snap.mixer.left + 2,
-    JSON.stringify({ transport: snap.transport, stop: snap.stop, hero: snap.hero, mixer: snap.mixer }));
+    JSON.stringify({ transport: snap.transport, next: snap.next, stop: snap.stop, hero: snap.hero, mixer: snap.mixer }));
   if (label === "844x390") {
     await page.locator("button.play").click();
     await page.waitForTimeout(2200);
@@ -860,6 +1094,8 @@ const desktopPlayer = await desktop.evaluate(() => {
     twoCols: hero.right <= mixer.left + 2,
     mixerRows: document.querySelectorAll(".stem").length,
     seek: !!document.querySelector(".seek"),
+    tempo: !!document.querySelector(".tempo"),
+    stopInTransport: !!document.querySelector(".transport .stop"),
     backVisible: !!(back && back.getClientRects().length),
     scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
     viewport: [window.innerWidth, window.innerHeight]
@@ -868,7 +1104,9 @@ const desktopPlayer = await desktop.evaluate(() => {
 check("desktop sidebar persists while a lesson is open", desktopPlayer.libraryWidth >= 340, desktopPlayer.libraryWidth + "px");
 check("desktop marks the active sidebar row", desktopPlayer.active === "Alubanche", desktopPlayer.active);
 check("desktop player shows hero and mixer side by side", desktopPlayer.twoCols, JSON.stringify(desktopPlayer));
-check("desktop player has the seek bar", desktopPlayer.seek);
+check("desktop player has the seek and speed bars",
+  desktopPlayer.seek && desktopPlayer.tempo, JSON.stringify(desktopPlayer));
+check("desktop keeps Stop in the transport", desktopPlayer.stopInTransport);
 check("desktop hides the back button", !desktopPlayer.backVisible);
 check("desktop mixer has five rows", desktopPlayer.mixerRows === 5, desktopPlayer.mixerRows + " rows");
 check("desktop player has no page overflow",
@@ -1139,7 +1377,7 @@ try {
     JSON.stringify({ wav: wavInfo.duration, transport: wavInfo.transportDuration, wavBytes: wavInfo.wavBytes, file: wavInfo.bytes }));
 
   await served.locator("#app-info-button").click();
-  await served.waitForFunction(() => window.__batapp_new.state().manifest === "1.1.7", null, { timeout: 10000 });
+  await served.waitForFunction(() => window.__batapp_new.state().manifest === "1.2.0", null, { timeout: 10000 });
   const servedInfo = await served.evaluate(() => ({
     text: document.getElementById("app-info-panel").innerText,
     hidden: document.getElementById("app-info-panel").hidden,
@@ -1147,8 +1385,8 @@ try {
     manifest: window.__batapp_new.state().manifest
   }));
   check("HTTP app menu reports the loaded build, manifest and WAV source",
-    !servedInfo.hidden && servedInfo.build === "1.1.7" &&
-    servedInfo.manifest === "1.1.7" &&
+    !servedInfo.hidden && servedInfo.build === "1.2.0" &&
+    servedInfo.manifest === "1.2.0" &&
     servedInfo.text.indexOf("Current lesson") >= 0 &&
     servedInfo.text.indexOf("Alubanche") >= 0 &&
     servedInfo.text.indexOf("WAV ×5") >= 0,
@@ -1196,25 +1434,63 @@ try {
     resumedTimes.every((time) => Math.abs(time - (pausedPosition + 0.7)) < 0.35) &&
     resumedTracks.find((track) => track.stem === "iya").muted === true,
     JSON.stringify({ paused: +pausedPosition.toFixed(3), times: resumedTimes.map((time) => +time.toFixed(3)) }));
-  await served.locator(".seek-input").evaluate((input) => {
-    input.value = "10";
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  await served.waitForTimeout(500);
-  const servedSequence = await served.evaluate(() => ({
+  const resumedSequence = await served.evaluate(() => ({
     media: window.__mediaProbeSummary(),
     tracks: window.__batapp_new.tracks(),
     state: window.__batapp_new.state()
   }));
   check("HTTP pause + mute + play rebuilds a fresh generation at the same point",
     initialGeneration.created === 5 &&
-    servedSequence.media.created === initialGeneration.created + 5 &&
+    resumedSequence.media.created === initialGeneration.created + 5 &&
+    resumedSequence.media.active === 5 &&
+    resumedSequence.media.rates.length === 1 && resumedSequence.state.mixerPlaying === true &&
+    resumedSequence.tracks.every((track) => !track.paused) &&
+    resumedSequence.tracks.find((track) => track.stem === "iya").muted === true &&
+    resumedSequence.tracks[0].src !== initialGeneration.src,
+    JSON.stringify({ media: resumedSequence.media, tracks: resumedSequence.tracks.map((track) => ({ stem: track.stem, t: +track.currentTime.toFixed(2), muted: track.muted })) }));
+
+  // Dragging the seek bar must keep playback alive; releasing it rebuilds the
+  // media pipeline at the new position so buffered old-position audio cannot
+  // replay (the same rule as Pause/Stop).
+  const beforeSeek = await served.evaluate(() => ({
+    created: window.__mediaProbeSummary().created,
+    seeks: window.__mediaProbeSummary().seeks.length,
+    src: window.__batapp_new.tracks()[0].src,
+    position: window.__batapp_new.state().position
+  }));
+  await served.locator(".seek-input").evaluate((input) => {
+    input.value = "10";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await served.waitForTimeout(600);
+  const dragging = await served.evaluate(() => ({
+    media: window.__mediaProbeSummary(),
+    tracks: window.__batapp_new.tracks(),
+    state: window.__batapp_new.state()
+  }));
+  check("HTTP dragging the seek bar keeps playback running",
+    dragging.media.created === beforeSeek.created &&
+    dragging.media.seeks.length === beforeSeek.seeks &&
+    dragging.media.active === 5 && dragging.state.mixerPlaying === true &&
+    dragging.tracks.every((track) => !track.paused) &&
+    dragging.state.position > beforeSeek.position + 0.3,
+    JSON.stringify({ before: beforeSeek, media: dragging.media, position: dragging.state.position }));
+  await served.locator(".seek-input").evaluate((input) => {
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await served.waitForTimeout(700);
+  const servedSequence = await served.evaluate(() => ({
+    media: window.__mediaProbeSummary(),
+    tracks: window.__batapp_new.tracks(),
+    state: window.__batapp_new.state()
+  }));
+  check("HTTP releasing the seek bar rebuilds a fresh generation at the new point",
+    servedSequence.media.created === beforeSeek.created + 5 &&
     servedSequence.media.active === 5 &&
     servedSequence.media.rates.length === 1 && servedSequence.state.mixerPlaying === true &&
     servedSequence.tracks.every((track) => track.currentTime >= 9.9 && track.currentTime < 12) &&
     servedSequence.tracks.find((track) => track.stem === "iya").muted === true &&
-    servedSequence.tracks[0].src !== initialGeneration.src,
+    servedSequence.tracks[0].src !== beforeSeek.src,
     JSON.stringify({ media: servedSequence.media, tracks: servedSequence.tracks.map((track) => ({ stem: track.stem, t: +track.currentTime.toFixed(2), muted: track.muted })) }));
 
   // Stop -> Play must create another fresh generation at zero, without
