@@ -30,7 +30,9 @@
  *   - setRate() changes every stem's playback rate together (pitch preserved).
  *     The shared clock and the loop timer scale with the rate, so seeking,
  *     progress and the shared loop rewind stay aligned while practising slower
- *     or faster.
+ *     or faster. setRateFresh() also discards the current media generation
+ *     before restarting; the speed buttons use it on release so buffered audio
+ *     cannot replay at the old rate.
  *
  * Exposes window.BatappPlayer as a classic script. No modules, no build step.
  */
@@ -1151,6 +1153,32 @@
       this._loopTimer = 0;
     }
     this._scheduleLoop(this._playToken);
+    return next;
+  };
+
+  BatappPlayer.prototype.setRateFresh = function (rate) {
+    if (this._disposed) return this._rate;
+    var next = clampRate(rate);
+    if (next === this._rate) return next;
+
+    var wasPlaying = this._state === "playing";
+    var position = wasPlaying ? this._mediaPosition() : this._offset;
+    this._rate = next;
+    this._offset = position;
+    this._clockOffset = position;
+    this._clockStartedAt = performance.now();
+    // A tempo change must not leave the old buffered generation in the media
+    // pipeline. Rebuild it on the next start, exactly like Pause/Stop/Seek.
+    this._needsFreshGeneration = true;
+
+    if (wasPlaying) {
+      this._state = "paused";
+      this.play();
+    } else {
+      // Keep the paused elements ready at the same position; Play will rebuild
+      // them from the retained source with the new rate.
+      this.tracks.forEach(this._applyRate, this);
+    }
     return next;
   };
 

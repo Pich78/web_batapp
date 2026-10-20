@@ -187,6 +187,12 @@ async function ready(scope = page) {
     { timeout: 25000 }
   );
 }
+async function stepSpeed(scope, delta, times = 1) {
+  await scope.evaluate(({ delta, times }) => {
+    const button = document.querySelector('.speed-step[data-delta="' + delta + '"]');
+    for (let index = 0; index < times; index += 1) button.click();
+  }, { delta, times });
+}
 
 /* Count real media elements, contexts, seeks and play/pause calls. */
 function installMediaProbe() {
@@ -302,9 +308,9 @@ const infoPanel = await page.evaluate(() => ({
 }));
 check("app menu shows the loaded build and script versions",
   !infoPanel.hidden && infoPanel.expanded === "true" &&
-  infoPanel.build === "1.2.0" && infoPanel.text.indexOf("Loaded build") >= 0 &&
+  infoPanel.build === "1.2.1" && infoPanel.text.indexOf("Loaded build") >= 0 &&
   infoPanel.text.indexOf("Player") >= 0 && infoPanel.text.indexOf("WAV encoder") >= 0 &&
-  infoPanel.text.indexOf("Screen awake") >= 0 && infoPanel.text.indexOf("1.2.0") >= 0,
+  infoPanel.text.indexOf("Screen awake") >= 0 && infoPanel.text.indexOf("1.2.1") >= 0,
   JSON.stringify(infoPanel));
 await page.keyboard.press("Escape");
 await page.waitForTimeout(100);
@@ -332,19 +338,30 @@ check("player shows the lesson title", ui.title === "Alubanche", ui.title);
 check("lesson page title", ui.documentTitle === "Alubanche · Toque 01 · Batá", ui.documentTitle);
 check("voiced toque gets five mixer rows", ui.rows === 5, ui.rows + " rows");
 check("loading gate is gone and Play is enabled", !ui.loader && ui.playEnabled, JSON.stringify(ui));
-check("speed bar defaults to 100%",
-  ui.tempoValue === "100" && ui.tempoText === "100%", JSON.stringify(ui));
-const barPlacement = await page.evaluate(() => {
+check("speed control defaults to 100%",
+  ui.speedValue === "100%", JSON.stringify(ui));
+check("speed control has minus and plus buttons",
+  (await page.locator(".speed-step").count()) === 2);
+const speedPlacement = await page.evaluate(() => {
   const box = (selector) => {
     const rect = document.querySelector(selector).getBoundingClientRect();
     return { top: rect.top, bottom: rect.bottom };
   };
-  return { seek: box(".seek"), tempo: box(".tempo") };
+  const speed = document.querySelector(".speed-controls");
+  const mixer = document.querySelector(".mixer");
+  return {
+    transport: box(".transport"),
+    speed: box(".speed-controls"),
+    mixer: box(".mixer"),
+    beforeMixer: !!(speed.compareDocumentPosition(mixer) & Node.DOCUMENT_POSITION_FOLLOWING),
+    tempoRows: document.querySelectorAll(".tempo").length
+  };
 });
-check("speed bar sits under the time bar",
-  barPlacement.tempo.top >= barPlacement.seek.bottom - 1 &&
-  barPlacement.tempo.top <= barPlacement.seek.bottom + 8,
-  JSON.stringify(barPlacement));
+check("speed controls sit below Play and before the mixer",
+  speedPlacement.speed.top >= speedPlacement.transport.bottom - 1 &&
+  speedPlacement.speed.bottom <= speedPlacement.mixer.top + 1 &&
+  speedPlacement.beforeMixer && speedPlacement.tempoRows === 0,
+  JSON.stringify(speedPlacement));
 const stopPlacement = await page.locator(".stop").evaluate((node) => {
   const box = node.getBoundingClientRect();
   const next = node.previousElementSibling.getBoundingClientRect();
@@ -474,56 +491,89 @@ await page.waitForTimeout(400);
 check("Stop rewinds every stem", await page.evaluate(() => window.__batapp_new.tracks().every((track) => track.currentTime < 0.25)));
 check("Stop resets the seek label", (await page.locator(".time.current").textContent()).trim() === "0:00");
 
-// Tempo: every stem follows the selected rate, and the shared clock stays
-// aligned with the audible position when the rate changes mid-play.
-await page.locator(".tempo-input").evaluate((input) => {
-  input.value = "50";
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-});
-const slowTracks = await page.evaluate(() => window.__batapp_new.tracks());
-check("50% tempo applies to every stem",
-  slowTracks.every((track) => Math.abs(track.rate - 0.5) < 0.001),
-  JSON.stringify(slowTracks.map((track) => track.stem + "=" + track.rate)));
-check("tempo changes preserve the recorded pitch",
-  slowTracks.every((track) => track.preservesPitch === true),
-  JSON.stringify(slowTracks.map((track) => track.stem + "=" + track.preservesPitch)));
+// Speed buttons: holding keeps the current audio running; release applies one
+// 1% step and rebuilds every stem at the current position.
+const plusBox = await page.locator('.speed-step[data-delta="1"]').boundingBox();
 await page.locator("button.play").click();
-await page.waitForTimeout(1600);
-const slow = await page.evaluate(() => ({
+await page.waitForTimeout(700);
+const beforeHold = await page.evaluate(() => ({
   state: window.__batapp_new.state(),
-  media: window.__batapp_new.tracks().reduce((sum, track) => sum + track.currentTime, 0) /
-    window.__batapp_new.tracks().length
+  tracks: window.__batapp_new.tracks()
 }));
-check("50% advances the media clock at half speed",
-  slow.media > 0.45 && slow.media < 1.05 &&
-  Math.abs(slow.state.position - slow.media) < 0.25,
-  JSON.stringify({ position: slow.state.position, media: slow.media }));
-
-const beforeFast = await page.evaluate(() => window.__batapp_new.state());
-await page.locator(".tempo-input").evaluate((input) => {
-  input.value = "150";
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-});
-await page.waitForTimeout(80);
-const reanchored = await page.evaluate(() => window.__batapp_new.state());
-check("changing tempo while playing does not jump the position",
-  Math.abs(reanchored.position - beforeFast.position) < 0.35,
-  JSON.stringify({ before: beforeFast.position, after: reanchored.position }));
+await page.mouse.move(plusBox.x + plusBox.width / 2, plusBox.y + plusBox.height / 2);
+await page.mouse.down();
+await page.waitForTimeout(600);
+const whileHeld = await page.evaluate(() => ({
+  state: window.__batapp_new.state(),
+  tracks: window.__batapp_new.tracks()
+}));
+check("holding + keeps playback running without changing speed",
+  beforeHold.state.playing && whileHeld.state.playing &&
+  whileHeld.state.rate === 1 &&
+  whileHeld.tracks.every((track) => !track.paused) &&
+  whileHeld.state.position > beforeHold.state.position + 0.3,
+  JSON.stringify({ before: beforeHold.state.position, held: whileHeld.state.position, rate: whileHeld.state.rate }));
+await page.mouse.up();
 await page.waitForTimeout(800);
-const fast = await page.evaluate(() => window.__batapp_new.state());
-check("150% advances the shared clock at 1.5x",
-  fast.rate === 1.5 && fast.position - reanchored.position > 0.9 &&
-  fast.position - reanchored.position < 1.5,
-  JSON.stringify({ rate: fast.rate, before: reanchored.position, after: fast.position }));
+const afterHold = await page.evaluate(() => ({
+  state: window.__batapp_new.state(),
+  tracks: window.__batapp_new.tracks(),
+  ui: window.__batapp_new.ui()
+}));
+check("releasing + applies 1% to every stem and keeps the position",
+  afterHold.state.rate === 1.01 && afterHold.ui.speedValue === "101%" &&
+  afterHold.tracks.every((track) => Math.abs(track.rate - 1.01) < 0.001) &&
+  afterHold.tracks.every((track) => !track.paused) &&
+  afterHold.state.position > whileHeld.state.position - 0.3 &&
+  afterHold.state.position < whileHeld.state.position + 1.5,
+  JSON.stringify({ rate: afterHold.state.rate, speed: afterHold.ui.speedValue, before: whileHeld.state.position, after: afterHold.state.position }));
+check("speed changes preserve the recorded pitch",
+  afterHold.tracks.every((track) => track.preservesPitch === true),
+  JSON.stringify(afterHold.tracks.map((track) => track.stem + "=" + track.preservesPitch)));
+await stepSpeed(page, -1);
+await page.waitForTimeout(500);
+check("minus returns to 100%",
+  (await page.evaluate(() => window.__batapp_new.state().rate)) === 1 &&
+  (await page.evaluate(() => window.__batapp_new.ui().speedValue)) === "100%",
+  await page.evaluate(() => JSON.stringify(window.__batapp_new.ui())));
 
-// The loop timer follows the tempo too: at 50%, one second of media takes two
-// seconds of wall time, so the shared rewind must not fire early.
+// Boundaries and rate-aware clock.
 await page.locator(".stop").click();
 await page.waitForTimeout(300);
-await page.locator(".tempo-input").evaluate((input) => {
-  input.value = "50";
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-});
+await stepSpeed(page, 1, 60);
+const topSpeed = await page.evaluate(() => ({
+  state: window.__batapp_new.state(),
+  ui: window.__batapp_new.ui(),
+  plusDisabled: document.querySelector('.speed-step[data-delta="1"]').disabled,
+  minusDisabled: document.querySelector('.speed-step[data-delta="-1"]').disabled
+}));
+check("plus stops at 150% and disables itself",
+  topSpeed.state.rate === 1.5 && topSpeed.ui.speedValue === "150%" &&
+  topSpeed.plusDisabled && !topSpeed.minusDisabled,
+  JSON.stringify(topSpeed));
+await page.locator("button.play").click();
+await page.waitForTimeout(1400);
+const fast = await page.evaluate(() => window.__batapp_new.state());
+check("150% advances the shared clock at 1.5x",
+  fast.rate === 1.5 && fast.position > 1.6 && fast.position < 2.5,
+  JSON.stringify(fast));
+await page.locator(".stop").click();
+await page.waitForTimeout(300);
+
+await stepSpeed(page, -1, 110);
+const bottomSpeed = await page.evaluate(() => ({
+  state: window.__batapp_new.state(),
+  ui: window.__batapp_new.ui(),
+  plusDisabled: document.querySelector('.speed-step[data-delta="1"]').disabled,
+  minusDisabled: document.querySelector('.speed-step[data-delta="-1"]').disabled
+}));
+check("minus stops at 50% and disables itself",
+  bottomSpeed.state.rate === 0.5 && bottomSpeed.ui.speedValue === "50%" &&
+  bottomSpeed.minusDisabled && !bottomSpeed.plusDisabled,
+  JSON.stringify(bottomSpeed));
+
+// The loop timer follows the speed too: at 50%, one second of media takes two
+// seconds of wall time, so the shared rewind must not fire early.
 const loopDuration = await page.evaluate(() => window.__batapp_new.state().duration);
 await page.locator(".seek-input").evaluate((input, value) => {
   input.value = String(value);
@@ -546,18 +596,13 @@ check("50% loop rewinds together after the rate-adjusted boundary",
 
 await page.locator(".stop").click();
 await page.waitForTimeout(300);
-await page.locator(".tempo-input").evaluate((input) => {
-  input.value = "100";
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-});
-check("100% restores the original tempo",
-  (await page.evaluate(() => window.__batapp_new.state().rate)) === 1);
+await stepSpeed(page, 1, 50);
+check("100% restores the original speed",
+  (await page.evaluate(() => window.__batapp_new.state().rate)) === 1 &&
+  (await page.evaluate(() => window.__batapp_new.ui().speedValue)) === "100%");
 
 // Prev / Next (Stop is the third ghost; navigation is the first two)
-await page.locator(".tempo-input").evaluate((input) => {
-  input.value = "75";
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-});
+await stepSpeed(page, -1, 25);
 const ghosts = page.locator(".transport .ghost:not(.stop)");
 check("Prev is disabled on the first lesson", await ghosts.nth(0).isDisabled());
 await ghosts.nth(1).click();
@@ -565,22 +610,19 @@ await page.waitForTimeout(700);
 await ready();
 check("Next opens the next rhythm", (await page.evaluate(() => window.__batapp_new.state().lesson)) === "volume-1/02-tani-tani-cho-bi",
   await page.evaluate(() => window.__batapp_new.state().lesson));
-check("selected tempo follows the next rhythm",
+check("selected speed follows the next rhythm",
   (await page.evaluate(() => window.__batapp_new.state().rate)) === 0.75 &&
-  (await page.evaluate(() => window.__batapp_new.ui().tempoValue)) === "75",
+  (await page.evaluate(() => window.__batapp_new.ui().speedValue)) === "75%",
   await page.evaluate(() => JSON.stringify(window.__batapp_new.ui())));
 await page.locator(".transport .ghost:not(.stop)").nth(0).click();
 await page.waitForTimeout(700);
 await ready();
 check("Prev steps back", (await page.evaluate(() => window.__batapp_new.state().lesson)) === "volume-1/01-alubanche",
   await page.evaluate(() => window.__batapp_new.state().lesson));
-check("selected tempo survives stepping back",
+check("selected speed survives stepping back",
   (await page.evaluate(() => window.__batapp_new.state().rate)) === 0.75,
   await page.evaluate(() => window.__batapp_new.state().rate));
-await page.locator(".tempo-input").evaluate((input) => {
-  input.value = "100";
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-});
+await stepSpeed(page, 1, 25);
 
 // Keyboard
 await page.evaluate(() => document.activeElement && document.activeElement.blur());
@@ -881,11 +923,14 @@ for (const [width, height] of portraitSizes) {
     const main = document.getElementById("main-pane");
     const playerView = document.querySelector(".player-view");
     const mixer = document.querySelector(".mixer");
+    const speed = document.querySelector(".speed-controls");
     return {
       app: box(document.getElementById("app")),
       menu: box(document.getElementById("app-info-button")),
       seek: box(document.querySelector(".seek")),
-      tempo: box(document.querySelector(".tempo")),
+      speed: box(speed),
+      mixer: box(mixer),
+      beforeMixer: !!(speed.compareDocumentPosition(mixer) & Node.DOCUMENT_POSITION_FOLLOWING),
       transport: box(document.querySelector(".transport")),
       next: box(document.querySelectorAll(".transport .ghost")[1]),
       stop: box(document.querySelector(".stop")),
@@ -907,12 +952,13 @@ for (const [width, height] of portraitSizes) {
     snap.mixerScroll[1] <= snap.mixerScroll[3] + 1 &&
     snap.mainScroll[1] <= snap.mainScroll[3] + 1 &&
     snap.seek.top >= 0 && snap.seek.bottom <= snap.viewport[1] &&
-    snap.tempo.top >= snap.seek.bottom - 1 &&
-    snap.tempo.top >= 0 && snap.tempo.bottom <= snap.viewport[1] &&
+    snap.speed.top >= snap.transport.bottom - 1 &&
+    snap.speed.top >= 0 && snap.speed.bottom <= snap.viewport[1] &&
+    snap.speed.bottom <= snap.mixer.top + 1 && snap.beforeMixer &&
     snap.stop.top >= 0 && snap.stop.bottom <= snap.viewport[1] &&
     snap.rows.length === 5 && snap.rows.every((row) =>
       row.top >= -1 && row.bottom <= snap.viewport[1] + 1),
-    JSON.stringify({ player: snap.playerScroll, mixer: snap.mixerScroll, main: snap.mainScroll, seek: snap.seek, tempo: snap.tempo, stop: snap.stop, rows: snap.rows }));
+    JSON.stringify({ player: snap.playerScroll, mixer: snap.mixerScroll, main: snap.mainScroll, seek: snap.seek, speed: snap.speed, mixerBox: snap.mixer, beforeMixer: snap.beforeMixer, stop: snap.stop, rows: snap.rows }));
   check(label + " portrait places Stop beside Next",
     snap.stop.left >= snap.next.right - 1 &&
     Math.abs((snap.stop.top + snap.stop.bottom) / 2 - (snap.next.top + snap.next.bottom) / 2) < 2 &&
@@ -959,6 +1005,7 @@ function landscapeSnapshot(page) {
     const main = document.getElementById("main-pane");
     const playerView = document.querySelector(".player-view");
     const mixer = document.querySelector(".mixer");
+    const speed = document.querySelector(".speed-controls");
     return {
       hero: box(document.querySelector(".hero")),
       transport: box(document.querySelector(".transport")),
@@ -966,7 +1013,8 @@ function landscapeSnapshot(page) {
       stop: box(document.querySelector(".stop")),
       mixer: box(mixer),
       seek: box(document.querySelector(".seek")),
-      tempo: box(document.querySelector(".tempo")),
+      speed: box(speed),
+      beforeMixer: !!(speed.compareDocumentPosition(mixer) & Node.DOCUMENT_POSITION_FOLLOWING),
       rows: Array.from(document.querySelectorAll(".stem")).map(box),
       app: box(document.getElementById("app")),
       viewport: [window.innerWidth, window.innerHeight],
@@ -996,14 +1044,15 @@ for (const [width, height] of landscapeSizes) {
     snap.mixerScroll[1] <= snap.mixerScroll[3] + 1 &&
     snap.mainScroll[1] <= snap.mainScroll[3] + 1,
     JSON.stringify({ player: snap.playerScroll, mixer: snap.mixerScroll, main: snap.mainScroll }));
-  check(label + " landscape shows the speed bar, seek bar and all mixer rows",
+  check(label + " landscape shows the speed controls, seek bar and all mixer rows",
     snap.seek.top >= 0 && snap.seek.bottom <= snap.viewport[1] &&
-    snap.tempo.top >= snap.seek.bottom - 1 &&
-    snap.tempo.top >= 0 && snap.tempo.bottom <= snap.viewport[1] &&
+    snap.speed.top >= snap.transport.bottom - 1 &&
+    snap.speed.top >= 0 && snap.speed.bottom <= snap.viewport[1] &&
+    snap.beforeMixer &&
     snap.rows.length === 5 && snap.rows.every((row) =>
       row.top >= -1 && row.bottom <= snap.viewport[1] + 1 &&
       row.left >= -1 && row.right <= snap.viewport[0] + 1),
-    JSON.stringify({ seek: snap.seek, tempo: snap.tempo, rows: snap.rows }));
+    JSON.stringify({ seek: snap.seek, speed: snap.speed, transport: snap.transport, beforeMixer: snap.beforeMixer, rows: snap.rows }));
   check(label + " landscape places Stop beside Next in the transport",
     snap.stop.left >= snap.next.right - 1 &&
     Math.abs((snap.stop.top + snap.stop.bottom) / 2 - (snap.next.top + snap.next.bottom) / 2) < 2 &&
@@ -1087,6 +1136,9 @@ const desktopPlayer = await desktop.evaluate(() => {
   const hero = document.querySelector(".hero").getBoundingClientRect();
   const mixer = document.querySelector(".mixer").getBoundingClientRect();
   const back = document.querySelector(".player-top .icon-btn");
+  const speed = document.querySelector(".speed-controls");
+  const speedBox = speed.getBoundingClientRect();
+  const transportBox = document.querySelector(".transport").getBoundingClientRect();
   return {
     lesson: window.__batapp_new.state().lesson,
     active: window.__batapp_new.ui().active,
@@ -1094,7 +1146,10 @@ const desktopPlayer = await desktop.evaluate(() => {
     twoCols: hero.right <= mixer.left + 2,
     mixerRows: document.querySelectorAll(".stem").length,
     seek: !!document.querySelector(".seek"),
-    tempo: !!document.querySelector(".tempo"),
+    speed: !!speed,
+    speedBelowTransport: speedBox.top >= transportBox.bottom - 1,
+    speedBeforeMixer: !!(speed.compareDocumentPosition(document.querySelector(".mixer")) &
+      Node.DOCUMENT_POSITION_FOLLOWING),
     stopInTransport: !!document.querySelector(".transport .stop"),
     backVisible: !!(back && back.getClientRects().length),
     scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
@@ -1104,8 +1159,10 @@ const desktopPlayer = await desktop.evaluate(() => {
 check("desktop sidebar persists while a lesson is open", desktopPlayer.libraryWidth >= 340, desktopPlayer.libraryWidth + "px");
 check("desktop marks the active sidebar row", desktopPlayer.active === "Alubanche", desktopPlayer.active);
 check("desktop player shows hero and mixer side by side", desktopPlayer.twoCols, JSON.stringify(desktopPlayer));
-check("desktop player has the seek and speed bars",
-  desktopPlayer.seek && desktopPlayer.tempo, JSON.stringify(desktopPlayer));
+check("desktop player has the seek bar and speed controls below Play",
+  desktopPlayer.seek && desktopPlayer.speed &&
+  desktopPlayer.speedBelowTransport && desktopPlayer.speedBeforeMixer,
+  JSON.stringify(desktopPlayer));
 check("desktop keeps Stop in the transport", desktopPlayer.stopInTransport);
 check("desktop hides the back button", !desktopPlayer.backVisible);
 check("desktop mixer has five rows", desktopPlayer.mixerRows === 5, desktopPlayer.mixerRows + " rows");
@@ -1133,15 +1190,30 @@ await tablet.bringToFront();
 await tablet.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
 await tablet.waitForTimeout(700);
 await tablet.waitForFunction(() => window.__batapp_new.state().lesson && !window.__batapp_new.state().loading, null, { timeout: 20000 });
-const tabletState = await tablet.evaluate(() => ({
-  libraryWidth: document.getElementById("library-pane").getBoundingClientRect().width,
-  columns: getComputedStyle(document.querySelector(".player-body")).gridTemplateColumns,
-  mixer: !!document.querySelector(".mixer"),
-  scrollWidth: document.documentElement.scrollWidth,
-  viewportWidth: window.innerWidth
-}));
+const tabletState = await tablet.evaluate(() => {
+  const speed = document.querySelector(".speed-controls").getBoundingClientRect();
+  const mixer = document.querySelector(".mixer").getBoundingClientRect();
+  const player = document.querySelector(".player-view");
+  return {
+    libraryWidth: document.getElementById("library-pane").getBoundingClientRect().width,
+    columns: getComputedStyle(document.querySelector(".player-body")).gridTemplateColumns,
+    mixer: !!document.querySelector(".mixer"),
+    speedBottom: speed.bottom,
+    mixerTop: mixer.top,
+    playerScroll: [player.scrollHeight, player.clientHeight],
+    scrollWidth: document.documentElement.scrollWidth,
+    scrollHeight: document.documentElement.scrollHeight,
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight
+  };
+});
 check("tablet keeps the sidebar and stacks the player",
   tabletState.libraryWidth >= 340 && tabletState.columns.split(" ").length === 1 && tabletState.mixer,
+  JSON.stringify(tabletState));
+check("tablet keeps the speed controls above the mixer without scrolling",
+  tabletState.speedBottom <= tabletState.mixerTop + 1 &&
+  tabletState.playerScroll[0] <= tabletState.playerScroll[1] + 1 &&
+  tabletState.scrollHeight <= tabletState.viewportHeight + 1,
   JSON.stringify(tabletState));
 check("tablet layout has no horizontal overflow", tabletState.scrollWidth <= tabletState.viewportWidth + 1,
   tabletState.scrollWidth + " > " + tabletState.viewportWidth);
@@ -1377,7 +1449,7 @@ try {
     JSON.stringify({ wav: wavInfo.duration, transport: wavInfo.transportDuration, wavBytes: wavInfo.wavBytes, file: wavInfo.bytes }));
 
   await served.locator("#app-info-button").click();
-  await served.waitForFunction(() => window.__batapp_new.state().manifest === "1.2.0", null, { timeout: 10000 });
+  await served.waitForFunction(() => window.__batapp_new.state().manifest === "1.2.1", null, { timeout: 10000 });
   const servedInfo = await served.evaluate(() => ({
     text: document.getElementById("app-info-panel").innerText,
     hidden: document.getElementById("app-info-panel").hidden,
@@ -1385,8 +1457,8 @@ try {
     manifest: window.__batapp_new.state().manifest
   }));
   check("HTTP app menu reports the loaded build, manifest and WAV source",
-    !servedInfo.hidden && servedInfo.build === "1.2.0" &&
-    servedInfo.manifest === "1.2.0" &&
+    !servedInfo.hidden && servedInfo.build === "1.2.1" &&
+    servedInfo.manifest === "1.2.1" &&
     servedInfo.text.indexOf("Current lesson") >= 0 &&
     servedInfo.text.indexOf("Alubanche") >= 0 &&
     servedInfo.text.indexOf("WAV ×5") >= 0,
@@ -1492,6 +1564,34 @@ try {
     servedSequence.tracks.find((track) => track.stem === "iya").muted === true &&
     servedSequence.tracks[0].src !== beforeSeek.src,
     JSON.stringify({ media: servedSequence.media, tracks: servedSequence.tracks.map((track) => ({ stem: track.stem, t: +track.currentTime.toFixed(2), muted: track.muted })) }));
+
+  // A released speed button must rebuild the same way and keep the position,
+  // without downloading the stems again.
+  const beforeSpeed = await served.evaluate(() => ({
+    created: window.__mediaProbeSummary().created,
+    src: window.__batapp_new.tracks()[0].src,
+    position: window.__batapp_new.state().position
+  }));
+  await served.locator('.speed-step[data-delta="1"]').click();
+  await served.waitForTimeout(700);
+  const afterSpeed = await served.evaluate(() => ({
+    media: window.__mediaProbeSummary(),
+    tracks: window.__batapp_new.tracks(),
+    state: window.__batapp_new.state(),
+    ui: window.__batapp_new.ui()
+  }));
+  check("HTTP speed release rebuilds a fresh generation at 101%",
+    afterSpeed.media.created === beforeSpeed.created + 5 &&
+    afterSpeed.media.active === 5 &&
+    afterSpeed.state.rate === 1.01 && afterSpeed.ui.speedValue === "101%" &&
+    afterSpeed.tracks.every((track) => Math.abs(track.rate - 1.01) < 0.001 && !track.paused) &&
+    afterSpeed.tracks[0].src !== beforeSpeed.src &&
+    afterSpeed.state.position >= beforeSpeed.position - 0.3 &&
+    afterSpeed.state.position < beforeSpeed.position + 1.8 &&
+    servedAudioRequests.length === 5,
+    JSON.stringify({ media: afterSpeed.media, rate: afterSpeed.state.rate, before: beforeSpeed.position, after: afterSpeed.state.position, requests: servedAudioRequests.length }));
+  await served.locator('.speed-step[data-delta="-1"]').click();
+  await served.waitForTimeout(500);
 
   // Stop -> Play must create another fresh generation at zero, without
   // downloading any audio again.

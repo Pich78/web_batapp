@@ -31,15 +31,17 @@ Android Chrome and Windows browsers must be checked by a person.
    stems stay loaded and resume from the exact same point without replaying old
    audio. Stop: the stems stay loaded and the next Play starts all of them from
    the beginning, again without queued audio from the previous position.
-5. Move the **Speed** slider to 50%, then 150%, while playing. Every stem must
-   slow down or speed up together without a position jump, and the drums must
-   keep their recorded pitch. The timeline and progress ring must follow the
-   audible position. Stop, set 75%, then step to the next rhythm: the new rhythm
-   must start at 75%. Leave the phone untouched for at least 30 seconds while
-   playing: the screen must not dim or sleep where the browser supports the
-   Screen Wake Lock API. Pause and Stop must release it; the app-info panel
-   reports the state. This needs HTTPS, and power-saving modes or browser
-   policy may refuse the lock.
+5. With the rhythm playing, press and hold **+**. The audio must keep playing
+   and the speed must stay unchanged while held; on release it must change by
+   exactly 1% and resume without a position jump. Repeat with **−**. Every stem
+   must slow down or speed up together and keep its recorded pitch. The timeline
+   and progress ring must follow the audible position. Step down to 50% and up
+   to 150%: the matching button must become disabled at each limit. Stop, set
+   75%, then step to the next rhythm: the new rhythm must start at 75%. Leave the
+   phone untouched for at least 30 seconds while playing: the screen must not
+   dim or sleep where the browser supports the Screen Wake Lock API. Pause and
+   Stop must release it; the app-info panel reports the state. This needs HTTPS,
+   and power-saving modes or browser policy may refuse the lock.
 6. While playing, mute a stem and move another slider. Only the level changes:
    the timeline keeps advancing and no stem pauses, seeks or reloads. Unmute and
    confirm the previous slider value is restored. Then pause → mute a track →
@@ -62,8 +64,9 @@ Android Chrome and Windows browsers must be checked by a person.
 11. Open an Oru Seco lesson including **19 Egbi pami**. The order must be Beat,
     Iya, Itotele, Okonkolo; there is no Vox row.
 12. Rotate the phone (portrait and landscape). Neither view may scroll the page
-    or the player. Portrait and landscape must show the speed bar, seek bar, the
-    transport with Stop beside Next, and every mixer row inside the viewport.
+    or the player. Portrait and landscape must show the speed controls below
+    Play, the seek bar, the transport with Stop beside Next, and every mixer row
+    inside the viewport.
 13. Check the browser tab title: e.g. `Alubanche · Toque 01 · Batá`.
 14. Press Back to the rhythm list. The player must stop and release every stem;
     the network panel must show no retained audio response. Open the same

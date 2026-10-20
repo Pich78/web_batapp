@@ -201,12 +201,12 @@ integrity) and the transport in `js/player.js`. `index_old.html` keeps the
 legacy `js/mixer.js` transport.
 
 - Two-tab library (Toques / Oru Seco) → lesson player with Play/Pause/Stop,
-  prev/next (clamped per volume), a draggable seek bar, a 50–150% rhythm-speed
-  slider (pitch preserved), a progress ring and a mixer row per available stem
-  (Beat, Itotele, Iya, Okonkolo, Vox; Vox is absent in Volume II and in
-  `Egbi pami`). Stop is an icon-only button inside the transport beside Next.
-  Each row has a volume slider and a mute that preserves the slider value.
-  Every stem, including Vox, starts at 100%.
+  prev/next (clamped per volume), a draggable seek bar, 50–150% speed −/+ buttons
+  (pitch preserved) below Play and before the mixer, a progress ring and a mixer
+  row per available stem (Beat, Itotele, Iya, Okonkolo, Vox; Vox is absent in
+  Volume II and in `Egbi pami`). Stop is an icon-only button inside the transport
+  beside Next. Each row has a volume slider and a mute that preserves the slider
+  value. Every stem, including Vox, starts at 100%.
 - Mixer order is Beat, Vox, Iya, Itotele, Okonkolo for Toques and Beat, Iya,
   Itotele, Okonkolo for Oru Seco (Vox is omitted when the stem is absent).
 - A fixed top-left hamburger opens the app-info panel: loaded build, deployed
@@ -231,11 +231,12 @@ legacy `js/mixer.js` transport.
   buffered old-position audio cannot replay. Mute and volume only change
   per-stem gain. Back disposes the player, revokes Blob URLs and closes the
   AudioContext.
-- The speed bar under the seek bar changes every stem's `playbackRate` together
-  (50–150%, pitch preserved) and carries the selected rate across rhythm
-  navigation in the same session. The shared wall-clock position and the loop
-  timer scale by the rate; changing speed mid-play re-anchors the clock at the
-  audible media position, and a fresh media generation inherits the rate.
+- The speed −/+ buttons below Play change every stem's `playbackRate` together
+  (50–150% in 1% steps, pitch preserved) and carry the selected rate across
+  rhythm navigation in the same session. Pressing keeps the current audio
+  running; releasing applies one step through a fresh media generation at the
+  current position, discarding the old buffer/object URLs. The shared
+  wall-clock position and the loop timer scale by the rate.
 - The seek bar under the title seeks all stems together; the title format is
   `Title · Toque/Oru Seco NN · Batá`, with `Toques · Batá`, `Oru Seco · Batá`
   and the root title for library routes.
@@ -250,8 +251,9 @@ legacy `js/mixer.js` transport.
     inside the transport;
   - landscape phones (`orientation: landscape` and `max-height: 559px`):
     full-bleed two-column player that fits the viewport without page or player
-    scrolling (the speed bar, transport and Stop-beside-Next stay visible), and a
-    two-column library whose own lesson list may scroll when 38 rows cannot fit;
+    scrolling (the transport, speed controls and Stop-beside-Next stay visible),
+    and a two-column library whose own lesson list may scroll when 38 rows cannot
+    fit;
   - desktop (`min-width: 900px` and `min-height: 600px`): full-bleed persistent
     library sidebar + player/empty main pane, with a narrower stacked player
     below 1200 px.
@@ -295,8 +297,8 @@ legacy `js/mixer.js` transport.
   durations no longer blocking load, Ogg decode fallback, the largest lesson
   converting completely, fresh media generations on Pause/Stop → Play with no
   extra audio requests, seek-drag continuation and seek-release fresh generation,
-  loop restart to zero, tempo rate/clock/pitch and rate-adjusted loop checks,
-  mocked screen-wake-lock request/release, volume/mute
+  loop restart to zero, speed-button hold/release, rate/clock/pitch and
+  rate-adjusted loop checks, mocked screen-wake-lock request/release, volume/mute
   leaving the transport untouched, Back unloading every resource and reopening
   downloading fresh stems). Chromium runs all 61 lessons; `BROWSER=firefox|webkit` runs
   representative lessons (and the HTTP gate/error paths). Its Chromium summary

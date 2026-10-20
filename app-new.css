@@ -439,8 +439,7 @@ button:disabled { cursor: default; opacity: 0.3; }
 
 .time.total { text-align: right; }
 
-.seek-input,
-.tempo-input {
+.seek-input {
   --fill: 0%;
   flex: 1;
   height: 28px;
@@ -451,15 +450,13 @@ button:disabled { cursor: default; opacity: 0.3; }
   cursor: pointer;
 }
 
-.seek-input::-webkit-slider-runnable-track,
-.tempo-input::-webkit-slider-runnable-track {
+.seek-input::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 2px;
   background: linear-gradient(to right, var(--accent) var(--fill), var(--surface-2) var(--fill));
 }
 
-.seek-input::-webkit-slider-thumb,
-.tempo-input::-webkit-slider-thumb {
+.seek-input::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 15px;
   height: 15px;
@@ -470,22 +467,19 @@ button:disabled { cursor: default; opacity: 0.3; }
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 
-.seek-input::-moz-range-track,
-.tempo-input::-moz-range-track {
+.seek-input::-moz-range-track {
   height: 4px;
   border-radius: 2px;
   background: var(--surface-2);
 }
 
-.seek-input::-moz-range-progress,
-.tempo-input::-moz-range-progress {
+.seek-input::-moz-range-progress {
   height: 4px;
   border-radius: 2px;
   background: var(--accent);
 }
 
-.seek-input::-moz-range-thumb,
-.tempo-input::-moz-range-thumb {
+.seek-input::-moz-range-thumb {
   width: 15px;
   height: 15px;
   border: 0;
@@ -496,14 +490,15 @@ button:disabled { cursor: default; opacity: 0.3; }
 
 .seek-input:disabled { opacity: 0.35; cursor: default; }
 
-.tempo {
+.speed-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 2px 20px 0;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px 0;
 }
 
-.tempo-label {
+.speed-label {
   min-width: 40px;
   font-size: 11px;
   font-weight: 650;
@@ -511,13 +506,33 @@ button:disabled { cursor: default; opacity: 0.3; }
   color: var(--muted);
 }
 
-.tempo-value {
-  min-width: 38px;
-  font-size: 11px;
+.speed-value {
+  min-width: 48px;
+  font-size: 14px;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
-  text-align: right;
-  color: var(--muted);
+  text-align: center;
+  color: var(--text);
 }
+
+.speed-step {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1;
+  transition: background 0.15s ease, transform 0.12s ease, opacity 0.15s ease;
+}
+
+.speed-step:hover:not(:disabled) { background: var(--surface-2); }
+.speed-step:active:not(:disabled) { transform: scale(0.92); }
 
 .player-status {
   margin: 8px 20px 0;
@@ -827,9 +842,10 @@ button:disabled { cursor: default; opacity: 0.3; }
   .dial { width: 76px; height: 76px; }
   .play { inset: 8px; }
   .play svg { width: 22px; height: 22px; }
-  .tempo { padding: 1px 20px 0; gap: 8px; }
-  .tempo-label,
-  .tempo-value { font-size: 10.5px; }
+  .speed-controls { padding: 4px 12px 0; gap: 6px; }
+  .speed-label { min-width: 34px; font-size: 10.5px; }
+  .speed-value { min-width: 44px; font-size: 13px; }
+  .speed-step { width: 32px; height: 32px; font-size: 18px; }
 
   .player-body {
     flex: 1;
@@ -945,21 +961,21 @@ button:disabled { cursor: default; opacity: 0.3; }
     overflow: hidden;
   }
 
-  /* Stop lives inside the transport, so the hero needs no extra row. */
+  /* Stop lives inside the transport; the speed controls stack below Play. */
   .hero {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
     min-height: 0;
   }
 
-  .tempo { padding: 0 16px; gap: 8px; }
-  .tempo-label,
-  .tempo-value { min-width: 34px; font-size: 10px; }
-  .tempo-input { height: 24px; }
+  .speed-controls { padding: 2px 0 0; gap: 6px; }
+  .speed-label { min-width: 34px; font-size: 10px; }
+  .speed-value { min-width: 42px; font-size: 13px; }
+  .speed-step { width: 32px; height: 32px; font-size: 18px; }
 
   .transport { padding: 0; gap: 14px; }
   .ghost { width: 40px; height: 40px; }
@@ -1008,7 +1024,8 @@ button:disabled { cursor: default; opacity: 0.3; }
   .play { inset: 6px; }
   .play svg { width: 20px; height: 20px; }
   .ghost { width: 36px; height: 36px; }
-  .tempo-input { height: 22px; }
+  .speed-controls { padding: 0; gap: 4px; }
+  .speed-step { width: 28px; height: 28px; font-size: 16px; }
   .stem { padding: 2px 8px; }
   .stem-name { font-size: 12px; }
   .stem input[type="range"] { height: 20px; }
@@ -1108,7 +1125,9 @@ button:disabled { cursor: default; opacity: 0.3; }
   .dial { width: 170px; height: 170px; }
   .play { inset: 18px; }
   .play svg { width: 44px; height: 44px; }
-  .tempo { padding: 8px 20px 0; }
+  .speed-controls { padding: 18px 0 0; gap: 10px; }
+  .speed-step { width: 40px; height: 40px; font-size: 22px; }
+  .speed-value { font-size: 15px; }
 
   .mixer {
     width: 100%;
@@ -1128,14 +1147,18 @@ button:disabled { cursor: default; opacity: 0.3; }
   .player-body {
     grid-template-columns: minmax(0, 1fr);
     align-content: center;
-    gap: 20px;
+    gap: 10px;
     max-width: 540px;
     margin: 0 auto;
-    padding: 8px 0 36px;
+    padding: 2px 0 10px;
   }
-  .dial { width: 132px; height: 132px; }
-  .play { inset: 14px; }
-  .play svg { width: 34px; height: 34px; }
+  .dial { width: 120px; height: 120px; }
+  .play { inset: 13px; }
+  .play svg { width: 30px; height: 30px; }
+  .stem { padding: 8px 14px 7px; }
+  .stem-name { font-size: 14px; }
+  .mute { width: 28px; height: 28px; }
+  .mute svg { width: 16px; height: 16px; }
   .mixer { max-height: none; }
 }
 

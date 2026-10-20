@@ -435,19 +435,6 @@
     seekInput.disabled = true;
     player.appendChild(seek);
 
-    var tempoPercent = Math.round(state.rate * 100);
-    var tempo = element("div", "tempo",
-      '<label class="tempo-label" for="tempo-input">Speed</label>' +
-      '<input id="tempo-input" class="tempo-input" type="range" min="50" max="150" step="1" value="' +
-      tempoPercent + '" aria-label="Rhythm speed">' +
-      '<output class="tempo-value" for="tempo-input">' + tempoPercent + "%</output>");
-    var tempoInput = tempo.querySelector("input");
-    var tempoValue = tempo.querySelector("output");
-    setFill(tempoInput, (tempoPercent - 50) / 100);
-    tempoInput.setAttribute("aria-valuetext", tempoPercent + "%");
-    audio.setRate(state.rate);
-    player.appendChild(tempo);
-
     var status = element("p", "player-status");
     status.hidden = true;
     player.appendChild(status);
@@ -478,7 +465,46 @@
     stop.setAttribute("aria-label", "Stop");
 
     [prev, dial, next, stop].forEach(function (node) { transport.appendChild(node); });
+
+    var speedPercent = Math.round(state.rate * 100);
+    var speed = element("div", "speed-controls",
+      '<span class="speed-label">Speed</span>' +
+      '<button class="speed-step" type="button" data-delta="-1" ' +
+      'aria-label="Decrease rhythm speed by 1%">&minus;</button>' +
+      '<output class="speed-value" aria-live="polite">' + speedPercent + "%</output>" +
+      '<button class="speed-step" type="button" data-delta="1" ' +
+      'aria-label="Increase rhythm speed by 1%">+</button>');
+    var speedValue = speed.querySelector("output");
+    var speedDown = speed.querySelector('[data-delta="-1"]');
+    var speedUp = speed.querySelector('[data-delta="1"]');
+
+    function paintSpeed() {
+      var percent = Math.round(state.rate * 100);
+      speedValue.textContent = percent + "%";
+      speedDown.disabled = percent <= 50;
+      speedUp.disabled = percent >= 150;
+    }
+
+    function changeSpeed(delta) {
+      var percent = Math.round(state.rate * 100);
+      var next = Math.max(50, Math.min(150, percent + delta));
+      if (next === percent) return;
+      state.rate = next / 100;
+      paintSpeed();
+      audio.setRateFresh(state.rate);
+    }
+
+    speed.addEventListener("click", function (event) {
+      if (!event.target || !event.target.closest) return;
+      var button = event.target.closest(".speed-step");
+      if (!button || button.disabled) return;
+      changeSpeed(Number(button.getAttribute("data-delta")));
+    });
+    audio.setRate(state.rate);
+    paintSpeed();
+
     hero.appendChild(transport);
+    hero.appendChild(speed);
     body.appendChild(hero);
 
     var mixerBox = element("div", "mixer");
@@ -501,18 +527,6 @@
     function hideStatus() {
       status.hidden = true;
     }
-
-    function applyTempo() {
-      var percent = Number(tempoInput.value);
-      var next = percent / 100;
-      state.rate = next;
-      tempoValue.textContent = percent + "%";
-      tempoInput.setAttribute("aria-valuetext", percent + "%");
-      setFill(tempoInput, (percent - 50) / 100);
-      if (audio.rate() !== next) audio.setRate(next);
-    }
-
-    tempoInput.addEventListener("input", applyTempo);
 
     function paintPlaying() {
       play.innerHTML = state.playing ? ICONS.pause : ICONS.play;
@@ -947,8 +961,7 @@
         loadStatus: (document.querySelector(".load-status") || {}).textContent || null,
         playEnabled: !!(play && !play.disabled),
         seekValue: (document.querySelector(".seek-input") || {}).value || null,
-        tempoValue: (document.querySelector(".tempo-input") || {}).value || null,
-        tempoText: (document.querySelector(".tempo-value") || {}).textContent || null,
+        speedValue: (document.querySelector(".speed-value") || {}).textContent || null,
         active: active ? active.querySelector(".name").textContent : null,
         libraryVisible: !!(libraryPane.getClientRects().length),
         mainVisible: !!(mainPane.getClientRects().length)

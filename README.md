@@ -36,14 +36,14 @@ behind the reconstruction.
   works from a subpath.
 - **Double-click `index.html`** — the modern layout. No server, no build:
   library with the two volumes, lesson player with Play/Pause/Stop, Prev/Next,
-  a draggable seek bar, a 50–150% rhythm-speed slider (pitch preserved), loop
+  a draggable seek bar, 50–150% speed buttons with pitch preservation, loop
   progress, per-lesson browser titles and a five-stem mixer (volume + mute per
   stem). Every stem starts at 100%, including Vox. The player loads all stems
   first and only enables Play when they are local. The mixer order is Beat, Vox,
   Iya, Itotele, Okonkolo for Toques and Beat, Iya, Itotele, Okonkolo for Oru
-  Seco. Stop sits beside Next in the transport, and the speed bar sits directly
-  under the time bar. It adapts from a fixed one-pane portrait phone shell (no
-  page or player scrolling) to a two-column landscape phone view and a full
+  Seco. Stop sits beside Next in the transport, and the speed controls sit below
+  Play and before the mixer. It adapts from a fixed one-pane portrait phone shell
+  (no page or player scrolling) to a two-column landscape phone view and a full
   desktop layout with a persistent library sidebar. While playing, the page
   requests a screen wake lock so the phone does not dim or sleep where the
   browser supports it.
@@ -130,12 +130,13 @@ the original scene-reconstruction transport in `js/mixer.js`.
   elements unloaded) and rebuilt at the new position, then playback resumes.
   Paused seeks stay paused at the new point and rebuild on the next Play. This
   prevents buffered audio from the old position replaying after a seek.
-- The Speed slider changes every stem's playback rate together from 50% to
-  150% while preserving the recorded pitch. The seek bar, progress ring and loop
-  boundary follow the selected rate. Changing speed during playback re-anchors
-  the shared clock at the audible position, and a new media generation after
-  Pause, Stop or Seek keeps the selected speed. The speed carries over when
-  stepping to another rhythm in the same session.
+- The Speed **−** and **+** buttons change every stem's playback rate together
+  from 50% to 150% in 1% steps while preserving the recorded pitch. Pressing a
+  button leaves playback running; releasing it rebuilds the media generation at
+  the current position with the new rate, so buffered data from the old speed
+  cannot replay. The seek bar, progress ring and loop boundary follow the
+  selected rate. The speed carries over when stepping to another rhythm in the
+  same session; the buttons are disabled at their limits.
 - While a rhythm is playing, the modern page requests the Screen Wake Lock API
   so the screen does not dim or sleep. It releases the lock on Pause, Stop, Back
   and page hide, and requests it again when the page becomes visible if playback
