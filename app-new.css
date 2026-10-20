@@ -82,6 +82,14 @@ button:disabled { cursor: default; opacity: 0.3; }
   outline-offset: 2px;
 }
 
+/* Route changes focus these headings for screen readers. They are not
+   interactive tab stops, so the amber keyboard ring would only look like a
+   stray rectangle around the title. */
+.brand h1[tabindex="-1"]:focus,
+.player-title h2[tabindex="-1"]:focus {
+  outline: none;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -232,7 +240,7 @@ button:disabled { cursor: default; opacity: 0.3; }
     overflow: hidden;
   }
 
-  .player-top { padding-left: 52px; }
+  .player-top { padding-left: 64px; }
 
   body[data-view="library"] .main-pane { display: none; }
   body[data-view="player"] .library-pane { display: none; }
@@ -281,7 +289,7 @@ button:disabled { cursor: default; opacity: 0.3; }
 }
 
 .brand {
-  padding: calc(24px + env(safe-area-inset-top)) 22px 4px 52px;
+  padding: calc(24px + env(safe-area-inset-top)) 22px 4px 64px;
 }
 
 .brand h1 {
@@ -935,7 +943,7 @@ button:disabled { cursor: default; opacity: 0.3; }
 
   .library-view { min-height: 0; }
 
-  .brand { padding: calc(10px + env(safe-area-inset-top)) 20px 0 52px; }
+  .brand { padding: calc(10px + env(safe-area-inset-top)) 20px 0 64px; }
   .brand h1 { font-size: 20px; }
   .brand p { display: none; }
 
@@ -963,7 +971,7 @@ button:disabled { cursor: default; opacity: 0.3; }
   }
 
   .player-top {
-    padding: calc(4px + env(safe-area-inset-top)) 14px 0 52px;
+    padding: calc(4px + env(safe-area-inset-top)) 14px 0 64px;
   }
 
   .player-title h2 { font-size: 16px; }
@@ -1099,7 +1107,7 @@ button:disabled { cursor: default; opacity: 0.3; }
     overflow-y: auto;
   }
 
-  .brand { padding: 34px 24px 6px 52px; }
+  .brand { padding: 34px 24px 6px 64px; }
   .brand h1 { font-size: 26px; }
   .brand p { font-size: 13px; }
 
@@ -1217,7 +1225,7 @@ button:disabled { cursor: default; opacity: 0.3; }
 }
 
 @media (max-width: 899px), (max-height: 599px) {
-  .player-top { padding-left: 52px; }
+  .player-top { padding-left: 64px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

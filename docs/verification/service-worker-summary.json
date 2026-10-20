@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-10-20T16:49:10.831Z",
+  "generated_at": "2026-10-20T18:18:29.287Z",
   "browser": "chromium",
   "target": "local static server (dynamic port) /index.html",
-  "app_version": "v1.4.0",
+  "app_version": "v1.4.1",
   "checks_passed": 22,
   "checks_total": 22,
   "problems": [],
@@ -10,7 +10,7 @@
     {
       "name": "the shell cache uses the release version",
       "ok": true,
-      "detail": "[\"batapp-shell-v1.4.0\"]"
+      "detail": "[\"batapp-shell-v1.4.1\"]"
     },
     {
       "name": "the shell cache contains the modern app shell only",
@@ -25,12 +25,12 @@
     {
       "name": "the shell starts the modern app offline from the scope root",
       "ok": true,
-      "detail": "{\"url\":\"http://127.0.0.1:33909/?offline=1#/\",\"title\":\"Batá · Toques & Oru Seco\"}"
+      "detail": "{\"url\":\"http://127.0.0.1:35899/?offline=1#/\",\"title\":\"Batá · Toques & Oru Seco\"}"
     },
     {
       "name": "the shell starts the modern app offline from index.html",
       "ok": true,
-      "detail": "{\"url\":\"http://127.0.0.1:33909/index.html#/\",\"title\":\"Batá · Toques & Oru Seco\"}"
+      "detail": "{\"url\":\"http://127.0.0.1:35899/index.html#/\",\"title\":\"Batá · Toques & Oru Seco\"}"
     },
     {
       "name": "index_old.html is not served from the modern shell cache",
@@ -40,17 +40,17 @@
     {
       "name": "first open stores five Ogg stems in the audio cache",
       "ok": true,
-      "detail": "[\"/assets/audio/volume-1/02-tani-tani-cho-bi/ito.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/oko.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/beat.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/iya.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/vox.ogg\"]"
+      "detail": "[\"/assets/audio/volume-1/02-tani-tani-cho-bi/beat.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/ito.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/iya.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/oko.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/vox.ogg\"]"
     },
     {
       "name": "the audio cache is kept separate from the shell cache",
       "ok": true,
-      "detail": "[\"batapp-shell-v1.4.0\",\"batapp-audio-v1\"]"
+      "detail": "[\"batapp-shell-v1.4.1\",\"batapp-audio-v1\"]"
     },
     {
       "name": "a new shell release installs the new cache",
       "ok": true,
-      "detail": "{\"names\":[\"batapp-shell-v1.4.0\",\"batapp-audio-v1\",\"batapp-shell-v9.9.9\"],\"shells\":{\"batapp-shell-v1.4.0\":[\"/\",\"/index.html\",\"/app-new.css\",\"/js/lessons.js\",\"/js/offline.js\",\"/js/wav.js\",\"/js/player.js\",\"/js/newapp.js\",\"/site.webmanifest\",\"/assets/icon.svg\",\"/assets/icon-16.png\",\"/assets/icon-32.png\",\"/assets/icon-180.png\",\"/assets/icon-192.png\",\"/assets/icon-512.png\"],\"batapp-shell-v9.9.9\":[]},\"audio\":[\"/assets/audio/volume-1/02-tani-tani-cho-bi/ito.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/oko.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/beat.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/iya.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/vox.ogg\"]}"
+      "detail": "{\"names\":[\"batapp-shell-v1.4.1\",\"batapp-audio-v1\",\"batapp-shell-v9.9.9\"],\"shells\":{\"batapp-shell-v1.4.1\":[\"/\",\"/index.html\",\"/app-new.css\",\"/js/lessons.js\",\"/js/offline.js\",\"/js/wav.js\",\"/js/player.js\",\"/js/newapp.js\",\"/site.webmanifest\",\"/assets/icon.svg\",\"/assets/icon-16.png\",\"/assets/icon-32.png\",\"/assets/icon-180.png\",\"/assets/icon-192.png\",\"/assets/icon-512.png\"],\"batapp-shell-v9.9.9\":[]},\"audio\":[\"/assets/audio/volume-1/02-tani-tani-cho-bi/beat.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/ito.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/iya.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/oko.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/vox.ogg\"]}"
     },
     {
       "name": "activating a new shell release deletes the old shell cache",
@@ -60,17 +60,17 @@
     {
       "name": "a new shell release keeps the cached Ogg source",
       "ok": true,
-      "detail": "[\"/assets/audio/volume-1/02-tani-tani-cho-bi/ito.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/oko.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/beat.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/iya.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/vox.ogg\"]"
+      "detail": "[\"/assets/audio/volume-1/02-tani-tani-cho-bi/beat.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/ito.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/iya.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/oko.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/vox.ogg\"]"
     },
     {
       "name": "the updated shell and retained audio still open offline",
       "ok": true,
-      "detail": "{\"state\":{\"view\":\"player\",\"volume\":\"volume-1\",\"lesson\":\"volume-1/02-tani-tani-cho-bi\",\"build\":\"v1.4.0\",\"manifest\":null,\"playing\":false,\"mixerPlaying\":false,\"loading\":false,\"error\":null,\"mode\":\"webaudio\",\"loaded\":true,\"disposed\":false,\"integrity\":\"beat:sha256,ito:sha256,iya:sha256,oko:sha256,vox:sha256\",\"position\":0,\"duration\":32.052244897959184,\"rate\":1,\"contextRunning\":false,\"wakeLock\":\"off\",\"stems\":[\"beat\",\"ito\",\"iya\",\"oko\",\"vox\"]},\"fromCache\":[true,true,true,true,true]}"
+      "detail": "{\"state\":{\"view\":\"player\",\"volume\":\"volume-1\",\"lesson\":\"volume-1/02-tani-tani-cho-bi\",\"build\":\"v1.4.1\",\"manifest\":null,\"playing\":false,\"mixerPlaying\":false,\"loading\":false,\"error\":null,\"mode\":\"webaudio\",\"loaded\":true,\"disposed\":false,\"integrity\":\"beat:sha256,ito:sha256,iya:sha256,oko:sha256,vox:sha256\",\"position\":0,\"duration\":32.052244897959184,\"rate\":1,\"contextRunning\":false,\"wakeLock\":\"off\",\"stems\":[\"beat\",\"ito\",\"iya\",\"oko\",\"vox\"]},\"fromCache\":[true,true,true,true,true]}"
     },
     {
       "name": "first open stores five Ogg stems in the audio cache",
       "ok": true,
-      "detail": "[\"/assets/audio/volume-1/02-tani-tani-cho-bi/iya.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/ito.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/beat.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/oko.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/vox.ogg\"]"
+      "detail": "[\"/assets/audio/volume-1/02-tani-tani-cho-bi/beat.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/ito.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/iya.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/oko.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/vox.ogg\"]"
     },
     {
       "name": "Clear offline audio removes the audio cache",
@@ -85,17 +85,17 @@
     {
       "name": "the shell still opens offline after clearing audio",
       "ok": true,
-      "detail": "{\"url\":\"http://127.0.0.1:33909/index.html#/\",\"title\":\"Batá · Toques & Oru Seco\"}"
+      "detail": "{\"url\":\"http://127.0.0.1:35899/index.html#/\",\"title\":\"Batá · Toques & Oru Seco\"}"
     },
     {
       "name": "a cleared rhythm is named unavailable offline",
       "ok": true,
-      "detail": "{\"state\":{\"view\":\"player\",\"volume\":\"volume-1\",\"lesson\":\"volume-1/02-tani-tani-cho-bi\",\"build\":\"v1.4.0\",\"manifest\":\"v1.4.0\",\"playing\":false,\"mixerPlaying\":false,\"loading\":false,\"error\":\"This rhythm is not available offline. Open it once while online.\",\"mode\":null,\"loaded\":false,\"disposed\":true,\"integrity\":null,\"position\":0,\"duration\":0,\"rate\":1,\"contextRunning\":null,\"wakeLock\":\"off\",\"stems\":[]},\"detail\":\"This rhythm is not available offline. Open it once while online.\"}"
+      "detail": "{\"state\":{\"view\":\"player\",\"volume\":\"volume-1\",\"lesson\":\"volume-1/02-tani-tani-cho-bi\",\"build\":\"v1.4.1\",\"manifest\":\"v1.4.1\",\"playing\":false,\"mixerPlaying\":false,\"loading\":false,\"error\":\"This rhythm is not available offline. Open it once while online.\",\"mode\":null,\"loaded\":false,\"disposed\":true,\"integrity\":null,\"position\":0,\"duration\":0,\"rate\":1,\"contextRunning\":null,\"wakeLock\":\"off\",\"stems\":[]},\"detail\":\"This rhythm is not available offline. Open it once while online.\"}"
     },
     {
       "name": "first open stores five Ogg stems in the audio cache",
       "ok": true,
-      "detail": "[\"/assets/audio/volume-1/02-tani-tani-cho-bi/beat.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/ito.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/oko.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/iya.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/vox.ogg\"]"
+      "detail": "[\"/assets/audio/volume-1/02-tani-tani-cho-bi/ito.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/oko.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/beat.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/iya.ogg\",\"/assets/audio/volume-1/02-tani-tani-cho-bi/vox.ogg\"]"
     },
     {
       "name": "an evicted stem while offline fails closed and names the stem",

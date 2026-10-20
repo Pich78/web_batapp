@@ -49,7 +49,7 @@ behind the reconstruction.
   requests a screen wake lock so the phone does not dim or sleep where the
   browser supports it.
 - **App info** — the hamburger button in the top-left shows one **Version** row
-  equal to the repository tag (for example `v1.4.0`), the current lesson,
+  equal to the repository tag (for example `v1.4.1`), the current lesson,
   whether audio is WAV or Ogg, whether the screen wake lock is active, off,
   blocked or unsupported, and the offline cache state (cached rhythms, storage
   use and a Clear offline audio action). If the manifest is newer it highlights
@@ -118,7 +118,7 @@ tag, and the internal `?v=` cache-busting strings use it so a PWA cannot mix old
 and new files:
 
 ```bash
-python3 tools/set_version.py set v1.4.0   # rewrite all shipped version values
+python3 tools/set_version.py set v1.4.1   # rewrite all shipped version values
 python3 tools/set_version.py check        # after tagging HEAD: must match
 python3 tools/set_version.py show
 ```

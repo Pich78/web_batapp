@@ -44,9 +44,11 @@ Playwright MCP configuration OK
 Start the MCP from OpenCode with `opencode mcp list`; `batapp-playwright` should
 be connected. The menu item `/mcps` shows the same state.
 
-The wrapper uses a locally installed `@playwright/mcp` when present. Otherwise
-it runs the pinned `@playwright/mcp@0.0.83` through `npx`; the first start may
-need network access. Set `PLAYWRIGHT_MCP_PACKAGE` to test another pin.
+The wrapper uses the locally installed `@playwright/mcp` from `npm ci`; the
+pinned version is a dev dependency. Without it, the wrapper runs
+`@playwright/mcp@0.0.83` through `npx`, which may need network access and can
+exceed OpenCode's 45 s startup timeout. Set `PLAYWRIGHT_MCP_PACKAGE` to test
+another pin.
 
 The wrapper reuses the Chromium reported by `tests/node_modules/playwright`.
 That avoids a second browser download and keeps the MCP on the same engine as

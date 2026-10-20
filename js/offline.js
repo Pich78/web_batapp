@@ -128,6 +128,29 @@
     } catch (error) { /* best effort */ }
   }
 
+  function statusFallback(lessons, degraded) {
+    return {
+      supported: true,
+      degraded: !!degraded,
+      online: !!(global.navigator && global.navigator.onLine !== false),
+      cachedLessons: 0,
+      cachedStems: 0,
+      totalLessons: lessons ? lessons.length : 0,
+      usage: null,
+      persisted: false
+    };
+  }
+
+  // Storage APIs may throw synchronously or never settle in an embedded
+  // browser. Never let the app-info panel stay on "checking…".
+  function safeSettle(call, fallback, milliseconds) {
+    try {
+      return settle(call(), fallback, milliseconds);
+    } catch (error) {
+      return Promise.resolve(fallback);
+    }
+  }
+
   function status(lessons) {
     if (!cacheSupported()) {
       return Promise.resolve({
@@ -142,18 +165,20 @@
     }
     // Cache keys and storage estimates are independent; run them together so
     // the app-info panel is not held up by a slow storage implementation.
-    var keysPromise = settle(openExisting().then(function (cache) {
-      return cache ? cache.keys() : [];
-    }), [], 2000);
+    var keysPromise = safeSettle(function () {
+      return openExisting().then(function (cache) {
+        return cache ? cache.keys() : [];
+      });
+    }, [], 2000);
     var estimate = global.navigator && global.navigator.storage &&
       typeof global.navigator.storage.estimate === "function"
-      ? settle(global.navigator.storage.estimate(), null, 1000)
+      ? safeSettle(function () { return global.navigator.storage.estimate(); }, null, 1000)
       : Promise.resolve(null);
     var persisted = global.navigator && global.navigator.storage &&
       typeof global.navigator.storage.persisted === "function"
-      ? settle(global.navigator.storage.persisted(), false, 1000)
+      ? safeSettle(function () { return global.navigator.storage.persisted(); }, false, 1000)
       : Promise.resolve(false);
-    return Promise.all([keysPromise, estimate, persisted]).then(function (values) {
+    var actual = Promise.all([keysPromise, estimate, persisted]).then(function (values) {
       var urls = {};
       values[0].forEach(function (key) { urls[key.url] = true; });
       var cachedLessons = 0;
@@ -169,6 +194,7 @@
       });
       return {
         supported: true,
+        degraded: false,
         online: !!(global.navigator && global.navigator.onLine !== false),
         cachedLessons: cachedLessons,
         cachedStems: cachedStems,
@@ -177,16 +203,11 @@
         persisted: !!values[2]
       };
     }).catch(function () {
-      return {
-        supported: true,
-        online: !!(global.navigator && global.navigator.onLine !== false),
-        cachedLessons: 0,
-        cachedStems: 0,
-        totalLessons: lessons ? lessons.length : 0,
-        usage: null,
-        persisted: false
-      };
+      return statusFallback(lessons, true);
     });
+    return Promise.race([actual, new Promise(function (resolve) {
+      setTimeout(function () { resolve(statusFallback(lessons, true)); }, 4000);
+    })]);
   }
 
   function register() {

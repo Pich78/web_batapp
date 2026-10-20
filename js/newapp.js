@@ -857,6 +857,11 @@
     }
     if (routeStatus) routeStatus.textContent = document.title;
 
+    if (!lesson && !intent && previous.view === "library" &&
+        previous.volume === state.volume) {
+      return;
+    }
+
     if (lesson) {
       if (intent === "next" || intent === "prev") {
         var stepButton = document.querySelector('.transport .ghost[data-step="' + intent + '"]');
@@ -891,7 +896,7 @@
   }
 
   function routeInner() {
-    var previous = { lesson: state.lesson, volume: state.volume };
+    var previous = { lesson: state.lesson, volume: state.volume, view: state.view };
     teardown();
     var hash = location.hash.replace(/^#\/?/, "");
     var volume = state.volume;
@@ -929,7 +934,14 @@
     focusAfterRoute(previous, lesson);
   }
 
+  var lastRoutedHash = null;
+
   function route() {
+    // Setting the initial empty hash to "#/" fires hashchange after route()
+    // has already rendered it. Never render (or move focus) twice for the same
+    // location, and never focus the brand title on a no-op library route.
+    if (location.hash === lastRoutedHash) return;
+    lastRoutedHash = location.hash;
     try {
       routeInner();
     } catch (error) {
@@ -1040,6 +1052,10 @@
       window.BatappOffline.status(D.lessons).then(function (status) {
         if (token !== infoRenderToken) return;
         var label = status.online ? "online" : "offline";
+        if (status.degraded) {
+          offlineValue.textContent = label + " · cache status unavailable";
+          return;
+        }
         label += " · " + status.cachedLessons + "/" + status.totalLessons + " rhythms cached";
         if (status.usage) label += " · " + formatBytes(status.usage);
         offlineValue.textContent = label;

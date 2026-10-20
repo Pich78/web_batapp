@@ -159,6 +159,11 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       status and `.player-status` are polite live regions; ARIA tab keyboard
       support; light-theme text contrast at least 4.5:1; 44 px hamburger and at
       least 24 px controls in every mode. Covered by `tests/verify-new.mjs`.
+- [x] **First-launch polish**: one route pass per hash, no focus on the brand
+      title for a no-op library route, no amber outline on programmatic heading
+      focus, and a 12 px gap between the hamburger and the brand/Back button.
+      The app-info cache status also settles even if a storage API throws or
+      hangs, instead of staying on “checking…”.
 - [ ] **Real-device pass**: follow `docs/verification/device-pass.md` on
       iPhone Safari (iOS 18.4+), Android Chrome and Windows Chrome/Edge. The
       automated suite cannot establish real-device audio behaviour.

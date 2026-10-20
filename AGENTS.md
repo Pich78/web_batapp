@@ -83,7 +83,10 @@ The repository-level `opencode.json` registers `batapp-playwright` under
 `mcp.servers` (OpenCode V2). The command is `tests/playwright-mcp.mjs`, which
 resolves the Chromium used by `tests/node_modules/playwright`, enables
 `--allow-unrestricted-file-access` for local `file://` URLs, and writes
-generated artifacts under `.work/playwright-mcp/`.
+generated artifacts under `.work/playwright-mcp/`. `npm ci` installs the pinned
+`@playwright/mcp` dev dependency; without the local copy the `npx` fallback can
+exceed OpenCode's 45 s startup timeout. After changing the config, run
+`opencode reload` and confirm `opencode mcp list` reports connected.
 
 ```bash
 cd tests
@@ -328,9 +331,12 @@ legacy `js/mixer.js` transport.
   panel takes focus, Escape/toggle close restores the button, and outside clicks
   do not steal focus back. Route changes move focus to the player heading, the
   active library row or the invoked Prev/Next control, and a visually hidden
-  route-status live region announces the new document title. `.player-status`
-  is a polite status live region. The library tabs implement the ARIA tab
-  pattern with roving tabindex and Arrow/Home/End keys.
+  route-status live region announces the new document title. The initial
+  library render and duplicate hash canonicalisation never focus the brand
+  title; programmatically focused headings suppress the amber outline. A 12 px
+  gap separates the fixed hamburger from the brand and the player's Back
+  button. `.player-status` is a polite status live region. The library tabs
+  implement the ARIA tab pattern with roving tabindex and Arrow/Home/End keys.
 - iOS/Safari 18.4+ is required for Ogg Vorbis playback; older iOS cannot decode
   the lesson audio.
 - Playback never autoplays on navigation; the user's first Play tap starts all

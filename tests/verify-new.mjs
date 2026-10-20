@@ -313,6 +313,44 @@ function installMediaProbe() {
   };
 }
 
+// --- first launch (no hash, like the PWA start_url) ------------------------
+const firstLaunch = await newPage({ viewport });
+await firstLaunch.bringToFront();
+await firstLaunch.goto(pageUrl);
+await firstLaunch.waitForTimeout(900);
+const launch = await firstLaunch.evaluate(() => {
+  const box = (element) => {
+    const rect = element.getBoundingClientRect();
+    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+  };
+  const menu = document.getElementById("app-info-button");
+  const title = document.querySelector(".brand h1");
+  const active = document.activeElement;
+  const activeTag = active ? active.tagName : null;
+  const activeText = active ? active.textContent.trim() : null;
+  title.focus();
+  const focusedOutline = getComputedStyle(title).outlineStyle;
+  title.blur();
+  return {
+    hash: location.hash,
+    activeTag,
+    activeText,
+    focusedOutline,
+    menu: box(menu),
+    title: box(title),
+    gap: title.getBoundingClientRect().left - menu.getBoundingClientRect().right
+  };
+});
+check("first launch does not focus the brand title",
+  launch.hash === "#/" && launch.activeTag !== "H1",
+  JSON.stringify({ hash: launch.hash, activeTag: launch.activeTag, activeText: launch.activeText }));
+check("programmatic heading focus has no visual outline",
+  launch.focusedOutline === "none", launch.focusedOutline);
+check("the app menu clears the brand title",
+  launch.gap >= 10, JSON.stringify({ menu: launch.menu, title: launch.title, gap: launch.gap }));
+await firstLaunch.screenshot({ path: path.join(shots, "00-first-launch.png") });
+await firstLaunch.close();
+
 // --- library ---------------------------------------------------------------
 await go("#/");
 await shot("01-library-toques");
@@ -459,6 +497,7 @@ await ready(focusPage);
 const openedFocus = await focusPage.evaluate(() => ({
   tag: document.activeElement ? document.activeElement.tagName : null,
   text: document.activeElement ? document.activeElement.textContent : null,
+  outlineStyle: document.activeElement ? getComputedStyle(document.activeElement).outlineStyle : null,
   routeStatus: document.getElementById("route-status").textContent,
   documentTitle: document.title,
   statusRole: (document.querySelector(".player-status") || {}).getAttribute
@@ -470,6 +509,7 @@ const openedFocus = await focusPage.evaluate(() => ({
 }));
 check("opening a lesson focuses its heading and announces the route",
   openedFocus.tag === "H2" && openedFocus.text === "Alubanche" &&
+  openedFocus.outlineStyle === "none" &&
   openedFocus.routeStatus === openedFocus.documentTitle &&
   openedFocus.routeStatus === "Alubanche · Toque 01 · Batá",
   JSON.stringify(openedFocus));
@@ -1137,6 +1177,7 @@ for (const [width, height] of portraitSizes) {
     return {
       app: box(document.getElementById("app")),
       menu: box(document.getElementById("app-info-button")),
+      back: box(document.querySelector(".player-top .icon-btn")),
       seek: box(document.querySelector(".seek")),
       speed: box(speed),
       mixer: box(mixer),
@@ -1181,6 +1222,9 @@ for (const [width, height] of portraitSizes) {
   check(label + " portrait app menu is a 44px touch target",
     snap.menu.width >= 44 && snap.menu.height >= 44,
     JSON.stringify(snap.menu));
+  check(label + " portrait app menu clears the Back button",
+    snap.back.left >= snap.menu.right + 10,
+    JSON.stringify({ menu: snap.menu, back: snap.back }));
   const portraitTargets = await touchTargetReport(page);
   check(label + " portrait controls meet the 24px touch floor",
     portraitTargets.count > 0 && portraitTargets.small.length === 0,
@@ -1225,6 +1269,7 @@ function landscapeSnapshot(page) {
     const speed = document.querySelector(".speed-controls");
     return {
       hero: box(document.querySelector(".hero")),
+      back: box(document.querySelector(".player-top .icon-btn")),
       transport: box(document.querySelector(".transport")),
       next: box(document.querySelectorAll(".transport .ghost")[1]),
       stop: box(document.querySelector(".stop")),
@@ -1281,6 +1326,9 @@ for (const [width, height] of landscapeSizes) {
   check(label + " landscape app menu is a 44px touch target",
     snap.menu.width >= 44 && snap.menu.height >= 44,
     JSON.stringify(snap.menu));
+  check(label + " landscape app menu clears the Back button",
+    snap.back.left >= snap.menu.right + 10,
+    JSON.stringify({ menu: snap.menu, back: snap.back }));
   const landscapeTargets = await touchTargetReport(page);
   check(label + " landscape controls meet the 24px touch floor",
     landscapeTargets.count > 0 && landscapeTargets.small.length === 0,
@@ -1310,9 +1358,14 @@ const librarySnap = await landscapeLibrary.evaluate(() => {
   const lefts = Array.from(document.querySelectorAll(".row")).slice(0, 4)
     .map((row) => Math.round(row.getBoundingClientRect().left));
   const pane = document.getElementById("library-pane");
+  const menu = document.getElementById("app-info-button").getBoundingClientRect();
+  const title = document.querySelector(".brand h1").getBoundingClientRect();
   return {
     columns: new Set(lefts).size,
     lefts,
+    menu: { right: menu.right },
+    title: { left: title.left },
+    gap: title.left - menu.right,
     scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
     viewport: [window.innerWidth, window.innerHeight],
     paneScroll: [pane.scrollWidth, pane.scrollHeight, pane.clientWidth, pane.clientHeight]
@@ -1323,6 +1376,9 @@ check("landscape library does not scroll the page",
   librarySnap.scroll[0] <= librarySnap.viewport[0] &&
   librarySnap.scroll[1] <= librarySnap.viewport[1],
   JSON.stringify(librarySnap));
+check("landscape app menu clears the brand title",
+  librarySnap.gap >= 10,
+  JSON.stringify({ menu: librarySnap.menu, title: librarySnap.title, gap: librarySnap.gap }));
 await landscapeLibrary.screenshot({ path: path.join(shots, "08-landscape-library.png") });
 await landscapeLibrary.close();
 
@@ -1343,8 +1399,9 @@ const desktopEmpty = await desktop.evaluate(() => {
     main: { width: main.width, left: main.left },
     empty: !!document.querySelector(".empty"),
     buttonBrandOverlap: overlap,
-    button: { left: button.left, top: button.top },
+    button: { left: button.left, right: button.right, top: button.top },
     brand: { left: brand.left, top: brand.top },
+    gap: brand.left - button.right,
     scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
     viewport: [window.innerWidth, window.innerHeight]
   };
@@ -1354,9 +1411,9 @@ check("desktop shows the library sidebar and main pane",
   desktopEmpty.main.width > 800 && desktopEmpty.main.left >= desktopEmpty.library.width - 1,
   JSON.stringify(desktopEmpty));
 check("desktop shows the empty state before a rhythm is selected", desktopEmpty.empty);
-check("desktop app-info button does not overlap the brand",
-  !desktopEmpty.buttonBrandOverlap,
-  JSON.stringify({ button: desktopEmpty.button, brand: desktopEmpty.brand }));
+check("desktop app-info button clears the brand",
+  !desktopEmpty.buttonBrandOverlap && desktopEmpty.gap >= 10,
+  JSON.stringify({ button: desktopEmpty.button, brand: desktopEmpty.brand, gap: desktopEmpty.gap }));
 check("desktop layout has no page overflow",
   desktopEmpty.scroll[0] <= desktopEmpty.viewport[0] &&
   desktopEmpty.scroll[1] <= desktopEmpty.viewport[1],
@@ -1523,11 +1580,13 @@ const tabletPortraitState = await tabletPortrait.evaluate(() => {
   const app = document.getElementById("app").getBoundingClientRect();
   const button = document.getElementById("app-info-button").getBoundingClientRect();
   const panel = document.getElementById("app-info-panel").getBoundingClientRect();
+  const title = document.querySelector(".brand h1").getBoundingClientRect();
   const first = document.getElementById("app").firstElementChild;
   return {
     app: { left: app.left, right: app.right, width: app.width },
     button: { left: button.left, right: button.right },
     panel: { left: panel.left, right: panel.right },
+    title: { left: title.left, right: title.right },
     panelOpen: !document.getElementById("app-info-panel").hidden,
     firstId: first ? first.id : null
   };
@@ -1542,6 +1601,9 @@ check("tablet portrait keeps the app-info button and panel inside the app shell"
 check("tablet portrait app-info button is the first app control",
   tabletPortraitState.firstId === "app-info-button",
   tabletPortraitState.firstId);
+check("tablet portrait app menu clears the brand title",
+  tabletPortraitState.title.left >= tabletPortraitState.button.right + 10,
+  JSON.stringify({ button: tabletPortraitState.button, title: tabletPortraitState.title }));
 await tabletPortrait.screenshot({ path: path.join(shots, "11-tablet-portrait.png") });
 await tabletPortrait.close();
 
@@ -1559,6 +1621,8 @@ const tabletPortraitPlayerState = await tabletPortraitPlayer.evaluate(() => {
   const main = document.querySelector(".main-pane");
   return {
     app: box("#app"),
+    menu: box("#app-info-button"),
+    back: box(".player-top .icon-btn"),
     viewport: [window.innerWidth, window.innerHeight],
     documentScroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
     mainScroll: [main.scrollHeight, main.clientHeight],
@@ -1572,6 +1636,9 @@ const tabletPortraitPlayerState = await tabletPortraitPlayer.evaluate(() => {
 });
 check("tablet portrait uses the 640px shell", tabletPortraitPlayerState.app.right - tabletPortraitPlayerState.app.left === 640,
   JSON.stringify(tabletPortraitPlayerState.app));
+check("tablet portrait app menu clears the Back button",
+  tabletPortraitPlayerState.back.left >= tabletPortraitPlayerState.menu.right + 10,
+  JSON.stringify({ menu: tabletPortraitPlayerState.menu, back: tabletPortraitPlayerState.back }));
 check("tablet portrait player fits without page or pane scrolling",
   tabletPortraitPlayerState.documentScroll[0] <= tabletPortraitPlayerState.viewport[0] &&
   tabletPortraitPlayerState.documentScroll[1] <= tabletPortraitPlayerState.viewport[1] + 1 &&
