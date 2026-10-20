@@ -10,9 +10,9 @@ Android Chrome and Windows browsers must be checked by a person.
 
 - iPhone/iPad: iOS/iPadOS **18.4 or newer** (Ogg Vorbis support). Older versions
   cannot decode the lesson audio.
-- A network connection for the first lesson load (the player fetches all stems
-  before enabling Play). On iPhone, check that the silent switch/volume allows
-  media playback.
+- A network connection for the first lesson load (the player lazily fetches only
+  that lesson's stems before enabling Play). On iPhone, check that the silent
+  switch/volume allows media playback.
 - Use the modern page at `/`; the scene reconstruction is at `/index_old.html`
   and is out of scope for this pass.
 
@@ -21,12 +21,12 @@ Android Chrome and Windows browsers must be checked by a person.
 1. Open the URL with the browser network panel recording. The library appears
    with Toques / Oru Seco tabs and **no audio file is requested**.
 2. Switch to **Oru Seco**, confirm the order is `1, 2, 3, … 20A, 20B, 21, 22`.
-3. Open **01 Alubanche** (Volume I). The loading gate shows checksum
-   verification, then “Preparing WAV x/5”, and no player controls appear until
-   every stem has downloaded, passed its checksum and been converted to WAV.
-   This can take a few seconds and uses roughly 60 MB for this lesson; the
-   largest lessons use about 139 MB. The mixer order must be Beat, Vox, Iya,
-   Itotele, Okonkolo.
+3. Open **01 Alubanche** (Volume I). On first open the loading gate fetches
+   only that lesson's five stems, verifies them and converts them to WAV; no
+   player controls appear until every stem is ready. The five source Ogg files
+   are cached on the device. This can take a few seconds and uses roughly 60 MB
+   of WAV in RAM for this lesson; the largest lessons use about 139 MB. The
+   mixer order must be Beat, Vox, Iya, Itotele, Okonkolo.
 4. Tap Play. All five stems start together; Vox is audible at 100%. Pause: the
    stems stay loaded and resume from the exact same point without replaying old
    audio. Stop: the stems stay loaded and the next Play starts all of them from
@@ -78,18 +78,25 @@ Android Chrome and Windows browsers must be checked by a person.
 13. Check the browser tab title: e.g. `Alubanche · Toque 01 · Batá`.
 14. Press Back to the rhythm list. The player must stop and release every stem;
     the network panel must show no retained audio response. Open the same
-    rhythm again: all five stems are downloaded again from scratch.
+    rhythm again: no Ogg request should occur, and the app must rebuild the WAV
+    from the cached source. Confirm the cache does not contain WAV files.
 15. Reload the page directly on a lesson URL; the lesson loads and the title is
     correct.
-16. Home-screen app only: after a new release is deployed, reopen the app. The
-    version check must replace the old build once (the first update may need
-    clearing the site data or removing/re-adding the icon).
-17. Open the top-left hamburger. Confirm there is exactly **one Version row**
-    equal to the repository tag (for example `v1.2.3`), plus the current lesson,
-    WAV/OGG source and screen-awake state. If the manifest is newer, verify the
-    version row is highlighted and the “Reload latest” action appears without a
-    second version number. Confirm the panel closes with Escape/outside tap and
-    never scrolls the page.
+16. Go offline (airplane mode / browser offline). Reload the lesson opened
+    above: the service worker must serve the app shell, the cached Ogg must
+    verify, and the WAV must be rebuilt. Then open an unvisited rhythm: it must
+    show “This rhythm is not available offline. Open it once while online.”
+17. Open the top-left hamburger. Confirm exactly **one Version row** equal to
+    the repository tag (for example `v1.3.0`), plus the current lesson, WAV/OGG
+    source, screen-awake state and offline cache status. Confirm the cached
+    rhythm count and “Clear offline audio” action, and that clearing removes
+    only the audio cache (the app still opens offline from the shell cache).
+    If the manifest is newer, verify the version row is highlighted and the
+    “Reload latest” action appears without a second version number. Confirm the
+    panel closes with Escape/outside tap and never scrolls the page.
+18. Home-screen/standalone app only: after a new release is deployed, reopen the
+    app. The shell cache must update; previously opened immutable Ogg rhythms
+    must remain cached.
 
 ## Results
 
@@ -117,6 +124,13 @@ desktop-emulated runs as device results.
   139 MB of WAV in addition to the media pipeline.
 - **Checksum/error state:** note the stem name and the detail line. Do not retry
   against a proxy that rewrites media; verify the URL and the manifest version.
+- **Offline failure:** note whether the shell loaded, whether the lesson had
+  been opened online before, the app-info cached-rhythm count, and whether the
+  service worker was controlling the page. A corrupt or evicted Ogg entry must
+  be reported with its stem; only the failed entry is refetched when online.
+- **Cache grows unexpectedly:** inspect Cache Storage. It must contain
+  `batapp-audio-v1` with `.ogg` entries only and a versioned `batapp-shell-*`
+  cache. Any `.wav` entry is a bug.
 - **Stems drift:** note the lesson, elapsed time and which stems flammed. Note
   whether the browser was backgrounded during the loop.
 - **Audio still cached after Back:** record the request URL and whether the

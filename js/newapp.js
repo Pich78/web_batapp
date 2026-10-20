@@ -858,6 +858,9 @@
   });
 
   window.addEventListener("hashchange", route);
+  if (window.BatappOffline && typeof window.BatappOffline.register === "function") {
+    window.BatappOffline.register();
+  }
   if (!location.hash) location.hash = "#/";
   route();
 
@@ -868,6 +871,7 @@
   var infoRows = document.getElementById("app-info-rows");
   var manifestState = "idle";
   var manifestVersion = null;
+  var infoRenderToken = 0;
 
   function loadedBuild() {
     var meta = document.querySelector('meta[name="batapp-version"]');
@@ -892,11 +896,19 @@
     text.textContent = value;
     infoRows.appendChild(key);
     infoRows.appendChild(text);
+    return text;
+  }
+
+  function formatBytes(bytes) {
+    if (!bytes || !isFinite(bytes)) return "";
+    var megabytes = bytes / 1048576;
+    return (megabytes >= 10 ? Math.round(megabytes) : megabytes.toFixed(1)) + " MB";
   }
 
   function renderInfo() {
     if (!infoRows) return;
     infoRows.innerHTML = "";
+    var token = ++infoRenderToken;
     var build = loadedBuild();
     addInfoRow("Version", build,
       manifestState === "ready" && manifestVersion !== build);
@@ -907,6 +919,37 @@
       : (state.wakeLock === "active" ? "on while playing"
         : (state.wakeLock === "requesting" ? "requesting…"
           : (state.wakeLock === "blocked" ? "blocked by browser" : "off"))));
+    var offlineValue = addInfoRow("Offline", "checking…");
+    if (window.BatappOffline &&
+        typeof window.BatappOffline.supported === "function" &&
+        window.BatappOffline.supported()) {
+      window.BatappOffline.status(D.lessons).then(function (status) {
+        if (token !== infoRenderToken) return;
+        var label = status.online ? "online" : "offline";
+        label += " · " + status.cachedLessons + "/" + status.totalLessons + " rhythms cached";
+        if (status.usage) label += " · " + formatBytes(status.usage);
+        offlineValue.textContent = label;
+        if (status.cachedLessons > 0) {
+          var action = element("div", "app-info-update");
+          var text = element("span");
+          text.textContent = "Cached Ogg source only; WAV is always rebuilt.";
+          var clear = element("button", "app-info-reload", "Clear offline audio");
+          clear.type = "button";
+          clear.addEventListener("click", function () {
+            window.BatappOffline.clearAudio().then(function () {
+              renderInfo();
+            });
+          });
+          action.appendChild(text);
+          action.appendChild(clear);
+          infoRows.appendChild(action);
+        }
+      }).catch(function () {
+        if (token === infoRenderToken) offlineValue.textContent = "unavailable";
+      });
+    } else {
+      offlineValue.textContent = "not available here";
+    }
 
     if (manifestState === "ready" && manifestVersion && manifestVersion !== build) {
       var update = element("div", "app-info-update");
@@ -1029,6 +1072,7 @@
           error: element && element.error ? element.error.code : null,
           ready: !!record.ready,
           integrity: record.integrity,
+          fromCache: !!record.fromCache,
           format: record.sourceFormat || null,
           wavBytes: record.wavBytes || null,
           wavDuration: record.wavDuration || null,

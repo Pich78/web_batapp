@@ -44,7 +44,7 @@
   // The per-media-element timeout only starts once the bytes are local. This
   // is the outer deadline for the whole gate, so a stalled transfer cannot
   // leave the loading screen up forever.
-  var LOAD_DEADLINE = 120000;
+  var LOAD_DEADLINE = 300000;
   var RATE_MIN = 0.5;
   var RATE_MAX = 1.5;
   var loadSequence = 0;
@@ -215,6 +215,7 @@
         muted: false,
         ready: false,
         integrity: null,
+        fromCache: false,
         error: null,
         _alignSeeking: false
       });
@@ -295,10 +296,13 @@
     var loadId = loadNonce + "-" + (++loadSequence);
     var verifiedCount = 0;
     var verified = new Array(total);
+    var offline = global.BatappOffline &&
+      typeof global.BatappOffline.supported === "function" &&
+      global.BatappOffline.supported() ? global.BatappOffline : null;
 
-    await Promise.all(entries.map(function (entry, index) {
-      var url = self._assetUrl(entry) + "?load=" + loadId;
-      return fetch(url, {
+    function loadFromNetwork(entry, index, url) {
+      var fetchUrl = url + "?load=" + loadId;
+      return fetch(fetchUrl, {
         cache: "no-store",
         credentials: "same-origin",
         signal: signal
@@ -320,17 +324,58 @@
         }
         return readBlob(blob).then(function (buffer) {
           return self._verify(entry, buffer).then(function (integrity) {
-            verified[index] = { entry: entry, blob: blob, buffer: buffer, integrity: integrity };
+            verified[index] = {
+              entry: entry,
+              blob: blob,
+              buffer: buffer,
+              integrity: integrity,
+              fromCache: false
+            };
             verifiedCount += 1;
             reportProgress(self._onProgress, verifiedCount, total, "verify");
+            // Only verified Ogg bytes enter Cache Storage. WAV is never stored.
+            if (offline) {
+              return offline.put(url, buffer).catch(function () { /* best effort */ });
+            }
           });
         });
       }).catch(function (error) {
         if (isAbort(error)) throw error;
         if (error && error.name === "BatappLoadError") throw error;
+        if (global.navigator && global.navigator.onLine === false) {
+          throw loadError([entry.stem],
+            "This rhythm is not available offline. Open it once while online.");
+        }
         throw loadError([entry.stem], "Could not download this stem. Check your connection and try again.");
       });
-    }));
+    }
+
+    function loadEntry(entry, index) {
+      var url = self._assetUrl(entry);
+      if (!offline) return loadFromNetwork(entry, index, url);
+      return offline.get(url).then(function (buffer) {
+        if (!buffer) return null;
+        return self._verify(entry, buffer).then(function (integrity) {
+          return {
+            entry: entry,
+            buffer: buffer,
+            integrity: integrity,
+            fromCache: true
+          };
+        }).catch(function (error) {
+          if (isAbort(error)) throw error;
+          // A corrupt cache entry is discarded; the network path can replace it.
+          return offline.remove(url).then(function () { return null; }, function () { return null; });
+        });
+      }).then(function (hit) {
+        if (!hit) return loadFromNetwork(entry, index, url);
+        verified[index] = hit;
+        verifiedCount += 1;
+        reportProgress(self._onProgress, verifiedCount, total, "verify");
+      });
+    }
+
+    await Promise.all(entries.map(loadEntry));
 
     if (this._aborted()) throw abortError();
     this._objectUrls = [];
@@ -378,13 +423,19 @@
       }
 
       if (!sourceUrl) {
+        // Cached Ogg entries have no Blob yet; create one for the fallback
+        // before releasing the verified ArrayBuffer.
+        item.sourceBlob = item.blob ||
+          (item.buffer ? new Blob([item.buffer], { type: "audio/ogg" }) : null);
         item.buffer = null;
         record.wavBytes = null;
         record.wavDuration = null;
         record.wavSampleRate = null;
         record.wavChannels = null;
-        item.sourceBlob = item.blob;
-        sourceUrl = URL.createObjectURL(item.blob);
+        if (!item.sourceBlob) {
+          throw loadError([record.stem], "Could not prepare the cached audio.");
+        }
+        sourceUrl = URL.createObjectURL(item.sourceBlob);
         format = "ogg";
       }
 
@@ -403,6 +454,7 @@
         integrity: item.integrity,
         format: item.format,
         wavError: item.wavError,
+        fromCache: item.fromCache,
         blob: item.sourceBlob
       };
     }));
@@ -529,6 +581,7 @@
       item.record.integrity = item.integrity;
       item.record.sourceFormat = item.format || "ogg";
       item.record.wavError = item.wavError || null;
+      item.record.fromCache = !!item.fromCache;
       item.record.sourceBlob = item.blob || null;
       item.record.sourceUrl = item.url;
       item.record.objectUrl = item.blob ? item.url : null;
@@ -637,9 +690,12 @@
   };
 
   BatappPlayer.prototype._finalizeLoad = function () {
-    // The exported duration is the musical length. Browser-reported media
-    // durations can be estimates on mobile, so use the manifest when present.
-    var declared = this.tracks.map(function (record) {
+    // WAV is the runtime model, so its exact sample length is authoritative
+    // when conversion succeeded. The manifest remains the fallback for the
+    // Ogg playback path and for browsers that estimated the media duration.
+    var lengths = this.tracks.map(function (record) {
+      var wavDuration = Number(record.wavDuration);
+      if (isFinite(wavDuration) && wavDuration > 0) return wavDuration;
       return Number(record.seconds);
     }).filter(function (duration) {
       return isFinite(duration) && duration > 0;
@@ -649,7 +705,7 @@
     }).filter(function (duration) {
       return isFinite(duration) && duration > 0;
     });
-    this._loopDuration = declared.length ? Math.min.apply(null, declared)
+    this._loopDuration = lengths.length ? Math.min.apply(null, lengths)
       : (mediaDurations.length ? Math.min.apply(null, mediaDurations) : 0);
     this.tracks.forEach(function (record) {
       if (!record.element) return;
@@ -810,6 +866,7 @@
         integrity: record.integrity,
         format: record.sourceFormat,
         wavError: record.wavError,
+        fromCache: record.fromCache,
         blob: record.sourceBlob
       };
     });

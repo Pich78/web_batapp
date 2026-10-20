@@ -6,9 +6,9 @@ version so an installed PWA cannot mix an old cached script with new markup.
 This tool makes the Git tag the single source of truth for that value.
 
 Usage:
-    .venv/bin/python tools/set_version.py set v1.2.3
+    .venv/bin/python tools/set_version.py set v1.3.0
     .venv/bin/python tools/set_version.py check
-    .venv/bin/python tools/set_version.py check --tag v1.2.3
+    .venv/bin/python tools/set_version.py check --tag v1.3.0
     .venv/bin/python tools/set_version.py show
 """
 from __future__ import annotations
@@ -24,12 +24,14 @@ FILES = (
     ROOT / "index.html",
     ROOT / "index_old.html",
     ROOT / "site.webmanifest",
+    ROOT / "sw.js",
 )
 VERSION_PATTERN = re.compile(r"^v\d+\.\d+\.\d+$")
 QUERY_VERSION = re.compile(r"(\?v=)([^\"&]+)")
 META_VERSION = re.compile(r'(<meta name="batapp-version" content=")([^"]*)(">)')
 BUILD_VERSION = re.compile(r'(var build = ")([^"]*)(";)')
 MANIFEST_VERSION = re.compile(r'("version"\s*:\s*")([^"]*)(")')
+SHELL_VERSION = re.compile(r'(var SHELL_VERSION = ")([^"]*)(";)')
 
 
 def fail(message: str) -> None:
@@ -68,6 +70,8 @@ def set_version(version: str) -> None:
             updated = replace_value(BUILD_VERSION, updated, version)
         if path.name == "site.webmanifest":
             updated = replace_value(MANIFEST_VERSION, updated, version)
+        if path.name == "sw.js":
+            updated = replace_value(SHELL_VERSION, updated, version)
         if updated != original:
             write(path, updated)
             changed.append(path.relative_to(ROOT))
@@ -117,6 +121,14 @@ def check(tag: str | None) -> None:
     if manifest != expected:
         problems.append(
             f"site.webmanifest version is {manifest!r}, expected {expected!r}"
+        )
+
+    shell_match = SHELL_VERSION.search(read(ROOT / "sw.js"))
+    if not shell_match:
+        problems.append("sw.js is missing var SHELL_VERSION")
+    elif shell_match.group(2) != expected:
+        problems.append(
+            f"sw.js SHELL_VERSION is {shell_match.group(2)!r}, expected {expected!r}"
         )
 
     for path in FILES:

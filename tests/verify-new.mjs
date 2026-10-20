@@ -109,14 +109,14 @@ const slimBytes = fs.statSync(path.join(root, "js/lessons.js")).size;
 check("slim modern data stays compact", slimBytes < 200000, slimBytes + " bytes");
 const modernHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const legacyHtml = fs.readFileSync(path.join(root, "index_old.html"), "utf8");
-check("modern page loads lessons.js, wav.js and the new player only",
-  modernHtml.includes("js/lessons.js") && modernHtml.includes("js/wav.js") &&
-  modernHtml.includes("js/player.js") &&
+check("modern page loads lessons.js, offline.js, wav.js and the new player only",
+  modernHtml.includes("js/lessons.js") && modernHtml.includes("js/offline.js") &&
+  modernHtml.includes("js/wav.js") && modernHtml.includes("js/player.js") &&
   !modernHtml.includes("js/data.js") && !modernHtml.includes("js/mixer.js"));
 check("modern assets are cache-versioned",
   /app-new\.css\?v=/.test(modernHtml) && /lessons\.js\?v=/.test(modernHtml) &&
-  /wav\.js\?v=/.test(modernHtml) && /newapp\.js\?v=/.test(modernHtml) &&
-  /player\.js\?v=/.test(modernHtml));
+  /offline\.js\?v=/.test(modernHtml) && /wav\.js\?v=/.test(modernHtml) &&
+  /newapp\.js\?v=/.test(modernHtml) && /player\.js\?v=/.test(modernHtml));
 check("legacy page keeps the full data.js and old mixer",
   legacyHtml.includes("js/data.js") && legacyHtml.includes("js/mixer.js") &&
   !legacyHtml.includes("js/lessons.js"));
@@ -129,6 +129,18 @@ check("PWA manifest carries the same version and a versioned start_url",
   !!versionMatch && manifestVersion.version === appVersion &&
   manifestVersion.start_url === "./?v=" + appVersion,
   JSON.stringify({ page: appVersion, manifest: manifestVersion.version, start_url: manifestVersion.start_url }));
+check("PWA manifest can open standalone",
+  manifestVersion.display === "standalone", manifestVersion.display);
+const serviceWorkerSource = fs.readFileSync(path.join(root, "sw.js"), "utf8");
+const serviceWorkerVersion = (serviceWorkerSource.match(/var SHELL_VERSION = "([^"]+)"/) || [])[1];
+check("service worker version matches the app",
+  serviceWorkerVersion === appVersion,
+  JSON.stringify({ page: appVersion, worker: serviceWorkerVersion || null }));
+check("service worker caches the modern shell, not audio",
+  serviceWorkerSource.includes('"./js/offline.js?v=" + SHELL_VERSION') &&
+  serviceWorkerSource.includes('"./js/player.js?v=" + SHELL_VERSION') &&
+  !serviceWorkerSource.includes('"./assets/audio/'),
+  "shell asset list");
 check("both pages use one release query",
   modernHtml.includes("js/player.js?v=" + (versionMatch ? versionMatch[1] : "")) &&
   legacyHtml.includes("js/mixer.js?v=" + (versionMatch ? versionMatch[1] : "")) &&
@@ -1445,6 +1457,7 @@ try {
   // Opening the app menu after deployment must expose a manifest newer than
   // the loaded page and offer a manual cache-busting reload.
   const infoUpdate = await browser.newPage({ viewport });
+  await infoUpdate.addInitScript(() => { window.__batappNoOffline = true; });
   await infoUpdate.goto(servedUrl + "#/");
   await infoUpdate.waitForTimeout(700);
   await infoUpdate.route("**/site.webmanifest*", (route) => route.fulfill({
@@ -1833,10 +1846,13 @@ try {
   await served.locator(".row[data-slug='volume-1/01-alubanche']").click();
   await ready(served);
   const reloadIds = Array.from(new Set(servedAudioRequests.map((url) => new URL(url).searchParams.get("load"))));
-  check("reopening a rhythm downloads all stems again from scratch",
-    servedAudioRequests.length === 10 && reloadIds.length === 2 &&
-    firstLoadIds.every((id) => reloadIds.indexOf(id) >= 0),
-    JSON.stringify({ requests: servedAudioRequests.length, loadIds: reloadIds }));
+  const reopenedCache = await served.evaluate(() =>
+    window.__batapp_new.tracks().map((track) => track.fromCache));
+  check("reopening a rhythm uses the cached Ogg without audio requests",
+    servedAudioRequests.length === 5 && reloadIds.length === 1 &&
+    firstLoadIds.length === 1 && firstLoadIds[0] === reloadIds[0] &&
+    reopenedCache.every(Boolean),
+    JSON.stringify({ requests: servedAudioRequests.length, loadIds: reloadIds, fromCache: reopenedCache }));
 
   check("no console errors over HTTP", servedErrors.length === 0, servedErrors.slice(0, 2).join(" | "));
   await served.close();
@@ -2142,9 +2158,139 @@ try {
     abortedEncoding.aborted && abortedEncoding.name === "AbortError",
     JSON.stringify(abortedEncoding));
   await stalled.close();
+
+  // --- lazy offline source cache ------------------------------------------
+  const offlineContext = await browser.newContext({ viewport });
+  const offlinePage = await offlineContext.newPage();
+  await offlinePage.bringToFront();
+  const offlineAudioRequests = [];
+  offlinePage.on("request", (request) => {
+    if (request.url().includes("/assets/audio/")) offlineAudioRequests.push(request.url());
+  });
+
+  await offlinePage.goto(servedUrl + "#/lesson/volume-1/02-tani-tani-cho-bi");
+  await ready(offlinePage);
+  const firstOfflineOpen = await offlinePage.evaluate(() => ({
+    state: window.__batapp_new.state(),
+    tracks: window.__batapp_new.tracks()
+  }));
+  check("first open downloads only that rhythm",
+    offlineAudioRequests.length === 5 &&
+    offlineAudioRequests.every((url) => url.includes("/volume-1/02-tani-tani-cho-bi/")) &&
+    firstOfflineOpen.tracks.every((track) => track.format === "wav" && !track.fromCache),
+    JSON.stringify({ requests: offlineAudioRequests, tracks: firstOfflineOpen.tracks.map((track) => ({ stem: track.stem, format: track.format, fromCache: track.fromCache })) }));
+
+  await offlinePage.evaluate(() => navigator.serviceWorker.ready);
+  await offlinePage.waitForFunction(
+    () => !!navigator.serviceWorker.controller,
+    null,
+    { timeout: 10000 }
+  );
+
+  await offlinePage.locator(".player-top .icon-btn").click();
+  await offlinePage.waitForTimeout(300);
+  const beforeReopen = offlineAudioRequests.length;
+  await offlinePage.locator(".row[data-slug='volume-1/02-tani-tani-cho-bi']").click();
+  await ready(offlinePage);
+  const secondOfflineOpen = await offlinePage.evaluate(() =>
+    window.__batapp_new.tracks().map((track) => track.fromCache));
+  check("second open uses cached Ogg and rebuilds WAV",
+    offlineAudioRequests.length === beforeReopen &&
+    secondOfflineOpen.every(Boolean),
+    JSON.stringify({ requests: offlineAudioRequests.length, fromCache: secondOfflineOpen }));
+
+  const cachedKeys = await offlinePage.evaluate(async () => {
+    const cache = await caches.open("batapp-audio-v1");
+    const keys = await cache.keys();
+    return keys.map((key) => new URL(key.url).pathname);
+  });
+  check("offline cache stores only Ogg source",
+    cachedKeys.length === 5 &&
+    cachedKeys.every((path) => path.indexOf("/assets/audio/") >= 0 && path.endsWith(".ogg")) &&
+    !cachedKeys.some((path) => path.endsWith(".wav")),
+    JSON.stringify(cachedKeys));
+
+  await offlinePage.locator("#app-info-button").click();
+  await offlinePage.waitForFunction(
+    () => document.getElementById("app-info-panel").innerText.includes("1/61 rhythms cached"),
+    null,
+    { timeout: 5000 }
+  );
+  const offlineInfo = await offlinePage.locator("#app-info-panel").innerText();
+  check("app info reports offline cache state and clear action",
+    offlineInfo.includes("1/61 rhythms cached") &&
+    offlineInfo.includes("Clear offline audio"),
+    offlineInfo.slice(0, 500));
+  await offlinePage.keyboard.press("Escape");
+
+  await offlineContext.setOffline(true);
+  const beforeOfflineReload = offlineAudioRequests.length;
+  await offlinePage.reload({ waitUntil: "domcontentloaded" });
+  await ready(offlinePage);
+  const offlineReload = await offlinePage.evaluate(() => ({
+    state: window.__batapp_new.state(),
+    tracks: window.__batapp_new.tracks()
+  }));
+  check("cached rhythm reloads and converts offline",
+    offlineReload.state.loaded && !offlineReload.state.error &&
+    offlineAudioRequests.length === beforeOfflineReload &&
+    offlineReload.tracks.every((track) => track.format === "wav" && track.fromCache),
+    JSON.stringify({ state: offlineReload.state, requests: offlineAudioRequests.length, tracks: offlineReload.tracks.map((track) => ({ stem: track.stem, fromCache: track.fromCache })) }));
+
+  await offlinePage.goto(servedUrl + "#/lesson/volume-1/03-oyankota", {
+    waitUntil: "domcontentloaded"
+  });
+  await offlinePage.waitForSelector(".loading.error", { timeout: 15000 });
+  const unvisitedOffline = await offlinePage.evaluate(() => ({
+    state: window.__batapp_new.state(),
+    detail: (document.querySelector(".load-detail") || {}).textContent || ""
+  }));
+  check("unvisited rhythm is named unavailable offline",
+    offlinePage.url().indexOf("volume-1/03-oyankota") >= 0 &&
+    unvisitedOffline.state.error &&
+    unvisitedOffline.detail.indexOf("not available offline") >= 0,
+    JSON.stringify(unvisitedOffline));
+
+  await offlineContext.setOffline(false);
+  await offlinePage.evaluate(async () => {
+    const cache = await caches.open("batapp-audio-v1");
+    const key = new URL(
+      "assets/audio/volume-1/02-tani-tani-cho-bi/iya.ogg",
+      document.baseURI
+    ).href;
+    await cache.put(new Request(key), new Response(
+      new Uint8Array([1, 2, 3, 4]),
+      { headers: { "Content-Type": "audio/ogg" } }
+    ));
+  });
+  const beforeRepair = offlineAudioRequests.length;
+  await offlinePage.goto(servedUrl + "#/lesson/volume-1/02-tani-tani-cho-bi");
+  await ready(offlinePage);
+  const repaired = await offlinePage.evaluate(() => ({
+    state: window.__batapp_new.state(),
+    tracks: window.__batapp_new.tracks()
+  }));
+  const repairedIya = repaired.tracks.filter((track) => track.stem === "iya")[0];
+  check("a corrupt cache entry is refetched alone",
+    offlineAudioRequests.length === beforeRepair + 1 &&
+    offlineAudioRequests[offlineAudioRequests.length - 1].indexOf("/iya.ogg") >= 0 &&
+    repairedIya && !repairedIya.fromCache &&
+    repaired.tracks.filter((track) => track.stem !== "iya").every((track) => track.fromCache),
+    JSON.stringify({ requests: offlineAudioRequests.slice(beforeRepair), tracks: repaired.tracks.map((track) => ({ stem: track.stem, fromCache: track.fromCache })) }));
+
+  await offlineContext.close();
 } finally {
   server.kill("SIGTERM");
 }
+
+const fileSWPage = await browser.newPage({ viewport });
+await fileSWPage.goto(pageUrl + "#/");
+const fileServiceWorkers = await fileSWPage.evaluate(() =>
+  "serviceWorker" in navigator
+    ? navigator.serviceWorker.getRegistrations().then((items) => items.length).catch(() => 0)
+    : 0);
+check("file:// registers no service worker", fileServiceWorkers === 0, fileServiceWorkers);
+await fileSWPage.close();
 
 await browser.close();
 

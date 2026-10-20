@@ -22,6 +22,7 @@ losslessly — and rebuilds the interface as plain HTML/CSS/JavaScript.
 | Layout + content model emitted as `js/data.js` | **done** |
 | Shipped-layout page (`index_old.html`) | working; reconstructs the original screens |
 | Modern layout page (`index.html`) | working; responsive player (portrait phone, landscape phone, desktop sidebar), same data and transport |
+| Lazy offline cache | working; first open stores only that rhythm's verified Ogg, later opens rebuild WAV in RAM |
 | App icon + manifest | working; three fanned batá drums, smooth black/amber silhouettes, full favicon/home-screen set |
 
 See [docs/PLAN.md](docs/PLAN.md) for the next steps and
@@ -48,15 +49,24 @@ behind the reconstruction.
   requests a screen wake lock so the phone does not dim or sleep where the
   browser supports it.
 - **App info** — the hamburger button in the top-left shows one **Version** row
-  equal to the repository tag (for example `v1.2.3`), the current lesson,
-  whether audio is WAV or Ogg and whether the screen wake lock is active, off,
-  blocked or unsupported. If the manifest is newer it highlights the version and
-  offers a manual “Reload latest” action without printing a second number.
-- **Home-screen / PWA updates** — there is no service worker. The page compares
-  its own version with `site.webmanifest` through a `no-store` request and, when
-  a newer version is deployed, reloads once with a versioned URL. The manifest
-  `start_url` and icons are versioned too. The first update of an already
-  installed home-screen app may still need one manual cache clear or reinstall.
+  equal to the repository tag (for example `v1.3.0`), the current lesson,
+  whether audio is WAV or Ogg, whether the screen wake lock is active, off,
+  blocked or unsupported, and the offline cache state (cached rhythms, storage
+  use and a Clear offline audio action). If the manifest is newer it highlights
+  the version and offers a manual “Reload latest” action without printing a
+  second number.
+- **Offline** — on HTTP(S) a shell-only service worker caches the app shell. Each
+  rhythm is downloaded lazily the first time it is opened; its verified Ogg
+  source is stored in Cache Storage, while WAV is rebuilt in RAM on every open
+  and never persisted. Previously opened rhythms work offline; unopened ones
+  report that they are not available offline. There is no bulk precache. On
+  `file://`, the local folder itself is the offline copy and no service worker
+  is registered.
+- **Home-screen / PWA updates** — the page compares its own version with
+  `site.webmanifest` through a `no-store` request and, when a newer version is
+  deployed, reloads once with a versioned URL. The manifest uses standalone
+  display and its `start_url` and icons are versioned. The service worker
+  updates only the shell cache; the immutable Ogg cache survives app releases.
 - **Double-click `index_old.html`** — the shipped-layout reconstruction: opening
   → volume selector → toque/oru-seco index → lesson player, rendered from the
   app's own scene geometry.
@@ -104,13 +114,14 @@ tag, and the internal `?v=` cache-busting strings use it so a PWA cannot mix old
 and new files:
 
 ```bash
-python3 tools/set_version.py set v1.2.3   # rewrite all shipped version values
+python3 tools/set_version.py set v1.3.0   # rewrite all shipped version values
 python3 tools/set_version.py check        # after tagging HEAD: must match
 python3 tools/set_version.py show
 ```
 
 Release in this order: finish the change, run `set` with the intended tag,
-commit, tag that commit, then run `check` before pushing `master` and the tag.
+commit and push `master`, then create and push the tag on that exact commit,
+and run `check --tag vX.Y.Z` there.
 
 ## Playback
 
@@ -119,25 +130,34 @@ the original scene-reconstruction transport in `js/mixer.js`.
 
 - Opening the library creates no audio element, no `AudioContext` and no audio
   request. Audio loading begins only after a rhythm is chosen.
-- The modern player fetches every stem with `cache: "no-store"` and a fresh
-  per-load URL, then checks the byte count and SHA-256 (CRC-32 on origins
-  without Web Crypto) against the manifest in `js/lessons.js`. The whole gate
-  has a 120 s deadline, so a stalled transfer fails with an error instead of
-  leaving the loader up; Back during a load also stops WAV encoding between
-  chunks.
+- On HTTP(S) the player first checks Cache Storage for each stem. A cached Ogg
+  is accepted only after its byte count and SHA-256 (CRC-32 on origins without
+  Web Crypto) match the manifest in `js/lessons.js`; a miss or mismatch fetches
+  that stem from the repository with `cache: "no-store"` and a fresh per-load
+  URL, verifies it, and stores only the Ogg source. The immutable SHA/CRC values
+  already in `js/lessons.js` are the validation source; no separate CRC manifest
+  is needed. The whole gate has a 300 s deadline, so a stalled transfer fails
+  with an error instead of leaving the loader up; Back during a load also stops
+  WAV encoding between chunks.
 - On HTTP/PWA the verified Ogg is decoded with `decodeAudioData` and re-encoded
   as 16-bit PCM WAV by `js/wav.js`; the player waits until all five WAV Blobs
-  can play through. WAV headers make the duration exact on mobile browsers.
-  The largest lesson uses about 139 MB of WAV at 44.1 kHz. If a browser cannot
-  decode Ogg for conversion, that stem falls back to direct Ogg playback.
+  can play through. WAV is rebuilt on every open and never persisted. The exact
+  WAV sample length is the transport duration; the manifest remains the fallback
+  for the Ogg playback path. The largest lesson uses about 139 MB of WAV at
+  44.1 kHz. If a browser cannot decode Ogg for conversion, that stem falls back
+  to direct Ogg playback.
 - On `file://` the browser cannot read local bytes reliably, so the local Ogg
   elements are awaited directly. The manifest duration remains the transport
   length if a mobile browser estimates the duration.
 - The playing screen appears only after the last stem is ready; failures name
   the stem and fail closed.
+- The first open of a rhythm downloads only that rhythm's stems. Reopening it
+  uses the cached verified Ogg and makes no audio request, then rebuilds the
+  WAV. Only previously opened rhythms are available offline; there is no bulk
+  precache. The app-info panel reports the cached rhythm count and storage use.
 - Back navigation aborts pending transfers, pauses and clears every media
-  element, revokes the Blob URLs and closes the `AudioContext`. Reopening the
-  same rhythm downloads all stems again from scratch.
+  element, revokes the Blob URLs and closes the `AudioContext`. Verified Ogg
+  source stays in Cache Storage for the next open.
 - One GainNode per stem controls the level when Web Audio accepts the media
   source; a per-element volume fallback is used elsewhere. Mute and the volume
   slider never pause, seek, restart or reload a stem.

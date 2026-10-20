@@ -17,7 +17,11 @@ source.
      JavaScript, not JSON; the modern page may `fetch` its own same-origin audio
      over HTTP(S) for the load gate, never on `file://`;
    - no ES modules (`type="module"`) → plain scripts and globals;
-   - no Web Workers, no Service Worker, no `history.pushState` → hash routing;
+   - no Web Workers and no `history.pushState` → hash routing;
+   - no Service Worker on `file://`. On HTTP(S) a shell-only service worker may
+     cache the app shell for offline start; it must never cache audio. The page
+     may keep immutable Ogg source in Cache Storage, but WAV/decoded audio is
+     never persisted;
    - Web Audio may be unavailable or tainted for local media. The modern player
      attempts it on `file://` and falls back to element volume; the legacy
      `js/mixer.js` keeps its element-based fallback and drift correction;
@@ -35,6 +39,8 @@ source.
 ```
 index_old.html, app.css, js/     the shipped-layout page (classic scripts, no build)
 index.html, app-new.css, js/newapp.js   the modern layout page
+sw.js                        shell-only service worker for HTTP(S) offline start
+js/offline.js                Cache Storage source cache + shell registration
 js/wav.js                    pure-JS 16-bit PCM WAV encoder for the modern page
 js/player.js                 modern transport (window.BatappPlayer), used by index.html
 js/mixer.js                  legacy transport (window.BatappMixer), used by index_old.html
@@ -235,15 +241,28 @@ legacy `js/mixer.js` transport.
   **Version** row equal to the repository tag, plus the current lesson, audio
   format and wake-lock state. A newer manifest highlights that row and offers a
   manual Reload latest action without printing a second version number.
-- Opening a lesson runs a load gate: on HTTP(S) every stem is fetched into a
-  Blob with `cache: "no-store"` and a fresh per-load URL and checked against the
-  byte count and SHA-256/CRC-32 manifest in `js/lessons.js`. The verified Ogg is
-  decoded with `decodeAudioData` and re-encoded as 16-bit PCM WAV by `js/wav.js`
-  before the player is shown; duration is advisory because some mobile browsers
-  estimate it. If decoding fails, the stem falls back to direct Ogg. On
-  `file://` the local Ogg elements are awaited directly. The gate has a 120 s
-  overall deadline (stalled transfers fail closed), and Back cancels WAV
-  encoding between chunks. Failures are named and Retry restarts the whole load.
+- Opening a lesson runs a lazy load gate: on HTTP(S) each stem is first looked
+  up in Cache Storage. A cached Ogg is accepted only after its byte count and
+  SHA-256/CRC-32 match `js/lessons.js`; a missing, corrupt or mismatched entry
+  is fetched from the repository with `cache: "no-store"` and a fresh per-load
+  URL, verified, then stored as Ogg source. The verified Ogg is decoded with
+  `decodeAudioData` and re-encoded as 16-bit PCM WAV by `js/wav.js` before the
+  player is shown. WAV is rebuilt on every open and never persisted. The exact
+  WAV sample length is the transport duration when conversion succeeds; the
+  manifest is the fallback for the Ogg playback path. If decoding fails, the
+  stem falls back to direct Ogg. On `file://` the local Ogg elements are awaited
+  directly. The gate has a 300 s overall deadline (stalled transfers fail
+  closed), and Back cancels WAV encoding between chunks. Failures are named and
+  Retry restarts the whole load.
+- Offline source cache is lazy and per rhythm: the first open downloads only
+  that lesson's stems; later opens use Cache Storage without audio requests.
+  There is no bulk precache. Only previously opened rhythms are available
+  offline; an unvisited rhythm fails with "This rhythm is not available
+  offline." The app-info panel reports cached rhythm count, storage use and a
+  Clear offline audio action. A shell-only service worker caches the modern app
+  shell for offline starts on HTTP(S); it does not cache audio. The static
+  SHA-256/CRC-32 values already in `js/lessons.js` are the cache-validation
+  source; because Ogg is immutable, no second CRC manifest is fetched.
 - Transport: every stem loops (the scene object `Bit` maps to the exported
   `beat` stem). The transport resets all stems to 0 together at the loop
   boundary, so a browser that recalculates one stem's duration after a near-end
@@ -255,7 +274,8 @@ legacy `js/mixer.js` transport.
   buffered old-position audio cannot replay. A rebuilt generation waits for
   every element to become ready and aligns the shared position before starting,
   which also covers near-end seeks. Mute and volume only change per-stem gain.
-  Back disposes the player, revokes Blob URLs and closes the AudioContext.
+  Back disposes the player, revokes Blob URLs and closes the AudioContext; the
+  verified Ogg source in Cache Storage is kept for the next open.
 - The speed −/+ buttons below Play change every stem's `playbackRate` together
   (50–150% in 1% steps, pitch preserved) and carry the selected rate across
   rhythm navigation in the same session. Pressing keeps the current audio
@@ -287,12 +307,13 @@ legacy `js/mixer.js` transport.
   - desktop (`min-width: 900px` and `min-height: 600px`): full-bleed persistent
     library sidebar + player/empty main pane, with a narrower stacked player
     below 1200 px.
-- Home-screen/PWA update check without a service worker: the page reads
-  `site.webmanifest` (`cache: "no-store"`), compares `version` with its own
+- Home-screen/PWA update check: the page reads `site.webmanifest`
+  (`cache: "no-store"`), compares `version` with its own
   `<meta name="batapp-version">`, and reloads once with `?v=` when a newer
   version is deployed. Manifest `start_url` and icon URLs carry the same
-  version. The first update of an already installed app may need one manual
-  cache clear or reinstall.
+  version, and the manifest uses `display: "standalone"`. The shell-only
+  service worker updates its versioned shell cache; the immutable Ogg cache is
+  retained across app releases.
 - `prefers-color-scheme` selects the theme; there is no toggle and no external
   resource (inline SVG icons, generated two-colour three-drum icon set, system
   font stack).
@@ -331,7 +352,9 @@ legacy `js/mixer.js` transport.
   rate-adjusted loop checks, near-end seek stress, background suspension →
   Play rebuild/resume, mocked screen-wake-lock request/release, a single
   tag-shaped Version row, volume/mute leaving the transport untouched, Back
-  unloading every resource and reopening downloading fresh stems). Chromium runs
+  unloading every resource, lazy per-rhythm Ogg caching, second-open zero audio
+  requests, offline shell reload, unvisited-rhythm offline errors, corrupt
+  cache repair, and no service worker on `file://`). Chromium runs
   all 61 lessons; `BROWSER=firefox|webkit` runs
   representative lessons (and the HTTP gate/error paths). Its Chromium summary
   is written to `docs/verification/new-ui-sweep-summary.json`;

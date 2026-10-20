@@ -99,6 +99,20 @@ deterministic regression gate.
    appears after the last one, and the app-info panel reports `WAV ×5`.
 4. Never publish or commit captured audio or private network data.
 
+### Offline source cache
+
+- Open a lesson online and wait for it to become ready.
+- Inspect `caches.open("batapp-audio-v1").keys()` with `browser_evaluate`:
+  entries must be `.ogg` only, never `.wav`.
+- Reload that lesson: the second open must make no `/assets/audio/` request and
+  `window.__batapp_new.tracks()` must report `fromCache: true`.
+- The service worker must be active for the app shell. Playwright's
+  `context.setOffline(true)` is the deterministic offline test; the MCP browser
+  UI does not expose a network-offline toggle.
+- Open an unvisited rhythm offline: it must fail with “This rhythm is not
+  available offline.”
+- App-info must show cached-rhythm count, storage use and Clear offline audio.
+
 ### Error and edge cases
 
 - Malformed hash: `#/lesson/%E0%A4%A` must recover to `#/`.

@@ -129,8 +129,12 @@ Status legend: `[x]` done and verified · `[~]` in progress · `[ ]` not started
       Vox starts at 100% in the modern model. All stems are loaded and verified
       (fetch-to-Blob with checksums and runtime WAV expansion on HTTP, local Ogg
       elements on file://) before the playing screen appears, with named errors
-      and Retry. A no-store manifest version check reloads an installed home-screen
-      app once when a newer release is deployed, without a service worker.
+      and Retry. On HTTP(S), a shell-only service worker and Cache Storage give
+      lazy per-rhythm offline use: the first open caches only that rhythm's
+      verified Ogg; later opens rebuild WAV in RAM without audio requests, and
+      unvisited rhythms fail with a named offline error. WAV is never persisted.
+      A no-store manifest version check reloads an installed home-screen app once
+      when a newer release is deployed.
       Verified by `tests/verify-new.mjs` (file:// and HTTP,
       Chromium/representative Firefox+WebKit); summary in
       `docs/verification/new-ui-sweep-summary.json` and
