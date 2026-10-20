@@ -299,10 +299,14 @@ legacy `js/mixer.js` transport.
   audio is left untouched.
 - Three responsive modes built from one DOM:
   - portrait phones: fixed app shell, one pane at a time; the player fits with
-    no page or internal scroll (short screens use a compact single-line mixer),
-    while the library list is the only scroll container; Stop sits beside Next
-    inside the transport. Tablets at 600–899 px keep the one-pane flow but use
-    a 640 px shell instead of the 440 px phone column;
+    no page or internal scroll, while the library list is the only scroll
+    container. The transport is centred with 44–56 px secondary controls around
+    the play ring and a grouped Speed pill; Stop is pinned to the mixer card's
+    right edge beside Next. The mixer card fills the remaining height in equal
+    rows (two-line channel strips on tall screens, single-line rows below
+    840 px, compact rows below 741 px), so no dead band opens between Speed and
+    the sliders. Tablets at 600–899 px keep the one-pane flow but use a 640 px
+    shell instead of the 440 px phone column;
   - landscape phones (`orientation: landscape` and `max-height: 559px`):
     full-bleed two-column player that fits the viewport without page or player
     scrolling (the transport, speed controls and Stop-beside-Next stay visible),

@@ -1154,85 +1154,121 @@ for (const hash of ["#/", "#/v/2", "#/lesson/volume-1/01-alubanche", "#/lesson/v
 check("no author/shop text, no links, no external URLs", surface.length === 0, surface.join(" | "));
 
 // --- fixed portrait app shell ----------------------------------------------
+// Cover both mixer shapes: a voiced toque has five rows, an Oru Seco has four.
+// The four-row card stretches each channel more, so it must pass the same
+// geometry contract at every portrait size.
 const portraitSizes = [[390, 844], [375, 667], [360, 640], [320, 568], [414, 896]];
+const portraitVariants = [
+  { slug: "volume-1/01-alubanche", tag: "toque", rows: 5 },
+  { slug: "volume-2/1-elegba", tag: "oru seco", rows: 4 }
+];
 for (const [width, height] of portraitSizes) {
-  const label = width + "x" + height;
-  const page = await newPage({ viewport: { width, height } });
-  await page.bringToFront();
-  await page.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
-  await ready(page);
-  await page.waitForTimeout(400);
-  const snap = await page.evaluate(() => {
-    const box = (node) => {
-      const rect = node.getBoundingClientRect();
-      return {
-        left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom,
-        width: rect.width, height: rect.height
+  for (const variant of portraitVariants) {
+    const label = width + "x" + height + " " + variant.tag;
+    const page = await newPage({ viewport: { width, height } });
+    await page.bringToFront();
+    await page.goto(pageUrl + "#/lesson/" + variant.slug);
+    await ready(page);
+    await page.waitForTimeout(400);
+    const snap = await page.evaluate(() => {
+      const box = (node) => {
+        const rect = node.getBoundingClientRect();
+        return {
+          left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom,
+          width: rect.width, height: rect.height
+        };
       };
-    };
-    const main = document.getElementById("main-pane");
-    const playerView = document.querySelector(".player-view");
-    const mixer = document.querySelector(".mixer");
-    const speed = document.querySelector(".speed-controls");
-    return {
-      app: box(document.getElementById("app")),
-      menu: box(document.getElementById("app-info-button")),
-      back: box(document.querySelector(".player-top .icon-btn")),
-      seek: box(document.querySelector(".seek")),
-      speed: box(speed),
-      mixer: box(mixer),
-      beforeMixer: !!(speed.compareDocumentPosition(mixer) & Node.DOCUMENT_POSITION_FOLLOWING),
-      transport: box(document.querySelector(".transport")),
-      next: box(document.querySelectorAll(".transport .ghost")[1]),
-      stop: box(document.querySelector(".stop")),
-      rows: Array.from(document.querySelectorAll(".stem")).map(box),
-      viewport: [window.innerWidth, window.innerHeight],
-      scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
-      mainScroll: [main.scrollWidth, main.scrollHeight, main.clientWidth, main.clientHeight],
-      playerScroll: [playerView.scrollWidth, playerView.scrollHeight, playerView.clientWidth, playerView.clientHeight],
-      mixerScroll: [mixer.scrollWidth, mixer.scrollHeight, mixer.clientWidth, mixer.clientHeight]
-    };
-  });
-  check(label + " portrait has no page scroll",
-    snap.app.left === 0 && snap.app.right === snap.viewport[0] &&
-    snap.app.top === 0 && snap.app.bottom === snap.viewport[1] &&
-    snap.scroll[0] <= snap.viewport[0] && snap.scroll[1] <= snap.viewport[1],
-    JSON.stringify({ app: snap.app, scroll: snap.scroll, viewport: snap.viewport }));
-  check(label + " portrait player fits without internal scroll",
-    snap.playerScroll[1] <= snap.playerScroll[3] + 1 &&
-    snap.mixerScroll[1] <= snap.mixerScroll[3] + 1 &&
-    snap.mainScroll[1] <= snap.mainScroll[3] + 1 &&
-    snap.seek.top >= 0 && snap.seek.bottom <= snap.viewport[1] &&
-    snap.speed.top >= snap.transport.bottom - 1 &&
-    snap.speed.top >= 0 && snap.speed.bottom <= snap.viewport[1] &&
-    snap.speed.bottom <= snap.mixer.top + 1 && snap.beforeMixer &&
-    snap.stop.top >= 0 && snap.stop.bottom <= snap.viewport[1] &&
-    snap.rows.length === 5 && snap.rows.every((row) =>
-      row.top >= -1 && row.bottom <= snap.viewport[1] + 1),
-    JSON.stringify({ player: snap.playerScroll, mixer: snap.mixerScroll, main: snap.mainScroll, seek: snap.seek, speed: snap.speed, mixerBox: snap.mixer, beforeMixer: snap.beforeMixer, stop: snap.stop, rows: snap.rows }));
-  check(label + " portrait places Stop beside Next",
-    snap.stop.left >= snap.next.right - 1 &&
-    Math.abs((snap.stop.top + snap.stop.bottom) / 2 - (snap.next.top + snap.next.bottom) / 2) < 2 &&
-    snap.stop.right <= snap.viewport[0],
-    JSON.stringify({ transport: snap.transport, next: snap.next, stop: snap.stop }));
-  check(label + " portrait keeps the app menu in the top-left safe area",
-    snap.menu.left >= 0 && snap.menu.top >= 0 &&
-    snap.menu.right <= 52 && snap.menu.bottom <= 52,
-    JSON.stringify(snap.menu));
-  check(label + " portrait app menu is a 44px touch target",
-    snap.menu.width >= 44 && snap.menu.height >= 44,
-    JSON.stringify(snap.menu));
-  check(label + " portrait app menu clears the Back button",
-    snap.back.left >= snap.menu.right + 10,
-    JSON.stringify({ menu: snap.menu, back: snap.back }));
-  const portraitTargets = await touchTargetReport(page);
-  check(label + " portrait controls meet the 24px touch floor",
-    portraitTargets.count > 0 && portraitTargets.small.length === 0,
-    JSON.stringify(portraitTargets));
-  if (label === "320x568") {
-    await page.screenshot({ path: path.join(shots, "07-portrait-small.png") });
+      const main = document.getElementById("main-pane");
+      const playerView = document.querySelector(".player-view");
+      const mixer = document.querySelector(".mixer");
+      const speed = document.querySelector(".speed-controls");
+      return {
+        app: box(document.getElementById("app")),
+        menu: box(document.getElementById("app-info-button")),
+        back: box(document.querySelector(".player-top .icon-btn")),
+        seek: box(document.querySelector(".seek")),
+        speed: box(speed),
+        mixer: box(mixer),
+        beforeMixer: !!(speed.compareDocumentPosition(mixer) & Node.DOCUMENT_POSITION_FOLLOWING),
+        transport: box(document.querySelector(".transport")),
+        play: box(document.querySelector(".transport .play")),
+        next: box(document.querySelectorAll(".transport .ghost")[1]),
+        stop: box(document.querySelector(".stop")),
+        rows: Array.from(document.querySelectorAll(".stem")).map(box),
+        viewport: [window.innerWidth, window.innerHeight],
+        scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
+        mainScroll: [main.scrollWidth, main.scrollHeight, main.clientWidth, main.clientHeight],
+        playerScroll: [playerView.scrollWidth, playerView.scrollHeight, playerView.clientWidth, playerView.clientHeight],
+        mixerScroll: [mixer.scrollWidth, mixer.scrollHeight, mixer.clientWidth, mixer.clientHeight]
+      };
+    });
+    check(label + " portrait has no page scroll",
+      snap.app.left === 0 && snap.app.right === snap.viewport[0] &&
+      snap.app.top === 0 && snap.app.bottom === snap.viewport[1] &&
+      snap.scroll[0] <= snap.viewport[0] && snap.scroll[1] <= snap.viewport[1],
+      JSON.stringify({ app: snap.app, scroll: snap.scroll, viewport: snap.viewport }));
+    check(label + " portrait player fits without internal scroll",
+      snap.playerScroll[1] <= snap.playerScroll[3] + 1 &&
+      snap.mixerScroll[1] <= snap.mixerScroll[3] + 1 &&
+      snap.mainScroll[1] <= snap.mainScroll[3] + 1 &&
+      snap.seek.top >= 0 && snap.seek.bottom <= snap.viewport[1] &&
+      snap.speed.top >= snap.transport.bottom - 1 &&
+      snap.speed.top >= 0 && snap.speed.bottom <= snap.viewport[1] &&
+      snap.speed.bottom <= snap.mixer.top + 1 && snap.beforeMixer &&
+      snap.stop.top >= 0 && snap.stop.bottom <= snap.viewport[1] &&
+      snap.rows.length === variant.rows && snap.rows.every((row) =>
+        row.top >= -1 && row.bottom <= snap.viewport[1] + 1),
+      JSON.stringify({ player: snap.playerScroll, mixer: snap.mixerScroll, main: snap.mainScroll, seek: snap.seek, speed: snap.speed, mixerBox: snap.mixer, beforeMixer: snap.beforeMixer, stop: snap.stop, rows: snap.rows }));
+    check(label + " portrait fills the mixer with equal rows",
+      snap.rows.length === variant.rows &&
+      Math.abs(snap.rows[snap.rows.length - 1].bottom - snap.mixer.bottom) <= 2 &&
+      Math.max(...snap.rows.map((row) => row.height)) -
+        Math.min(...snap.rows.map((row) => row.height)) <= 1,
+      JSON.stringify({ mixer: snap.mixer, rows: snap.rows }));
+    check(label + " portrait places Stop beside Next",
+      snap.stop.left >= snap.next.right - 1 &&
+      Math.abs((snap.stop.top + snap.stop.bottom) / 2 - (snap.next.top + snap.next.bottom) / 2) < 2 &&
+      snap.stop.right <= snap.viewport[0],
+      JSON.stringify({ transport: snap.transport, next: snap.next, stop: snap.stop }));
+    check(label + " portrait centres Play and the speed pill",
+      Math.abs((snap.play.left + snap.play.right) / 2 - snap.viewport[0] / 2) <= 1.5 &&
+      Math.abs((snap.speed.left + snap.speed.right) / 2 - snap.viewport[0] / 2) <= 1.5,
+      JSON.stringify({ play: snap.play, speed: snap.speed, viewport: snap.viewport }));
+    check(label + " portrait keeps the mixer against the deck",
+      snap.speed.bottom <= snap.mixer.top + 1 && snap.mixer.top - snap.speed.bottom <= 30,
+      JSON.stringify({ speed: snap.speed, mixer: snap.mixer }));
+    check(label + " portrait pins Stop to the mixer edge",
+      Math.abs(snap.stop.right - snap.mixer.right) <= 1.5,
+      JSON.stringify({ stop: snap.stop, mixer: snap.mixer }));
+    check(label + " portrait transport controls are at least 44px",
+      snap.next.width >= 44 && snap.next.height >= 44 &&
+      snap.stop.width >= 44 && snap.stop.height >= 44,
+      JSON.stringify({ next: snap.next, stop: snap.stop }));
+    check(label + " portrait keeps the app menu in the top-left safe area",
+      snap.menu.left >= 0 && snap.menu.top >= 0 &&
+      snap.menu.right <= 52 && snap.menu.bottom <= 52,
+      JSON.stringify(snap.menu));
+    check(label + " portrait app menu is a 44px touch target",
+      snap.menu.width >= 44 && snap.menu.height >= 44,
+      JSON.stringify(snap.menu));
+    check(label + " portrait app menu clears the Back button",
+      snap.back.left >= snap.menu.right + 10,
+      JSON.stringify({ menu: snap.menu, back: snap.back }));
+    const portraitTargets = await touchTargetReport(page);
+    check(label + " portrait controls meet the 24px touch floor",
+      portraitTargets.count > 0 && portraitTargets.small.length === 0,
+      JSON.stringify(portraitTargets));
+    if (label === "320x568 toque") {
+      await page.screenshot({ path: path.join(shots, "07-portrait-small.png") });
+    }
+    if (label === "320x568 oru seco") {
+      await page.screenshot({ path: path.join(shots, "07-portrait-small-oru.png") });
+    }
+    if (label === "390x844 oru seco") {
+      await page.screenshot({ path: path.join(shots, "03b-player-idle-oru.png") });
+    }
+    await page.close();
   }
-  await page.close();
 }
 
 const portraitLibrary = await newPage({ viewport: { width: 390, height: 844 } });

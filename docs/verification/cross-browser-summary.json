@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-10-20T18:18:19.798Z",
+  "generated_at": "2026-10-20T19:14:08.561Z",
   "target": "file:///home/apicciano/ai/batapp-web/index.html",
   "note": "Chromium runs the full sweep; Firefox/WebKit run representative lessons. WebKit uses the official Playwright Docker image and element-volume playback because the Linux WPE build crashes on WAV + MediaElementAudioSourceNode seeks. Real iPhone Safari and Android Chrome are covered by the manual device pass.",
   "browsers": [
     {
       "browser": "chromium",
       "status": "passed",
-      "checks_passed": 300,
-      "checks_total": 300,
+      "checks_passed": 385,
+      "checks_total": 385,
       "full_sweep": true,
       "exit_code": 0,
       "reason": "",
@@ -16,8 +16,8 @@
     {
       "browser": "firefox",
       "status": "passed",
-      "checks_passed": 300,
-      "checks_total": 300,
+      "checks_passed": 385,
+      "checks_total": 385,
       "full_sweep": false,
       "exit_code": 0,
       "reason": "",
@@ -26,8 +26,8 @@
     {
       "browser": "webkit",
       "status": "passed",
-      "checks_passed": 297,
-      "checks_total": 297,
+      "checks_passed": 382,
+      "checks_total": 382,
       "full_sweep": false,
       "exit_code": 0,
       "reason": "",
