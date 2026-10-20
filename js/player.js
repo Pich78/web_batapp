@@ -538,7 +538,11 @@
   BatappPlayer.prototype._createElements = function (items) {
     var self = this;
     this._ensureContext();
-    var useWebAudio = !!this._context;
+    // The decode context is still needed for WAV conversion. Test-only WPE
+    // compatibility keeps the context for decoding but plays through element
+    // volume instead of MediaElementAudioSourceNode.
+    var useWebAudio = !!this._context && !global.__batappNoMediaSource;
+    if (this._context && !useWebAudio) this.mode = "elements";
     var created = [];
 
     try {

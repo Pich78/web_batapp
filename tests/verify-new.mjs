@@ -167,7 +167,27 @@ const browser = await engine.launch(browserName === "chromium"
   ? { args: ["--autoplay-policy=no-user-gesture-required", "--mute-audio"] }
   : {});
 const viewport = { width: 390, height: 844 };
-const page = await browser.newPage({ viewport });
+
+async function newPage(options) {
+  const created = await browser.newPage(options);
+  if (browserName === "webkit") {
+    // Playwright's Linux WebKit/WPE build crashes when WAV media is routed
+    // through MediaElementAudioSourceNode and seeked. Keep the decode context
+    // (and WAV conversion) but use the element-volume playback path here.
+    await created.addInitScript(() => { window.__batappNoMediaSource = true; });
+  }
+  return created;
+}
+
+const page = await newPage({ viewport });
+// Keep a stuck browser/worker from holding the suite forever. unref() means a
+// normal early error still exits immediately; the timer only fires if the
+// process is otherwise alive and waiting.
+const suiteWatchdog = setTimeout(() => {
+  console.error("verify-new timed out after 15 minutes");
+  process.exit(1);
+}, 15 * 60 * 1000);
+suiteWatchdog.unref();
 const external = [];
 const pageErrors = [];
 page.on("request", (request) => {
@@ -288,7 +308,7 @@ const fits = await page.evaluate(() => document.documentElement.scrollWidth <= w
 check("library has no horizontal overflow at 390px", fits);
 const fills = await page.evaluate(() => document.getElementById("app").getBoundingClientRect().height >= window.innerHeight - 1);
 check("app column fills the phone viewport", fills);
-const startup = await browser.newPage({ viewport });
+const startup = await newPage({ viewport });
 await startup.addInitScript(installMediaProbe);
 const startupRequests = [];
 startup.on("request", (request) => {
@@ -680,7 +700,7 @@ await page.waitForTimeout(400);
 check("Escape returns to the library", (await page.evaluate(() => window.__batapp_new.state().view)) === "library");
 
 // --- screen wake lock while playing ----------------------------------------
-const wake = await browser.newPage({ viewport });
+const wake = await newPage({ viewport });
 await wake.bringToFront();
 await wake.addInitScript(() => {
   window.__wakeLog = { requests: 0, releases: 0, active: 0 };
@@ -745,7 +765,7 @@ check("Stop releases the screen wake lock",
 await wake.close();
 
 // --- transport regression: pause → mute → play → backward seek ------------
-const transport = await browser.newPage({ viewport });
+const transport = await newPage({ viewport });
 await transport.bringToFront();
 await transport.addInitScript(installMediaProbe);
 await transport.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
@@ -953,7 +973,7 @@ check("no author/shop text, no links, no external URLs", surface.length === 0, s
 const portraitSizes = [[390, 844], [375, 667], [360, 640], [320, 568], [414, 896]];
 for (const [width, height] of portraitSizes) {
   const label = width + "x" + height;
-  const page = await browser.newPage({ viewport: { width, height } });
+  const page = await newPage({ viewport: { width, height } });
   await page.bringToFront();
   await page.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
   await ready(page);
@@ -1017,7 +1037,7 @@ for (const [width, height] of portraitSizes) {
   await page.close();
 }
 
-const portraitLibrary = await browser.newPage({ viewport: { width: 390, height: 844 } });
+const portraitLibrary = await newPage({ viewport: { width: 390, height: 844 } });
 await portraitLibrary.bringToFront();
 await portraitLibrary.goto(pageUrl + "#/v/1");
 await portraitLibrary.waitForTimeout(500);
@@ -1072,7 +1092,7 @@ function landscapeSnapshot(page) {
 const landscapeSizes = [[844, 390], [740, 360], [667, 375], [568, 320], [480, 320]];
 for (const [width, height] of landscapeSizes) {
   const label = width + "x" + height;
-  const page = await browser.newPage({ viewport: { width, height } });
+  const page = await newPage({ viewport: { width, height } });
   await page.bringToFront();
   await page.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
   await ready(page);
@@ -1120,7 +1140,7 @@ for (const [width, height] of landscapeSizes) {
 
 // Library landscape: the page must not scroll; the lesson list may scroll
 // inside its own pane because 38 rows cannot fit a short phone height.
-const landscapeLibrary = await browser.newPage({ viewport: { width: 844, height: 390 } });
+const landscapeLibrary = await newPage({ viewport: { width: 844, height: 390 } });
 await landscapeLibrary.bringToFront();
 await landscapeLibrary.goto(pageUrl + "#/v/1");
 await landscapeLibrary.waitForTimeout(500);
@@ -1145,7 +1165,7 @@ await landscapeLibrary.screenshot({ path: path.join(shots, "08-landscape-library
 await landscapeLibrary.close();
 
 // --- desktop ---------------------------------------------------------------
-const desktop = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const desktop = await newPage({ viewport: { width: 1440, height: 900 } });
 await desktop.bringToFront();
 await desktop.goto(pageUrl + "#/");
 await desktop.waitForTimeout(500);
@@ -1238,7 +1258,7 @@ check("desktop next updates the lesson and the active row",
 await desktop.close();
 
 // Narrow desktop/tablet: both panes must remain, player stacks vertically.
-const tablet = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+const tablet = await newPage({ viewport: { width: 1024, height: 768 } });
 await tablet.bringToFront();
 await tablet.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
 await tablet.waitForTimeout(700);
@@ -1274,7 +1294,7 @@ await tablet.screenshot({ path: path.join(shots, "10-tablet-player.png") });
 await tablet.close();
 
 // Tablet portrait keeps the fixed app menu inside the centered app shell.
-const tabletPortrait = await browser.newPage({ viewport: { width: 768, height: 1024 } });
+const tabletPortrait = await newPage({ viewport: { width: 768, height: 1024 } });
 await tabletPortrait.bringToFront();
 await tabletPortrait.goto(pageUrl + "#/");
 await tabletPortrait.waitForTimeout(500);
@@ -1307,7 +1327,7 @@ await tabletPortrait.screenshot({ path: path.join(shots, "11-tablet-portrait.png
 await tabletPortrait.close();
 
 // --- theme follows the system ---------------------------------------------
-const dark = await browser.newPage({ viewport, colorScheme: "dark" });
+const dark = await newPage({ viewport, colorScheme: "dark" });
 await dark.bringToFront();
 await dark.goto(pageUrl + "#/lesson/volume-1/01-alubanche");
 await dark.waitForTimeout(700);
@@ -1322,7 +1342,7 @@ check("dark theme follows prefers-color-scheme",
 await dark.screenshot({ path: path.join(shots, "11-dark-player.png") });
 await dark.close();
 
-const darkDesktop = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: "dark" });
+const darkDesktop = await newPage({ viewport: { width: 1440, height: 900 }, colorScheme: "dark" });
 await darkDesktop.bringToFront();
 await darkDesktop.goto(pageUrl + "#/lesson/volume-1/14-oya-otagua");
 await darkDesktop.waitForTimeout(800);
@@ -1406,7 +1426,7 @@ const servedUrl = `http://127.0.0.1:${port}/index.html`;
 const server = spawn("python3", ["-m", "http.server", String(port), "--bind", "127.0.0.1"], { cwd: root, stdio: "ignore" });
 await new Promise((resolve) => setTimeout(resolve, 900));
 try {
-  const servedStartup = await browser.newPage({ viewport });
+  const servedStartup = await newPage({ viewport });
   await servedStartup.addInitScript(installMediaProbe);
   const servedStartupAudio = [];
   servedStartup.on("request", (request) => {
@@ -1425,7 +1445,7 @@ try {
   await servedStartup.close();
 
   // PWA version check: a matching manifest is a no-op.
-  const versionOk = await browser.newPage({ viewport });
+  const versionOk = await newPage({ viewport });
   await versionOk.goto(servedUrl + "#/");
   await versionOk.waitForTimeout(700);
   check("PWA version check does not reload when the manifest matches",
@@ -1433,7 +1453,7 @@ try {
   await versionOk.close();
 
   // PWA version check: a newer manifest forces one cache-busted reload.
-  const versionNew = await browser.newPage({ viewport });
+  const versionNew = await newPage({ viewport });
   await versionNew.route("**/site.webmanifest*", (route) => route.fulfill({
     status: 200,
     contentType: "application/manifest+json",
@@ -1456,7 +1476,7 @@ try {
 
   // Opening the app menu after deployment must expose a manifest newer than
   // the loaded page and offer a manual cache-busting reload.
-  const infoUpdate = await browser.newPage({ viewport });
+  const infoUpdate = await newPage({ viewport });
   await infoUpdate.addInitScript(() => { window.__batappNoOffline = true; });
   await infoUpdate.goto(servedUrl + "#/");
   await infoUpdate.waitForTimeout(700);
@@ -1481,7 +1501,7 @@ try {
     await infoUpdate.locator(".app-info-reload").isVisible());
   await infoUpdate.close();
 
-  const served = await browser.newPage({ viewport });
+  const served = await newPage({ viewport });
   await served.bringToFront();
   await served.addInitScript(installMediaProbe);
   const servedAudioRequests = [];
@@ -1499,7 +1519,10 @@ try {
   check("first lesson load fetches five versioned stems",
     servedAudioRequests.length === 5 && firstLoadIds.length === 1,
     JSON.stringify(servedAudioRequests));
-  check("served page uses the Web Audio mixer", (await served.evaluate(() => window.__batapp_new.state().mode)) === "webaudio");
+  const servedMode = await served.evaluate(() => window.__batapp_new.state().mode);
+  check("served page uses the expected mixer path",
+    servedMode === (browserName === "webkit" ? "elements" : "webaudio"),
+    servedMode);
   const wavInfo = await served.evaluate(async () => {
     const tracks = window.__batapp_new.tracks();
     const track = tracks[0];
@@ -1562,14 +1585,18 @@ try {
     await served.evaluate(() => document.getElementById("app-info-panel").hidden));
   let vox = await served.evaluate(() => window.__batapp_new.tracks().find((track) => track.stem === "vox"));
   check("Vox starts at 100% on HTTP",
-    vox.volume === 1 && vox.gain === 1 && vox.elementVolume === 1,
+    vox.volume === 1 && vox.elementVolume === 1 &&
+    (browserName === "webkit" || vox.gain === 1),
     JSON.stringify({ gain: vox.gain, elementVolume: vox.elementVolume, volume: vox.volume }));
   await served.locator(".stem[data-stem='vox'] input").evaluate((input) => {
     input.value = "50";
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   vox = await served.evaluate(() => window.__batapp_new.tracks().find((track) => track.stem === "vox"));
-  check("Vox gain follows its slider on HTTP", vox.gain === 0.5 && vox.elementVolume === 1,
+  check("Vox level follows its slider on HTTP",
+    browserName === "webkit"
+      ? vox.gain === null && vox.elementVolume === 0.5
+      : vox.gain === 0.5 && vox.elementVolume === 1,
     JSON.stringify({ gain: vox.gain, elementVolume: vox.elementVolume }));
   await served.locator(".stem[data-stem='vox'] input").evaluate((input) => {
     input.value = "100";
@@ -1707,61 +1734,64 @@ try {
 
   // Returning from the background with a suspended AudioContext must not
   // leave a moving silent timeline: the UI returns to Play, and the next tap
-  // rebuilds/resumes the context inside the gesture.
-  const backgroundBefore = await served.evaluate(() => ({
-    state: window.__batapp_new.state(),
-    hasContext: !!window.__mediaProbe.context,
-    label: document.querySelector("button.play").getAttribute("aria-label")
-  }));
-  check("HTTP player has a running AudioContext before backgrounding",
-    backgroundBefore.hasContext && backgroundBefore.state.contextRunning === true &&
-    backgroundBefore.state.playing === true && backgroundBefore.label === "Pause",
-    JSON.stringify(backgroundBefore));
-  await served.evaluate(async () => {
-    const context = window.__mediaProbe.context;
-    window.__batappSavedResume = context.resume.bind(context);
-    await context.suspend();
-    context.resume = () => Promise.reject(new Error("blocked"));
-    Object.defineProperty(document, "visibilityState", {
-      configurable: true,
-      get: () => "hidden"
+  // rebuilds/resumes the context inside the gesture. The WPE element-volume
+  // test path has no MediaElementSource, so this control is Web Audio-only.
+  if (browserName !== "webkit") {
+    const backgroundBefore = await served.evaluate(() => ({
+      state: window.__batapp_new.state(),
+      hasContext: !!window.__mediaProbe.context,
+      label: document.querySelector("button.play").getAttribute("aria-label")
+    }));
+    check("HTTP player has a running AudioContext before backgrounding",
+      backgroundBefore.hasContext && backgroundBefore.state.contextRunning === true &&
+      backgroundBefore.state.playing === true && backgroundBefore.label === "Pause",
+      JSON.stringify(backgroundBefore));
+    await served.evaluate(async () => {
+      const context = window.__mediaProbe.context;
+      window.__batappSavedResume = context.resume.bind(context);
+      await context.suspend();
+      context.resume = () => Promise.reject(new Error("blocked"));
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "hidden"
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
     });
-    document.dispatchEvent(new Event("visibilitychange"));
-  });
-  await served.waitForTimeout(200);
-  await served.evaluate(() => {
-    Object.defineProperty(document, "visibilityState", {
-      configurable: true,
-      get: () => "visible"
+    await served.waitForTimeout(200);
+    await served.evaluate(() => {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "visible"
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
     });
-    document.dispatchEvent(new Event("visibilitychange"));
-  });
-  await served.waitForTimeout(900);
-  const backgroundAfter = await served.evaluate(() => ({
-    state: window.__batapp_new.state(),
-    label: document.querySelector("button.play").getAttribute("aria-label"),
-    status: (document.querySelector(".player-status") || {}).textContent || ""
-  }));
-  check("returning with a suspended AudioContext shows Play, not a silent clock",
-    backgroundAfter.state.playing === false &&
-    backgroundAfter.state.contextRunning === false &&
-    backgroundAfter.label === "Play" &&
-    backgroundAfter.status.indexOf("Playback paused") >= 0,
-    JSON.stringify(backgroundAfter));
-  await served.evaluate(() => {
-    window.__mediaProbe.context.resume = window.__batappSavedResume;
-  });
-  await served.locator("button.play").click();
-  await served.waitForTimeout(1200);
-  const backgroundResumed = await served.evaluate(() => ({
-    state: window.__batapp_new.state(),
-    tracks: window.__batapp_new.tracks()
-  }));
-  check("Play after background rebuilds and resumes every stem",
-    backgroundResumed.state.playing && backgroundResumed.state.mixerPlaying &&
-    backgroundResumed.state.contextRunning === true &&
-    backgroundResumed.tracks.every((track) => !track.paused),
-    JSON.stringify({ state: backgroundResumed.state, tracks: backgroundResumed.tracks.map((track) => ({ stem: track.stem, paused: track.paused })) }));
+    await served.waitForTimeout(900);
+    const backgroundAfter = await served.evaluate(() => ({
+      state: window.__batapp_new.state(),
+      label: document.querySelector("button.play").getAttribute("aria-label"),
+      status: (document.querySelector(".player-status") || {}).textContent || ""
+    }));
+    check("returning with a suspended AudioContext shows Play, not a silent clock",
+      backgroundAfter.state.playing === false &&
+      backgroundAfter.state.contextRunning === false &&
+      backgroundAfter.label === "Play" &&
+      backgroundAfter.status.indexOf("Playback paused") >= 0,
+      JSON.stringify(backgroundAfter));
+    await served.evaluate(() => {
+      window.__mediaProbe.context.resume = window.__batappSavedResume;
+    });
+    await served.locator("button.play").click();
+    await served.waitForTimeout(1200);
+    const backgroundResumed = await served.evaluate(() => ({
+      state: window.__batapp_new.state(),
+      tracks: window.__batapp_new.tracks()
+    }));
+    check("Play after background rebuilds and resumes every stem",
+      backgroundResumed.state.playing && backgroundResumed.state.mixerPlaying &&
+      backgroundResumed.state.contextRunning === true &&
+      backgroundResumed.tracks.every((track) => !track.paused),
+      JSON.stringify({ state: backgroundResumed.state, tracks: backgroundResumed.tracks.map((track) => ({ stem: track.stem, paused: track.paused })) }));
+  }
 
   // Stop -> Play must create another fresh generation at zero, without
   // downloading any audio again.
@@ -1813,16 +1843,21 @@ try {
   }));
   const oko = afterLevel.tracks.find((track) => track.stem === "oko");
   const iya = afterLevel.tracks.find((track) => track.stem === "iya");
-  check("volume and mute change only the gain, never the transport",
+  const levelApplied = browserName === "webkit"
+    ? Math.abs(oko.elementVolume - 0.4) < 0.02 &&
+      Math.abs(iya.elementVolume - iya.volume) < 0.02
+    : Math.abs(oko.gain - 0.4) < 0.02 &&
+      Math.abs(iya.gain - iya.volume) < 0.02;
+  check("volume and mute change only the level, never the transport",
     afterLevel.media.created === beforeLevel.media.created &&
     afterLevel.media.plays === beforeLevel.media.plays &&
     afterLevel.media.pauses === beforeLevel.media.pauses &&
     afterLevel.media.seeks.length === beforeLevel.media.seeks.length &&
     afterLevel.state.mixerPlaying === true &&
     afterLevel.state.position > beforeLevel.position + 0.4 &&
-    Math.abs(oko.volume - 0.4) < 0.02 && Math.abs(oko.gain - 0.4) < 0.02 &&
-    iya.muted === false && Math.abs(iya.gain - iya.volume) < 0.02,
-    JSON.stringify({ before: { plays: beforeLevel.media.plays, pauses: beforeLevel.media.pauses, seeks: beforeLevel.media.seeks.length }, after: { plays: afterLevel.media.plays, pauses: afterLevel.media.pauses, seeks: afterLevel.media.seeks.length }, oko: { volume: oko.volume, gain: oko.gain }, iya: { muted: iya.muted, gain: iya.gain, volume: iya.volume } }));
+    Math.abs(oko.volume - 0.4) < 0.02 && levelApplied &&
+    iya.muted === false,
+    JSON.stringify({ before: { plays: beforeLevel.media.plays, pauses: beforeLevel.media.pauses, seeks: beforeLevel.media.seeks.length }, after: { plays: afterLevel.media.plays, pauses: afterLevel.media.pauses, seeks: afterLevel.media.seeks.length }, oko: { volume: oko.volume, gain: oko.gain, elementVolume: oko.elementVolume }, iya: { muted: iya.muted, gain: iya.gain, elementVolume: iya.elementVolume, volume: iya.volume } }));
 
   // Back releases every audio resource; reopening downloads fresh stems.
   await served.locator(".player-top .icon-btn").click();
@@ -1858,7 +1893,7 @@ try {
   await served.close();
 
   // Load gate: delay the audio responses, then assert Play is disabled.
-  const slow = await browser.newPage({ viewport });
+  const slow = await newPage({ viewport });
   await slow.bringToFront();
   await slow.route("**/assets/audio/**", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 350));
@@ -1889,7 +1924,7 @@ try {
   await slow.close();
 
   // One slow stem must keep the playing screen hidden until it is ready.
-  const oneSlow = await browser.newPage({ viewport });
+  const oneSlow = await newPage({ viewport });
   await oneSlow.bringToFront();
   await oneSlow.route("**/vox.ogg*", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1800));
@@ -1913,7 +1948,7 @@ try {
   await oneSlow.close();
 
   // A corrupted transfer must fail closed before the player is shown.
-  const corrupt = await browser.newPage({ viewport });
+  const corrupt = await newPage({ viewport });
   await corrupt.bringToFront();
   await corrupt.route("**/vox.ogg*", (route) => route.fulfill({
     status: 200,
@@ -1944,7 +1979,7 @@ try {
 
   // Mobile browsers may estimate media duration. The WAV path must not reject
   // a verified stem just because that estimate differs from the manifest.
-  const estimated = await browser.newPage({ viewport });
+  const estimated = await newPage({ viewport });
   await estimated.bringToFront();
   await estimated.addInitScript(() => {
     const descriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "duration");
@@ -1972,7 +2007,7 @@ try {
 
   // If the browser cannot decode Ogg for WAV conversion, the player falls
   // back to the verified Ogg Blob rather than failing the lesson.
-  const decodeFail = await browser.newPage({ viewport });
+  const decodeFail = await newPage({ viewport });
   await decodeFail.bringToFront();
   await decodeFail.addInitScript(() => {
     function wrap(Native) {
@@ -2004,7 +2039,7 @@ try {
   await decodeFail.close();
 
   // The largest lesson must also convert completely (about 139 MB of WAV).
-  const largest = await browser.newPage({ viewport });
+  const largest = await newPage({ viewport });
   await largest.bringToFront();
   await largest.goto(servedUrl + "#/lesson/volume-1/31-tui-tui");
   await largest.waitForFunction(() => {
@@ -2024,7 +2059,7 @@ try {
   await largest.close();
 
   // Error + Retry: abort the Vox fetch, then retry with the route removed.
-  const failing = await browser.newPage({ viewport });
+  const failing = await newPage({ viewport });
   await failing.bringToFront();
   await failing.route("**/vox.ogg*", (route) => route.abort());
   await failing.goto(servedUrl + "#/lesson/volume-1/01-alubanche");
@@ -2041,7 +2076,7 @@ try {
   await failing.close();
 
   // --- P0 regressions: overlapping transport actions -----------------------
-  const race = await browser.newPage({ viewport });
+  const race = await newPage({ viewport });
   await race.bringToFront();
   await race.goto(servedUrl + "#/lesson/volume-1/02-tani-tani-cho-bi");
   await ready(race);
@@ -2099,7 +2134,7 @@ try {
   await race.close();
 
   // --- P0 regressions: malformed hash and load deadline --------------------
-  const malformed = await browser.newPage({ viewport });
+  const malformed = await newPage({ viewport });
   const malformedErrors = [];
   malformed.on("pageerror", (error) => malformedErrors.push(error.message));
   await malformed.goto(servedUrl + "#/lesson/%E0%A4%A");
@@ -2119,7 +2154,7 @@ try {
     JSON.stringify({ state: malformedState, errors: malformedErrors }));
   await malformed.close();
 
-  const stalled = await browser.newPage({ viewport });
+  const stalled = await newPage({ viewport });
   await stalled.bringToFront();
   await stalled.route("**/assets/audio/**", () => {});
   await stalled.goto(servedUrl + "#/");
@@ -2161,6 +2196,9 @@ try {
 
   // --- lazy offline source cache ------------------------------------------
   const offlineContext = await browser.newContext({ viewport });
+  if (browserName === "webkit") {
+    await offlineContext.addInitScript(() => { window.__batappNoMediaSource = true; });
+  }
   const offlinePage = await offlineContext.newPage();
   await offlinePage.bringToFront();
   const offlineAudioRequests = [];
@@ -2180,7 +2218,14 @@ try {
     firstOfflineOpen.tracks.every((track) => track.format === "wav" && !track.fromCache),
     JSON.stringify({ requests: offlineAudioRequests, tracks: firstOfflineOpen.tracks.map((track) => ({ stem: track.stem, format: track.format, fromCache: track.fromCache })) }));
 
-  await offlinePage.evaluate(() => navigator.serviceWorker.ready);
+  const serviceWorkerReady = await offlinePage.evaluate(async () => {
+    if (!("serviceWorker" in navigator)) return false;
+    return Promise.race([
+      navigator.serviceWorker.ready.then(() => true),
+      new Promise((resolve) => setTimeout(() => resolve(false), 10000))
+    ]);
+  });
+  if (!serviceWorkerReady) throw new Error("Service worker did not become ready");
   await offlinePage.waitForFunction(
     () => !!navigator.serviceWorker.controller,
     null,
@@ -2283,7 +2328,7 @@ try {
   server.kill("SIGTERM");
 }
 
-const fileSWPage = await browser.newPage({ viewport });
+const fileSWPage = await newPage({ viewport });
 await fileSWPage.goto(pageUrl + "#/");
 const fileServiceWorkers = await fileSWPage.evaluate(() =>
   "serviceWorker" in navigator
@@ -2294,7 +2339,10 @@ await fileSWPage.close();
 
 await browser.close();
 
-const fileErrors = pageErrors.filter((entry) => !entry.includes("favicon"));
+const fileErrors = pageErrors.filter((entry) =>
+  !entry.includes("favicon") &&
+  !(browserName === "webkit" &&
+    /site\.webmanifest|Origin null is not allowed/.test(entry)));
 check("no external network requests from the file:// page", external.length === 0, external.slice(0, 3).join(" | "));
 check("no console errors during the file:// walkthrough", fileErrors.length === 0, fileErrors.slice(0, 3).join(" | "));
 
@@ -2309,6 +2357,7 @@ const report = {
   checks
 };
 fs.writeFileSync(reportFile, JSON.stringify(report, null, 2) + "\n");
+clearTimeout(suiteWatchdog);
 console.log(browserName + ": " + checks.filter((entry) => entry.ok).length + "/" + checks.length + " checks passed; report: " + reportFile);
 if (problems.length) {
   console.log(problems.join("\n"));

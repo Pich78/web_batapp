@@ -53,6 +53,15 @@
     return global.caches.open(AUDIO_CACHE);
   }
 
+  function settle(promise, fallback, milliseconds) {
+    return Promise.race([
+      Promise.resolve(promise).catch(function () { return fallback; }),
+      new Promise(function (resolve) {
+        setTimeout(function () { resolve(fallback); }, milliseconds);
+      })
+    ]);
+  }
+
   function get(url) {
     if (!cacheSupported()) return Promise.resolve(null);
     return openCache().then(function (cache) {
@@ -120,9 +129,9 @@
         persisted: false
       });
     }
-    return openCache().then(function (cache) {
+    return settle(openCache().then(function (cache) {
       return cache.keys();
-    }).then(function (keys) {
+    }), [], 3000).then(function (keys) {
       var urls = {};
       keys.forEach(function (key) { urls[key.url] = true; });
       var cachedLessons = 0;
@@ -138,11 +147,11 @@
       });
       var estimate = global.navigator && global.navigator.storage &&
         typeof global.navigator.storage.estimate === "function"
-        ? global.navigator.storage.estimate().catch(function () { return null; })
+        ? settle(global.navigator.storage.estimate(), null, 1500)
         : Promise.resolve(null);
       var persisted = global.navigator && global.navigator.storage &&
         typeof global.navigator.storage.persisted === "function"
-        ? global.navigator.storage.persisted().catch(function () { return false; })
+        ? settle(global.navigator.storage.persisted(), false, 1500)
         : Promise.resolve(false);
       return Promise.all([estimate, persisted]).then(function (values) {
         return {

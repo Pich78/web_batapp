@@ -87,7 +87,7 @@ Android Chrome and Windows browsers must be checked by a person.
     verify, and the WAV must be rebuilt. Then open an unvisited rhythm: it must
     show “This rhythm is not available offline. Open it once while online.”
 17. Open the top-left hamburger. Confirm exactly **one Version row** equal to
-    the repository tag (for example `v1.3.0`), plus the current lesson, WAV/OGG
+    the repository tag (for example `v1.3.1`), plus the current lesson, WAV/OGG
     source, screen-awake state and offline cache status. Confirm the cached
     rhythm count and “Clear offline audio” action, and that clearing removes
     only the audio cache (the app still opens offline from the shell cache).

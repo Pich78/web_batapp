@@ -361,9 +361,16 @@ legacy `js/mixer.js` transport.
   `tests/verify-browsers.mjs` records all engines in
   `docs/verification/cross-browser-summary.json`.
 - WebKit needs host libraries for local runs:
-  `sudo npx playwright install-deps webkit`. WebKit unavailability is recorded
-  as such; the real iPhone Safari pass in
-  `docs/verification/device-pass.md` is authoritative.
+  `sudo npx playwright install-deps webkit`. If sudo is unavailable, run
+  `cd tests && npm run verify-webkit:docker`; it uses the official Playwright
+  Docker image, which already carries WebKit and its dependencies, and writes
+  the same report under `.work/verification/`. `node verify-browsers.mjs`
+  performs this fallback automatically. The Docker WebKit run uses the
+  WebKit-safe test mode: WAV conversion stays enabled, but playback uses
+  element volume instead of `MediaElementAudioSourceNode`, which crashes the
+  Linux WPE build on seek. This is a WPE test limitation, not a production
+  switch; the real iPhone Safari pass in `docs/verification/device-pass.md`
+  remains authoritative for the Web Audio path.
 - Record unresolved questions in `docs/REVERSE-ENGINEERING.md` under
   “Unknowns” instead of guessing.
 

@@ -1,13 +1,16 @@
 /* Run the modern-layout suite across Chromium, Firefox and WebKit.
  *
  * Chromium runs the full 61-lesson sweep; Firefox/WebKit run representative
- * lessons (the suite selects them). A browser that cannot launch on this host
- * (WebKit usually needs `sudo npx playwright install-deps webkit`) is recorded
- * as unavailable instead of failing the whole run.
+ * lessons (the suite selects them). WebKit falls back to the official
+ * Playwright Docker image when host libraries are missing. That run uses the
+ * WebKit-safe test mode: WAV conversion stays enabled, but playback uses
+ * element volume instead of MediaElementAudioSourceNode, which crashes in the
+ * Linux WPE build. A browser that cannot launch either way is recorded as
+ * unavailable instead of failing the whole run.
  *
  *   cd tests && node verify-browsers.mjs
  */
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -17,11 +20,11 @@ const root = path.resolve(here, "..");
 const summaryFile = path.join(root, "docs/verification/cross-browser-summary.json");
 const browsers = ["chromium", "firefox", "webkit"];
 
-function run(browser) {
+function run(command, args, env) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, ["verify-new.mjs"], {
+    const child = spawn(command, args, {
       cwd: here,
-      env: { ...process.env, BROWSER: browser },
+      env: { ...process.env, ...env },
       stdio: ["ignore", "pipe", "pipe"]
     });
     let stdout = "";
@@ -38,23 +41,44 @@ function run(browser) {
   });
 }
 
+function dockerAvailable() {
+  const result = spawnSync("docker", ["--version"], { encoding: "utf8" });
+  return !result.error && result.status === 0;
+}
+
+function reportFor(browser) {
+  const file = path.join(root, ".work/verification/new-ui-report-" + browser + ".json");
+  if (!fs.existsSync(file)) return null;
+  try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch (error) { return null; }
+}
+
 const results = [];
 for (const browser of browsers) {
   process.stdout.write("running " + browser + "…\n");
-  const result = await run(browser);
   const reportFile = path.join(root, ".work/verification/new-ui-report-" + browser + ".json");
-  let report = null;
-  if (fs.existsSync(reportFile)) {
-    try { report = JSON.parse(fs.readFileSync(reportFile, "utf8")); } catch (error) { /* unreadable */ }
+  fs.rmSync(reportFile, { force: true });
+  let result = await run(process.execPath, ["verify-new.mjs"], { BROWSER: browser });
+  let report = reportFor(browser);
+  let unavailable = !report && /Executable doesn't exist|missing dependencies|Host system is missing libraries/i.test(result.stderr);
+
+  // WebKit on Linux needs root-installed host libraries. If they are absent,
+  // rerun in the official Playwright image using the WebKit-safe test mode
+  // (WAV + element-volume playback; see verify-new.mjs).
+  if (browser === "webkit" && unavailable && dockerAvailable()) {
+    process.stdout.write("webkit: host libraries unavailable; retrying in Docker…\n");
+    fs.rmSync(reportFile, { force: true });
+    result = await run(process.execPath, ["verify-webkit-docker.mjs"], {});
+    report = reportFor(browser);
+    unavailable = !report && /Executable doesn't exist|missing dependencies|Host system is missing libraries|Docker is required/i.test(result.stderr);
   }
-  const unavailable = !report && /Executable doesn't exist|missing dependencies|Host system is missing libraries/i.test(result.stderr);
+
   const status = unavailable ? "unavailable" : (result.code === 0 && report && report.problems.length === 0 ? "passed" : "failed");
   const reason = unavailable
     ? "browser could not launch on this host (run: sudo npx playwright install-deps " + browser + ")"
     : (report && report.problems.length ? report.problems.slice(0, 3).join(" | ") : "");
   const diagnostics = unavailable
     ? result.stderr.split("\n").filter((line) =>
-        /Missing libraries|libgtk|libevent|gst|libavif|Executable doesn't exist|Host system/i.test(line)
+        /Missing libraries|libgtk|libevent|gst|libavif|Executable doesn't exist|Host system|Docker/i.test(line)
       ).slice(0, 8).join("\n")
     : "";
   results.push({
@@ -73,7 +97,7 @@ for (const browser of browsers) {
 const summary = {
   generated_at: new Date().toISOString(),
   target: "file://" + root + "/index.html",
-  note: "Chromium runs the full sweep; Firefox/WebKit run representative lessons. Real iPhone Safari and Android Chrome are covered by the manual device pass.",
+  note: "Chromium runs the full sweep; Firefox/WebKit run representative lessons. WebKit uses the official Playwright Docker image and element-volume playback because the Linux WPE build crashes on WAV + MediaElementAudioSourceNode seeks. Real iPhone Safari and Android Chrome are covered by the manual device pass.",
   browsers: results
 };
 fs.mkdirSync(path.dirname(summaryFile), { recursive: true });

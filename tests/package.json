@@ -7,6 +7,7 @@
     "verify": "node verify.mjs",
     "verify-new": "node verify-new.mjs",
     "verify-browsers": "node verify-browsers.mjs",
+    "verify-webkit:docker": "node verify-webkit-docker.mjs",
     "lesson-sweep": "node lesson-sweep.mjs",
     "mcp": "node playwright-mcp.mjs",
     "mcp:check": "node mcp/config-check.mjs",

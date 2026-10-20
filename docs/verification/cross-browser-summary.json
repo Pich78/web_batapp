@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-10-20T13:50:07.845Z",
+  "generated_at": "2026-10-20T15:21:27.553Z",
   "target": "file:///home/apicciano/ai/batapp-web/index.html",
-  "note": "Chromium runs the full sweep; Firefox/WebKit run representative lessons. Real iPhone Safari and Android Chrome are covered by the manual device pass.",
+  "note": "Chromium runs the full sweep; Firefox/WebKit run representative lessons. WebKit uses the official Playwright Docker image and element-volume playback because the Linux WPE build crashes on WAV + MediaElementAudioSourceNode seeks. Real iPhone Safari and Android Chrome are covered by the manual device pass.",
   "browsers": [
     {
       "browser": "chromium",
@@ -25,13 +25,13 @@
     },
     {
       "browser": "webkit",
-      "status": "unavailable",
-      "checks_passed": null,
-      "checks_total": null,
-      "full_sweep": null,
-      "exit_code": 1,
-      "reason": "browser could not launch on this host (run: sudo npx playwright install-deps webkit)",
-      "diagnostics": "║ Host system is missing dependencies to run browsers. ║\n║ Missing libraries:                                   ║\n║     libgtk-4.so.1                                    ║\n║     libevent-2.1.so.7                                ║\n║     libgstcodecparsers-1.0.so.0                      ║\n║     libavif.so.13                                    ║"
+      "status": "passed",
+      "checks_passed": 227,
+      "checks_total": 227,
+      "full_sweep": false,
+      "exit_code": 0,
+      "reason": "",
+      "diagnostics": ""
     }
   ]
 }
